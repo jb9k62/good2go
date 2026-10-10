@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "dist",
+    "rootDir": "skills/okf-bootstrap/assets",
+    "allowImportingTsExtensions": false,
+    "declaration": false,
+    "sourceMap": false,
+    "removeComments": false
+  },
+  "include": ["skills/okf-bootstrap/assets/*.mts"],
+  "exclude": ["skills/okf-bootstrap/assets/templates"]
+}

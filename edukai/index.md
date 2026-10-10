@@ -6,7 +6,7 @@ okf_version: "0.2"
 
 What agents have learned while working on **okf-bootstrap**, kept so the next session starts
 knowing it. This is the **memory bundle**. The design bundle, written for the team, is in
-`okf/`.
+`design/`.
 
 ## Domains
 

@@ -9,7 +9,7 @@ generated: { by: pi/deepseek-ai/DeepSeek-V4.1-Flash, at: 2026-10-08T20:35:00Z }
 This repository is an npm workspace: two agent skills, their tools and their tests. If you
 remember one command, make it `npm run check`, and run it before you finish. It typechecks the
 tools and the widget workspace, runs the unit tests and the Chromium view tests, and validates
-this repository's own `okf/` and `edukai/` bundles. One warning: the browser tests skip when
+this repository's own `design/` and `edukai/` bundles. One warning: the browser tests skip when
 there is no Chromium, so a green run does not prove the views render.
 
 The tools are TypeScript, and Node runs them directly by stripping the types. There is no

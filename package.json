@@ -1,20 +1,49 @@
 {
-  "name": "okf-bootstrap",
-  "version": "0.6.0",
-  "private": true,
-  "description": "Agent skills (pi, Claude Code) that scaffold two OKF knowledge bundles into a project: design docs with a validator, graph viewer, Mermaid gates and interactive React widgets, and an agent memory bundle (edukai) that re-checks itself through harness hooks.",
+  "name": "@jb9k62/good2go",
+  "version": "0.7.0",
+  "description": "Node tooling for OKF (Open Knowledge Format) bundles and agent memory: validator, graph viewer, Mermaid gates, ranked search, and the edukai memory bundle, plus skills for Claude Code and pi.",
   "license": "MIT",
   "type": "module",
+  "author": "jb9k62",
+  "homepage": "https://github.com/jb9k62/okf-bootstrap#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jb9k62/okf-bootstrap.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jb9k62/okf-bootstrap/issues"
+  },
   "keywords": [
     "pi-package",
     "claude-code",
     "agent-skill",
     "okf",
     "open-knowledge-format",
-    "documentation"
+    "documentation",
+    "good2go",
+    "agent-memory",
+    "mcp-free",
+    "cli"
+  ],
+  "bin": {
+    "good2go": "dist/good2go.mjs"
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.map",
+    "!dist/templates/**/node_modules",
+    "!dist/templates/**/dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "SECURITY.md"
   ],
   "engines": {
     "node": ">=24"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   },
   "workspaces": [
     "skills/okf-bootstrap/assets/templates/okf-widgets"
@@ -28,18 +57,20 @@
     ]
   },
   "scripts": {
+    "build": "node scripts/build.mts",
+    "prepack": "npm run build",
     "typecheck": "tsc -p tsconfig.json && npm run typecheck -w okf-widgets",
     "test": "node --test test/*.test.mts && npm test -w okf-widgets",
     "test:render": "node --test test/render.e2e.mts",
     "test:views": "node --test test/views.e2e.mts",
-    "check": "npm run typecheck && npm test && npm run test:views && npm run okf:validate && npm run edukai:validate",
-    "okf:validate": "node --import ./skills/okf-bootstrap/assets/okf-start.mjs skills/okf-bootstrap/assets/okf-view.mts okf --validate --strict",
-    "okf:fix": "node --import ./skills/okf-bootstrap/assets/okf-start.mjs skills/okf-bootstrap/assets/okf-view.mts okf --validate --fix",
-    "okf:view": "npm run build -w okf-widgets && node --import ./skills/okf-bootstrap/assets/okf-start.mjs skills/okf-bootstrap/assets/okf-view.mts okf --widgets skills/okf-bootstrap/assets/templates/okf-widgets/dist/okf-widgets.js",
-    "okf:mermaid": "node --import ./skills/okf-bootstrap/assets/okf-start.mjs skills/okf-bootstrap/assets/okf-mermaid.mts okf",
-    "okf:mermaid:render": "npm run build -w okf-widgets && node --import ./skills/okf-bootstrap/assets/okf-start.mjs skills/okf-bootstrap/assets/okf-view.mts okf --check-render --widgets skills/okf-bootstrap/assets/templates/okf-widgets/dist/okf-widgets.js",
+    "check": "npm run typecheck && npm test && npm run build && npm run test:views && npm run okf:validate && npm run edukai:validate",
+    "okf:validate": "node --import ./skills/okf-bootstrap/assets/okf-start.mjs skills/okf-bootstrap/assets/okf-view.mts design --validate --strict",
+    "okf:fix": "node --import ./skills/okf-bootstrap/assets/okf-start.mjs skills/okf-bootstrap/assets/okf-view.mts design --validate --fix",
+    "okf:view": "npm run build -w okf-widgets && node --import ./skills/okf-bootstrap/assets/okf-start.mjs skills/okf-bootstrap/assets/okf-view.mts design --widgets skills/okf-bootstrap/assets/templates/okf-widgets/dist/okf-widgets.js",
+    "okf:mermaid": "node --import ./skills/okf-bootstrap/assets/okf-start.mjs skills/okf-bootstrap/assets/okf-mermaid.mts design",
+    "okf:mermaid:render": "npm run build -w okf-widgets && node --import ./skills/okf-bootstrap/assets/okf-start.mjs skills/okf-bootstrap/assets/okf-view.mts design --check-render --widgets skills/okf-bootstrap/assets/templates/okf-widgets/dist/okf-widgets.js",
     "okf:search": "node --import ./skills/okf-bootstrap/assets/okf-start.mjs skills/okf-bootstrap/assets/okf-search.mts",
-    "okf:recheck": "node --import ./skills/okf-bootstrap/assets/okf-start.mjs skills/okf-bootstrap/assets/okf-edukai.mts recheck --bundle okf",
+    "okf:recheck": "node --import ./skills/okf-bootstrap/assets/okf-start.mjs skills/okf-bootstrap/assets/okf-edukai.mts recheck --bundle design",
     "edukai:validate": "node --import ./skills/okf-bootstrap/assets/okf-start.mjs skills/okf-bootstrap/assets/okf-view.mts edukai --validate --strict && node --import ./skills/okf-bootstrap/assets/okf-start.mjs skills/okf-bootstrap/assets/okf-edukai.mts index --check",
     "edukai:index": "node --import ./skills/okf-bootstrap/assets/okf-start.mjs skills/okf-bootstrap/assets/okf-edukai.mts index",
     "edukai:recheck": "node --import ./skills/okf-bootstrap/assets/okf-start.mjs skills/okf-bootstrap/assets/okf-edukai.mts recheck",

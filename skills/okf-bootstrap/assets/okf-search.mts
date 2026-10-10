@@ -92,11 +92,15 @@ import type { Doc, Entry, EntryMeta, Filters, Freshness, Hit, Postings, RankInde
 
 // The cache is only valid for the code that wrote it: a hash of this file, okf-core.mts and
 // okf-rank.mts, so a refreshed copy of any never reads entries a different tokenizer produced.
+const sibling = (name: string): string => {
+  const ts = fileURLToPath(new URL(`./${name}.mts`, import.meta.url));
+  return fs.existsSync(ts) ? ts : fileURLToPath(new URL(`./${name}.mjs`, import.meta.url));
+};
 const CACHE_VERSION = crypto
   .createHash('sha1')
   .update(fs.readFileSync(fileURLToPath(import.meta.url)))
-  .update(fs.readFileSync(fileURLToPath(new URL('./okf-core.mts', import.meta.url))))
-  .update(fs.readFileSync(fileURLToPath(new URL('./okf-rank.mts', import.meta.url))))
+  .update(fs.readFileSync(sibling('okf-core')))
+  .update(fs.readFileSync(sibling('okf-rank')))
   .digest('hex')
   .slice(0, 12);
 // A file modified this close to the cache being written may have changed again within the

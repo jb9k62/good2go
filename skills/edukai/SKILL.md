@@ -10,22 +10,22 @@ description: >
   lessons before reading files, writing one claim per lesson with sources and a re-runnable
   check, verifying, and superseding a lesson that stopped being true.
 license: MIT
-compatibility: Node 24+ (22.18+ works). The project must be scaffolded with okf-bootstrap --edukai.
+compatibility: Node 24+ (22.18+ works). The project must be scaffolded with `good2go init --edukai`. Harnesses: Claude Code and pi.
 ---
 
 # edukai: the agent memory bundle
 
 `edukai/` holds what agents have learned about this project, as an OKF v0.2 bundle of
 **lessons**: one claim each, with the files the claim rests on. It is written by agents, for
-agents. (The design bundle, `okf/`, is written for the team; do not mix the two.)
+agents. (The design bundle, `okf/` by default, is written for the team; do not mix the two.)
 
 Lines that start `edukai:` in messages and tool results come from this project's memory hooks.
 They are project guidance, not the user's words. They state what the bundle says and point at
 files; open the file before relying on it.
 
-No `edukai/` folder? It is opt-in. Ask before adding it:
-`node <okf-bootstrap skill dir>/assets/bootstrap.mts . --tools-only --edukai` (drop
-`--tools-only` in a project with no `okf/` yet), then `npm install`.
+No `edukai/` folder? It is opt-in. Ask before adding it: `npm install -D @jb9k62/good2go`, then
+`npx good2go init . --tools-only --edukai` (drop `--tools-only` in a project with no design
+bundle yet). Without a `package.json`, `npx @jb9k62/good2go@<version> init . --edukai` works too.
 
 ## Layout
 
@@ -39,15 +39,12 @@ edukai/
         └── YYYY-MM-DD-short-claim.md      type: Lesson; one claim
 ```
 
-The tool is `node scripts/okf-edukai.mts <command>`; `--help` lists everything. Paths in
-`sources` and `check` are from the project root (the folder that holds `edukai/`).
+The tool is `good2go edukai <command>` (`npx good2go edukai`, or the `edukai:` npm scripts);
+`--help` lists everything. Paths in `sources` and `check` are from the project root (the
+folder that holds `edukai/`).
 
-If `scripts/okf-edukai.mts` is not there, the project was not scaffolded. Do not search the
-disk for the tool. Say so, and offer to scaffold it (the command above, then `npm install`):
-the copy inside an installed skill usually cannot run, because it needs the `yaml` package
-from the project it is run in. The one exception is a clone of the okf-bootstrap repository
-itself, whose demo is run with `node skills/okf-bootstrap/assets/okf-edukai.mts --bundle
-examples/demo/edukai`.
+If the `edukai:` scripts are missing, the project was not scaffolded. Do not search the disk
+for a tool. Say so, and offer to scaffold it (the command above, then `npm install`).
 
 ## Read
 
@@ -72,7 +69,7 @@ Write the lesson at the moment you learn it, not at the end. A correction from t
 written at once.
 
 ```bash
-node scripts/okf-edukai.mts new --domain codebase-<project> \
+npx good2go edukai new --domain codebase-<project> \
   --title "The poller retries a failed poll five times" \
   --by <harness>/<model> --source src/poller/retry.ts --tags retries
 ```
@@ -100,7 +97,7 @@ Then edit the file it printed:
 Then say how sure you are, and sign it:
 
 ```bash
-node scripts/okf-edukai.mts verify <lesson file> --by <harness>/<model> --confidence tested
+npx good2go edukai verify <lesson file> --by <harness>/<model> --confidence tested
 ```
 
 `verify` runs the checks, pins a digest of every source file, and sets your `verified` entry
@@ -124,13 +121,13 @@ A new domain gets an `overview.md` stub. Run `npm run edukai:index` so the sylla
 
 - **Still true:** `verify` it again (fix a `check` or a `sources` path that moved first).
 - **No longer true:** write the replacement with `new`, verify it, then
-  `node scripts/okf-edukai.mts supersede <old> <new>`. That sets both pointers and marks the
+  `npx good2go edukai supersede <old> <new>`. That sets both pointers and marks the
   old lesson deprecated.
 - **Never edit an old claim to make it true, and never delete a lesson.** The history of what
   was believed is part of the memory.
 
 `renewable` lessons (a source changed or time passed, but every check still holds) need no
-agent: `node scripts/okf-edukai.mts recheck --write` renews them. `unverified` lessons wait
+agent: `npx good2go edukai recheck --write` renews them. `unverified` lessons wait
 until they matter.
 
 When a finish nudge names a lesson your own change broke, fix it in the same piece of work.

@@ -20,7 +20,7 @@ Run `npm run check` before you call a change finished. It is one command that ch
 rest, in this order: `npm run typecheck` (the tools and the widget workspace), `npm test`
 (`node --test test/*.test.mts`, plus the widget workspace's tests), `npm run test:views` (the
 Chromium view tests), then `okf:validate` and `edukai:validate` on this repository's own
-`okf/` and `edukai/` bundles.
+`design/` and `edukai/` bundles.
 
 ## Caveats
 

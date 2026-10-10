@@ -15,7 +15,7 @@ sources:
 
 # ADR-0006: Publish the tools to npm as @jb9k62/good2go
 
-- **Status:** proposed
+- **Status:** accepted and implemented in 0.7.0
 - **Date:** 2026-10-09
 - **Deciders:** the maintainers
 
@@ -95,6 +95,25 @@ In detail:
 - **Releases are published from CI**, from a version tag, with npm provenance.
 
 Renaming the repository, the skills and the plugin to match Good2Go is not decided here.
+
+### As built
+
+- `good2go` is a small dispatcher (`good2go.mts`) that runs each tool as a child process, so
+  every tool keeps its own flags, exit codes and entry-point checks. Subcommands: `init`, `new`,
+  `validate`, `fix`, `view`, `mermaid`, `search`, `recheck`, `edukai`, `hook`, `update`, `skills`.
+- `npm run build` (`scripts/build.mts`) compiles `skills/okf-bootstrap/assets/*.mts` with
+  `tsconfig.build.json` into `dist/`, copies `templates/` and the skills' instructions beside
+  them, and marks the command executable. `prepack` runs it, so `npm publish` cannot ship a stale
+  `dist/`. CI packs the tarball, installs it in a fresh folder and runs it.
+- `good2go skills` copies the skills (instructions and references only) into the agent's
+  skills folder, so `npx @jb9k62/good2go skills` works with no clone. The hooks still need the
+  Claude Code plugin or the pi package, because a hook must run where `node_modules` may not
+  exist and from files Node will strip types from.
+- The install manifest moved to `.okf-bootstrap.json` at the project root, with no script
+  hashes; the old `scripts/.okf-bootstrap.json` is read once to migrate.
+- Publishing uses npm trusted publishing (OIDC) with provenance and no stored token; the first
+  version is published by hand so the trusted publisher can be attached
+  (the steps are in `docs/RELEASING.md` in the repository).
 
 ## Consequences
 

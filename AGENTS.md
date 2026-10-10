@@ -2,7 +2,7 @@
 
 This repo holds two **agent skills** (for pi and Claude Code) that scaffold
 [OKF](skills/okf-bootstrap/references/okf-spec/SPEC.md) knowledge bundles into other projects:
-`okf/`, design docs for the team, and `edukai/`, what agents have learned (the memory bundle).
+`design/`, design docs for the team, and `edukai/`, what agents have learned (the memory bundle).
 It is not an app. What ships is `skills/`, `hooks/` and `extensions/`; everything else (tests,
 scripts, demo, docs) supports them.
 
@@ -19,17 +19,19 @@ learn with the edukai skill. Before finishing, run `npm run edukai:recheck`.
 
 | Path | What it is |
 | --- | --- |
-| `okf/` | This repository's own design bundle (dogfood): concepts, ADRs and tours for the skill itself |
+| `design/` | This repository's own design bundle (dogfood): concepts, ADRs and tours for the skill itself |
 | `edukai/` | This repository's own memory bundle: lessons agents learned about this repository |
 | `skills/okf-bootstrap/SKILL.md` | The skill's entry point and its user-facing contract. Frontmatter `description` drives triggering |
-| `skills/okf-bootstrap/assets/bootstrap.mts` | Scaffolder: copies templates into a target project |
-| `skills/okf-bootstrap/assets/okf-view.mts` | Validator + graph viewer; emits one self-contained `viz.html` (~3000 lines) |
+| `skills/okf-bootstrap/assets/bootstrap.mts` | Scaffolder (`good2go init`): copies templates into a target project and wires its npm scripts to the package |
+| `skills/okf-bootstrap/assets/good2go.mts` | The `good2go` command: dispatches to the tools. `okf-new.mts` (`new`: any extra bundle), `okf-skills.mts` (`skills`) and `okf-update.mts` (`update`) sit beside it |
+| `scripts/build.mts` | Compiles the tools to `dist/` for the npm package (`@jb9k62/good2go`); CI packs and smoke-tests the tarball |
+| `skills/okf-bootstrap/assets/okf-view.mts` | Validator + graph viewer; emits one `viz.html` (~4500 lines) that loads its four libraries from pinned CDNs |
 | `skills/okf-bootstrap/assets/okf-mermaid.mts` | Mermaid parse gate and headless-Chromium render gate |
 | `skills/okf-bootstrap/assets/okf-search.mts` | Ranked, freshness-aware search (`search`, `show`, `related`, `facets`, `stale`) with an on-disk cache |
 | `skills/okf-bootstrap/assets/okf-rank.mts` | The ranking and its inverted index: pure, no imports. Run by `okf-search` and inlined (types stripped) into `viz.html` for its search box |
 | `skills/okf-bootstrap/assets/okf-core.mts` | Parsing shared by the viewer and search: frontmatter, trust tier, staleness, links. Loads `yaml` on the first parse, so a search answered from its cache never loads it |
 | `skills/okf-bootstrap/assets/okf-edukai.mts` | The memory bundle's tool: `new`, `verify`, `supersede`, `index`, `recheck`. Writes the cache the hooks read |
-| `skills/okf-bootstrap/assets/okf-start.mjs` | Copied as `scripts/okf-start.mjs` and loaded first by every scaffolded npm script: Node's compile cache, so the tools' TypeScript is stripped once |
+| `skills/okf-bootstrap/assets/okf-start.mjs` | Loaded first by this repository's own npm scripts: Node's compile cache, so the tools' TypeScript is stripped once. No longer copied into projects; they run the compiled package |
 | `skills/okf-bootstrap/assets/okf-edukai-hook.mts` | What the harness adapters run (`brief`, `cites`, `debt`, `hook`) and the code that derives a lesson's state. No dependencies |
 | `skills/edukai/SKILL.md` | The memory skill: what is worth a lesson, how sure we are, what to do with one that failed its re-check |
 | `hooks/hooks.json`, `hooks/edukai-hook.mjs` | Claude Code adapter: on SessionStart, PostToolUse and Stop it runs the launcher, plain JavaScript that exits quietly on a Node too old for TypeScript and otherwise calls `okf-edukai-hook.mts` |
@@ -55,8 +57,8 @@ npm run typecheck     # tsc for the tools, then the widget workspace
 npm test              # node --test test/*.test.mts, plus the widget workspace's tests
 npm run test:render   # Chromium: diagrams, quizzes, widgets (needs `npx playwright install chromium`)
 npm run test:views    # Chromium: layouts, Graph/Tree/Table views, neighbourhood, colour modes
-npm run okf:validate  # this repository's own okf/ bundle (types, links, timestamps)
-npm run okf:view      # build widgets, validate, write okf/viz.html
+npm run okf:validate  # this repository's own design/ bundle (types, links, timestamps)
+npm run okf:view      # build widgets, validate, write design/viz.html
 npm run edukai:validate && npm run edukai:recheck   # the memory bundle: rules, then the queue
 npm run edukai:brief  # what an agent is told when a session opens
 npm run demo          # build widgets, then render examples/demo/okf to viz.html
@@ -79,10 +81,14 @@ do not prove it reads well.
   plain JavaScript that turns on Node's compile cache in a private folder. Keep it free of
   TypeScript and of imports beyond `node:` built-ins; a tool must still run without it.
 - **Tools must stay dependency-light.** `bootstrap.mts`, `okf-view.mts`, `okf-mermaid.mts`,
-  `okf-search.mts`, `okf-core.mts`, `okf-rank.mts`, `okf-edukai.mts` and `okf-edukai-hook.mts` are copied into user projects as `scripts/okf-*.mts`. Don't import anything from outside
+  `okf-search.mts`, `okf-core.mts`, `okf-rank.mts`, `okf-edukai.mts` and `okf-edukai-hook.mts` ship in the npm package as compiled JavaScript (Node won't strip types under `node_modules`). Don't import anything from outside
   `skills/okf-bootstrap/assets/`, and resolve templates relative to the file itself.
-- **`viz.html` is one file**: no build step, libraries inlined. Don't add a bundler or a
-  network fetch to the viewer.
+- **`viz.html` is one file**: no build step. The ranking and the widget bundle are inlined; the
+  four libraries (Cytoscape, marked, Mermaid, highlight.js) stay external scripts from jsDelivr and
+  cdnjs, each pinned to an exact version with a subresource-integrity hash
+  ([ADR-0004](design/adr/0004-viz-html-stays-one-file.md)). That is deliberate for now: keep the
+  hashes in step when bumping one, and don't add a bundler or any other network fetch. The tools
+  themselves (`good2go`) make no network requests.
 - **Exit-code contract for every gate**: `0` pass, `1` broken (name file and line), `2`
   could not run. Never return 0 when a check didn't actually run.
 - **Templates become the user's code.** Changes under `assets/templates/` affect projects
@@ -103,7 +109,7 @@ do not prove it reads well.
   runs from an installed plugin where `node_modules` may not exist, and its output is put in
   front of an agent. A test enforces the imports and runs it outside the repo.
 - **The demo's memory bundle is pinned.** Lessons in `examples/demo/edukai/` hold digests of
-  files under `examples/demo/` (source files, and `okf/adr/0002-…` and `okf/parcel-tracker/api.md`).
+  files under `examples/demo/` (source files, and `okf/adr/0002-…` and `okf/parcel-tracker/api.md` (the demo keeps the default `okf/` folder, as a project scaffolded with the defaults has)).
   Editing one of those changes a lesson's state and the report a test pins; the three changes
   made on purpose are listed in `examples/demo/README.md`.
 
@@ -117,9 +123,9 @@ do not prove it reads well.
 - **Vendored OKF spec**: never hand-edit `references/okf-spec/` or `vendor/`. Use
   `npm run spec -- update` (copies `SPEC.md`, `LICENSE.md`, writes `UPSTREAM.json`). CI
   runs `spec status` weekly and fails when upstream moves.
-- **This repository's own bundles**: `okf/` and `edukai/` live at the root, and `npm run check`
+- **This repository's own bundles**: `design/` and `edukai/` live at the root, and `npm run check`
   validates both. The tools run from `skills/okf-bootstrap/assets/`, not generated copies under
-  `scripts/` ([ADR-0003](okf/adr/0003-run-the-tools-from-the-skill-assets.md)); never scaffold
+  `scripts/` ([ADR-0003](design/adr/0003-run-the-tools-from-the-skill-assets.md)); never scaffold
   `scripts/okf-*.mts` into this repo.
 - **Screenshots**: don't edit `docs/images/`; the `screenshots` workflow regenerates them
   and commits them to the `chore/screenshots` branch (never to `main`), with a pull request

@@ -9,7 +9,7 @@ keep for themselves.** Agent skills for [pi](https://pi.dev) and
 [Claude Code](https://claude.com/claude-code) that set up two
 [OKF](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md)
 (Open Knowledge Format) knowledge bundles in any project. `okf/` is for people: plain markdown
-next to the code, checked like code, and rendered as one self-contained page with a concept
+next to the code, checked like code, and rendered as one HTML page (it loads its libraries from pinned CDNs) with a concept
 graph, diagrams, and interactive explainers. `edukai/` (opt-in) is for the agent: short,
 sourced lessons that code re-checks, handed back to the agent at the moment they matter.
 
@@ -127,12 +127,20 @@ with transcripts from both harnesses.
 
 ## Install
 
-Node 24+ is required: the tools are TypeScript that Node runs directly, with no build step.
+Node 24+ is required.
+
+**The tools** are an npm package, `@jb9k62/good2go`, with a `good2go` command. A project
+depends on it (`npm i -D @jb9k62/good2go`) and holds no copies of the tools; the scaffold adds the
+dependency and the npm scripts for you. With no `package.json`, use
+`npx @jb9k62/good2go@0.7.0 <command>`. The package has no install scripts and is published from CI
+with provenance ([SECURITY.md](SECURITY.md)).
+
+**The skills** (and the memory hooks) go into your agent:
 
 **pi**, as a package (pin a tag for reproducible installs):
 
 ```bash
-pi install git:github.com/jb9k62/okf-bootstrap@v0.6.0
+pi install git:github.com/jb9k62/okf-bootstrap@v0.7.0
 ```
 
 **Claude Code**, as a plugin from this repo's marketplace:
@@ -148,15 +156,15 @@ or by cloning straight into your skills directory, where it loads as a local plu
 git clone https://github.com/jb9k62/okf-bootstrap ~/.claude/skills/okf-bootstrap
 ```
 
-**Anywhere else**: clone, then link the skill into every agent you use. A `git pull` then
-updates them all.
+**Anywhere else**, copy the skills from the package, with no clone:
 
 ```bash
-git clone https://github.com/jb9k62/okf-bootstrap && cd okf-bootstrap
-npm run install-skill     # ~/.claude/skills and ~/.pi/agent/skills; --claude, --pi, --agents, --copy
+npx @jb9k62/good2go skills     # ~/.claude/skills, ~/.pi/agent/skills, ~/.agents/skills; --claude, --pi, --agents, --force
 ```
 
-That last way links the two skills only. The memory hooks load when the repository is installed
+or clone and link them (`npm run install-skill`), so a `git pull` updates every agent at once.
+
+Both ways install the two skills only. The memory hooks load when the repository is installed
 as a Claude Code plugin or a pi package (pi 1.0 or later); without them, the snippet `--edukai`
 writes into `AGENTS.md` is what points an agent at its memory. The hooks need Node 22.18 or
 later on the `PATH` they run with (on an older one they stay silent), and say nothing in a
@@ -175,12 +183,12 @@ Or invoke it directly (`/skill:okf-bootstrap` in pi, `/okf-bootstrap` in Claude 
 the scaffold yourself:
 
 ```bash
-node path/to/okf-bootstrap/skills/okf-bootstrap/assets/bootstrap.mts . --name "My App" --widgets --edukai
+npx @jb9k62/good2go init . --name "My App" --widgets --edukai   # --design-dir design to name the folder
 npm install
 npm install -D @mermaid-js/mermaid-cli@11 playwright && npx playwright install chromium
 
 npm run okf:validate        # types, links, timestamps: expect 0 issues
-npm run okf:view            # writes okf/viz.html; open it in a browser
+npm run okf:view            # writes okf/viz.html (your design folder); open it in a browser
 npm run okf:mermaid         # every diagram parses
 npm run okf:mermaid:render  # every diagram renders, every quiz and widget works
 npm run okf:search -- search "retry policy" --fresh   # ranked, freshness-aware lookup for agents
@@ -189,28 +197,30 @@ npm run edukai:index        # with --edukai: the syllabus, and the cache the hoo
 npm run edukai:recheck      # lessons that need an agent: broken, failed, suspect, stale
 ```
 
-Re-running the scaffold is safe: it keeps everything you wrote and refreshes only the tools.
+The design bundle (`okf/` by default, or `--design-dir`) is always the first one scaffolded. Any
+other bundle is one command, whatever it holds:
+
+```bash
+npx good2go new ops --name "Operations" --intent "How we run the service, for whoever is on call"
+npx good2go validate ops
+```
+
+Re-running the scaffold is safe: it keeps everything you wrote.
 
 ## Updating
 
 ```bash
-npm run okf:update                  # dry run: what would change in the tools, to the latest release
-npm run okf:update -- --apply       # do it (refuses on a dirty git tree, so `git diff` is the undo)
-npm run okf:update -- --ref v0.5.0  # a specific release tag (an older one needs --allow-downgrade to apply)
-npm run okf:update -- --dir ../app   # a project other than the current directory
+npm update @jb9k62/good2go          # the tools: the lockfile pins them, Dependabot and Renovate can propose it
+npm run okf:update                  # which scaffolded templates the new release changed
+npm run okf:update -- --write       # write the release's copies under .okf-update/ to diff by hand
 ```
 
-Updates run only when you run them; nothing checks in the background. Both modes fetch a
-release tag (never `main`) into a temporary folder. The dry run writes nothing in the project and
-runs none of the release's code; it lists the files that would change and the release's changelog.
-`--apply` runs the release's scaffold with `--tools-only`, so it runs code from that tag. A
-generated script you have edited is kept, and the release's copy is written beside it as
-`<name>.new`. Your authored files are never overwritten: when a release changes a template, its
-copy goes under `.okf-update/` for you to diff. Projects scaffolded before this existed have no
-`scripts/.okf-bootstrap.json`; run `bootstrap.mts <project> --tools-only` once from the new skill
-to create it. That run replaces every `scripts/okf-*` file, so commit first and check
-`git diff scripts/` for edits of your own. The `.okf-update/` folder and `scripts/*.new` files an
-apply leaves behind do not count as a dirty tree, so they never block the next update.
+Nothing checks in the background. Your authored files are never overwritten.
+
+**Scaffolded before 0.7?** Your `scripts/okf-*` files are copies of the tools. Run
+`npx @jb9k62/good2go init --tools-only` once: it removes each copy that is unchanged from what the
+old release wrote, keeps and names any you edited, rewrites the npm scripts and adds the
+dependency. Commit first so `git diff` is the undo.
 
 ## How it works
 
@@ -226,11 +236,7 @@ your-project/
 │   ├── index.md              # the syllabus; one generated block
 │   ├── log.md
 │   └── <domain>/             # overview.md, and lessons/YYYY-MM-DD-short-claim.md
-├── scripts/
-│   ├── okf-view.mts          # validator + viewer + render gate
-│   ├── okf-mermaid.mts       # Mermaid parse gate
-│   ├── okf-search.mts        # ranked search, on either bundle
-│   └── okf-edukai.mts        # lessons: new, verify, supersede, index, recheck
+├── .okf-bootstrap.json       # the install manifest: version, name, design folder, template hashes
 ├── packages/okf-widgets/     # with --widgets: your React widgets (an npm workspace)
 ├── okf-concept-template.md   # authoring aids, outside the bundle
 └── okf-explainer-template.md
@@ -277,14 +283,14 @@ npm run test:render         # browser gates on the demo and an error fixture, an
 npm run screenshots         # regenerate docs/images from the demo bundle
 ```
 
-This repository documents itself with the tooling it ships: [`okf/`](okf/index.md) is its own
+This repository documents itself with the tooling it ships: [`design/`](design/index.md) is its own
 design bundle and [`edukai/`](edukai/index.md) is its own agent memory. The tools run from
 `skills/okf-bootstrap/assets/` rather than generated copies under `scripts/`
-([ADR-0003](okf/adr/0003-run-the-tools-from-the-skill-assets.md)).
+([ADR-0003](design/adr/0003-run-the-tools-from-the-skill-assets.md)).
 
 ```bash
-npm run okf:validate        # this repository's own okf/ bundle
-npm run okf:view            # render it to okf/viz.html (builds the widgets first)
+npm run okf:validate        # this repository's own design/ bundle
+npm run okf:view            # render it to design/viz.html (builds the widgets first)
 npm run edukai:brief        # what an agent is told when a session opens
 npm run edukai:recheck      # lessons whose sources changed, or whose checks no longer hold
 ```

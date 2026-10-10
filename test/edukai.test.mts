@@ -21,6 +21,7 @@ const HOOK = path.join(ASSETS, 'okf-edukai-hook.mts');
 const VIEW = path.join(ASSETS, 'okf-view.mts');
 const SEARCH = path.join(ASSETS, 'okf-search.mts');
 const BOOTSTRAP = path.join(ASSETS, 'bootstrap.mts');
+const GOOD2GO = path.join(ASSETS, 'good2go.mts');
 const CACHE = path.join(ROOT, '.cache', 'test');
 fs.mkdirSync(CACHE, { recursive: true });
 const scratch = fs.mkdtempSync(path.join(CACHE, 'edukai-'));
@@ -1314,7 +1315,7 @@ describe('the edukai skill', () => {
   });
 
   it('names commands and flags the tools really have', () => {
-    for (const command of ['new', 'verify', 'supersede', 'recheck']) assert.match(text, new RegExp(`okf-edukai\\.mts ${command}\\b`));
+    for (const command of ['new', 'verify', 'supersede', 'recheck']) assert.match(text, new RegExp(`good2go edukai ${command}\\b`));
     const help = run(EDUKAI, ['--help'], ROOT).out + run(SEARCH, ['--help'], ROOT).out;
     for (const flag of new Set(text.match(/--[a-z][a-z-]+/g))) {
       if (['--edukai', '--tools-only', '--help'].includes(flag)) continue; // bootstrap's own
@@ -1332,59 +1333,54 @@ describe('bootstrap --edukai', () => {
   }
   const scripts = (dir: string) => JSON.parse(read(path.join(dir, 'package.json'))).scripts as Record<string, string>;
   const EDUKAI_SCRIPTS = {
-    'edukai:validate': 'node --import ./scripts/okf-start.mjs scripts/okf-view.mts edukai --validate --strict && node --import ./scripts/okf-start.mjs scripts/okf-edukai.mts index --check',
-    'edukai:index': 'node --import ./scripts/okf-start.mjs scripts/okf-edukai.mts index',
-    'edukai:recheck': 'node --import ./scripts/okf-start.mjs scripts/okf-edukai.mts recheck',
-    'edukai:brief': 'node --import ./scripts/okf-start.mjs scripts/okf-edukai.mts index && node --import ./scripts/okf-start.mjs scripts/okf-edukai-hook.mts brief',
-    'edukai:search': 'node --import ./scripts/okf-start.mjs scripts/okf-search.mts --bundle edukai',
-    'edukai:view': 'node --import ./scripts/okf-start.mjs scripts/okf-view.mts edukai',
+    'edukai:validate': 'good2go validate edukai --strict && good2go edukai index --check',
+    'edukai:index': 'good2go edukai index',
+    'edukai:recheck': 'good2go recheck',
+    'edukai:brief': 'good2go edukai index && good2go hook brief',
+    'edukai:search': 'good2go search --bundle edukai',
+    'edukai:view': 'good2go view edukai',
   };
-  /** Run an npm script's command line without npm, one `&&` step at a time. */
+  /** Run an npm script's command line without npm, one `&&` step at a time, with good2go from source. */
   function npmRun(dir: string, name: string, extra: string[] = []) {
     let last = { code: 0 as number | null, out: '', err: '', all: '' };
     const steps = scripts(dir)[name]!.split(' && ');
     for (const [i, step] of steps.entries()) {
-      // Everything after `node`, as npm would pass it: the preload first, then the tool.
-      const [, first, ...args] = step.split(' ');
-      last = run(first!, [...args, ...(i === steps.length - 1 ? extra : [])], dir);
+      const [bin, ...args] = step.split(' ');
+      assert.equal(bin, 'good2go', `${name} calls the package's command`);
+      last = run(GOOD2GO, [...args, ...(i === steps.length - 1 ? extra : [])], dir);
       if (last.code !== 0) break;
     }
     return last;
   }
 
-  it('starts every npm script through the compile cache, which lands under node_modules', () => {
+  it('starts every npm script through good2go, with nothing copied into the project', () => {
     const dir = target('preload');
     assert.equal(run(BOOTSTRAP, [dir, '--edukai'], ROOT).code, 0);
     for (const [name, script] of Object.entries(scripts(dir))) {
       for (const step of script.split(' && ')) {
-        if (step.startsWith('node ')) assert.match(step, /^node --import \.\/scripts\/okf-start\.mjs scripts\/okf-[a-z-]+\.mts\b/, name);
+        if (/^(good2go|npm) /.test(step)) continue;
+        assert.fail(`${name}: ${step} is not a good2go command`);
       }
     }
-    const start = read(path.join(dir, 'scripts', 'okf-start.mjs'));
-    assert.doesNotMatch(start, /from '(?!node:)/, 'it loads before anything can be stripped or installed');
-    fs.mkdirSync(path.join(dir, 'node_modules'));
-    fs.symlinkSync(path.join(ROOT, 'node_modules', 'yaml'), path.join(dir, 'node_modules', 'yaml'));
+    assert.ok(!fs.existsSync(path.join(dir, 'scripts')), 'no scripts/ folder');
     assert.equal(npmRun(dir, 'edukai:index').code, 0);
     const r = npmRun(dir, 'okf:search', ['facets']);
     assert.equal(r.code, 0, r.all);
-    assert.ok(fs.readdirSync(path.join(dir, 'node_modules', '.cache', 'okf-compile'), { recursive: true }).length > 1);
-    // Without the preload a tool runs the same.
-    assert.equal(run(path.join(dir, 'scripts', 'okf-search.mts'), ['facets'], dir).out, r.out);
   });
 
-  it('always copies the two tools and adds okf:recheck, but no memory bundle unless asked', () => {
+  it('adds okf:recheck, but no memory bundle unless asked', () => {
     const dir = target('plain');
     const r = run(BOOTSTRAP, [dir], ROOT);
     assert.equal(r.code, 0, r.all);
-    for (const tool of ['okf-edukai.mts', 'okf-edukai-hook.mts']) assert.ok(fs.existsSync(path.join(dir, 'scripts', tool)), tool);
-    assert.equal(scripts(dir)['okf:recheck'], 'node --import ./scripts/okf-start.mjs scripts/okf-edukai.mts recheck --bundle okf');
+    assert.ok(!fs.existsSync(path.join(dir, 'scripts')), 'no tools copied');
+    assert.equal(scripts(dir)['okf:recheck'], 'good2go recheck --bundle okf');
     assert.equal(scripts(dir)['edukai:index'], undefined);
     assert.ok(!fs.existsSync(path.join(dir, 'edukai')));
     assert.ok(!fs.existsSync(path.join(dir, 'AGENTS.md')));
     const recheck = npmRun(dir, 'okf:recheck', ['--strict']);
     assert.equal(recheck.code, 0, recheck.all);
     assert.match(recheck.out, /edukai recheck: okf/);
-    assert.equal(run(path.join(dir, 'scripts', 'okf-view.mts'), ['okf', '--validate', '--strict'], dir).code, 0, 'the ADR templates still validate');
+    assert.equal(npmRun(dir, 'okf:validate', ['--strict']).code, 0, 'the ADR templates still validate');
   });
 
   it('scaffolds a memory bundle in which new, verify and edukai:validate all pass', () => {
@@ -1404,10 +1400,9 @@ describe('bootstrap --edukai', () => {
 
     fs.mkdirSync(path.join(dir, 'src'));
     fs.writeFileSync(path.join(dir, 'src', 'a.ts'), 'export const A = 1;\n');
-    const tool = path.join(dir, 'scripts', 'okf-edukai.mts');
-    const made = run(tool, ['new', '--domain', 'codebase-memory-app', '--title', 'A is one', '--by', ME, '--source', 'src/a.ts'], dir);
+    const made = run(GOOD2GO, ['edukai', 'new', '--domain', 'codebase-memory-app', '--title', 'A is one', '--by', ME, '--source', 'src/a.ts'], dir);
     assert.equal(made.code, 0, made.all);
-    const verified = run(tool, ['verify', made.out.trim(), '--by', ME, '--confidence', 'tested'], dir);
+    const verified = run(GOOD2GO, ['edukai', 'verify', made.out.trim(), '--by', ME, '--confidence', 'tested'], dir);
     assert.equal(verified.code, 0, verified.all);
     assert.equal(npmRun(dir, 'edukai:validate').code, 1, 'the new domain is not in the syllabus yet');
     assert.equal(npmRun(dir, 'edukai:index').code, 0);
@@ -1583,19 +1578,21 @@ describe('the demo: Parcel tracker\'s memory', () => {
   });
 });
 
-describe('release metadata for 0.6.0', () => {
+describe('release metadata for 0.7.0', () => {
   it('keeps the version the same in all the places it lives', () => {
     const pkg = JSON.parse(read(path.join(ROOT, 'package.json')));
     const market = JSON.parse(read(path.join(ROOT, '.claude-plugin', 'marketplace.json')));
-    assert.equal(pkg.version, '0.6.0');
+    assert.equal(pkg.version, '0.7.0');
     assert.equal(JSON.parse(read(path.join(ROOT, '.claude-plugin', 'plugin.json'))).version, pkg.version);
     assert.equal(market.plugins[0].version, pkg.version);
+    assert.match(read(BOOTSTRAP), new RegExp(`const VERSION = '${pkg.version}'`));
+    assert.match(read(GOOD2GO), new RegExp(`const VERSION = '${pkg.version}'`));
     assert.equal(JSON.parse(read(path.join(ROOT, 'package-lock.json'))).version, pkg.version);
   });
 
-  it('copies both edukai tools into projects, and typechecks the pi extension', () => {
-    assert.match(read(BOOTSTRAP), /const TOOLS = \[.*'okf-edukai', 'okf-edukai-hook'\] as const;/);
-    assert.match(read(BOOTSTRAP), /const LEGACY_MJS: readonly string\[\] = \['okf-view', 'okf-mermaid'\];/);
+  it('ships both edukai tools in the package, and typechecks the pi extension', () => {
+    assert.match(read(GOOD2GO), /edukai: \['okf-edukai', \[\]\]/);
+    assert.match(read(GOOD2GO), /hook: \['okf-edukai-hook', \[\]\]/);
     assert.match(read(path.join(ROOT, 'tsconfig.json')), /"extensions\/\*\.ts"/);
   });
 });

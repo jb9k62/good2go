@@ -1,5 +1,16 @@
 # TODO
 
+## Remove the legacy `scripts/okf-*` migration (target: 0.9.0)
+
+0.7.0 moved the tools into the `@jb9k62/good2go` package. Two pieces of code exist only to carry
+projects scaffolded earlier across, and are deprecated: delete them once the minor releases after
+0.7.0 have given everyone time to run `good2go init --tools-only` once.
+
+- `bootstrap.mts`: `LEGACY_MANIFEST`, the fallback in `previousManifest()`, and the "tooling" migration block that removes `scripts/okf-*` copies.
+- `okf-update.mts`: the `scripts/.okf-bootstrap.json` fallback in `readManifest`.
+- Tests: the migration block in `test/bootstrap.test.mts` and the legacy-manifest case in `test/update.test.mts`.
+- Docs: the migration notes in the README, `SKILL.md` and the changelog (`design/okf-bootstrap/tools.md` has the same list).
+
 ## Cast validation in OKF tools
 
 **How to integrate the cast system into okf-bootstrap validation:**

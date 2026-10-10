@@ -13,9 +13,10 @@
  *
  * With no target flags it installs for each agent whose home directory exists.
  *
+ * For a clone. Without one, `good2go skills` copies the skills that ship in the npm package.
  * This links skills only. The memory hooks (hooks/hooks.json for Claude Code,
  * extensions/edukai.ts for pi) load when the repository is installed as a plugin or a pi
- * package; without them, the AGENTS.md snippet that `bootstrap.mts --edukai` writes is what
+ * package; without them, the AGENTS.md snippet that `good2go init --edukai` writes is what
  * points an agent at the memory bundle.
  */
 import fs from 'node:fs';

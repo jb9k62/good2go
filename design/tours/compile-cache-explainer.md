@@ -1,7 +1,7 @@
 ---
 type: Explainer
 title: "Guided tour: why the tools start fast"
-description: "The two caches the tools keep, what each one is keyed on, and why they never choose what to throw away. A widget contrasts them with the eviction policies a cache usually has. Closes with a quiz."
+description: "The two caches the tools keep for this repository's own scripts and hooks, what each one is keyed on, and why they never choose what to throw away. A widget contrasts them with the eviction policies a cache usually has. Closes with a quiz."
 tags: [explainer, guided-tour, caching, tooling]
 generated: { by: pi/deepseek-ai/DeepSeek-V4.1-Flash, at: 2026-10-08T20:30:00Z }
 sources:
@@ -10,8 +10,9 @@ sources:
   - resource: skills/okf-bootstrap/assets/okf-search.mts
 ---
 
-This tour is for anyone who runs the tools, or who has wondered why the npm scripts load a
-file before the tool. By the end you will know what the two caches are, what each is keyed on,
+This tour is for anyone who works on this repository, or who has wondered why its npm scripts
+load a file before the tool. (A project that installs the `@jb9k62/good2go` package gets no
+compile cache: the package holds compiled JavaScript, so there is nothing to strip.) By the end you will know what the two caches are, what each is keyed on,
 and why neither ever has to decide what to throw away. There is a widget to play with, and a
 [quiz](#quiz) at the end.
 
@@ -30,16 +31,19 @@ and why neither ever has to decide what to throw away. There is a widget to play
 > when the process exits, so the next run strips the same file again. Node's compile cache
 > keeps that stripped code on disk, keyed by the file's content, and reuses it.
 
-The tools are TypeScript with no build step: Node 24 runs a `.mts` file directly. That is the
-point of the design, but it has a price. Every start strips the types again, and for a hook
+This repository's tools are TypeScript with no build step: Node 24 runs a `.mts` file
+directly. That is the point of running them from source, but it has a price. The published
+package avoids it by compiling to JavaScript at publish time
+([ADR-0006](/adr/0006-publish-the-tools-to-npm.md)), so it needs no cache and gets none. Every start strips the types again, and for a hook
 that runs on every file read, the stripping is most of the work.
 
 The answer is a cache. In fact there are two, of different kinds.
 
 **The compile cache** saves the stripping. It is switched on in two places:
 
-- `okf-start.mjs` is loaded first by every npm script (`node --import ./scripts/okf-start.mjs
-  scripts/okf-search.mts`). It keeps the cache under the project's own
+- `okf-start.mjs` is loaded first by this repository's own npm scripts (`node --import
+  ./skills/okf-bootstrap/assets/okf-start.mjs skills/okf-bootstrap/assets/okf-search.mts`). It
+  is not copied to projects. It keeps the cache under the project's own
   `node_modules/.cache/okf-compile`, or in a private folder under the temp directory when
   there is no `node_modules` to write to.
 - `hooks/compile-cache.mjs` does the same for the memory hooks. It always uses a private temp

@@ -13,7 +13,7 @@ sources:
 
 # ADR-0005: Name each bundle for what it holds: design/, and an optional ops/
 
-- **Status:** proposed
+- **Status:** accepted in part. The configurable design folder (`--design-dir`) and `good2go new` are implemented; the move of this repository's own `okf/` to `design/`, role lookup by manifest map, and a built-in `--ops` starter are not yet
 - **Date:** 2026-10-09
 - **Deciders:** the maintainers
 
@@ -52,6 +52,22 @@ The code fixes the names in several places, which is what a change has to undo:
 
 ## Decision
 
+**The first bundle a project bootstraps is always the design bundle.** `good2go init` scaffolds
+it, and its folder is configurable: `--design-dir <name>` (default `okf`, and `design` for new
+projects once the default moves). Every other bundle is optional and is made afterwards with one
+general command, whatever it holds:
+
+```
+good2go new ops --name "Operations" --intent "How we run the service, for whoever is on call"
+```
+
+`good2go new <dir> --name <name> --intent <sentence>` creates the folder and a few essential
+files (`index.md`, `log.md` and a starter page that explains how to add more), and the result
+passes `good2go validate` as it stands. It is deliberately simple: it knows nothing about what a
+bundle is for beyond the intent sentence, so `ops/`, `runbooks/`, `people/` or any other name works
+the same way. The memory bundle stays a special case because hooks read it
+([ADR-0002](/adr/0002-two-bundles-design-and-memory.md)).
+
 We will name each bundle for what it holds. The design bundle is scaffolded as `design/`, and
 a new, optional `ops/` bundle holds the knowledge about operating the software and the
 organisation around it. Both names are defaults that a project can change.
@@ -59,12 +75,12 @@ organisation around it. Both names are defaults that a project can change.
 In detail:
 
 - **Three roles, three defaults.** `design` → `design/`, `ops` → `ops/`, `memory` →
-  `edukai/`. `--ops` opts in to the third, as `--edukai` does for memory. A flag per role
-  (`--design-dir`, `--ops-dir`) overrides the folder, for a project where `design/` already
-  holds mock-ups or `ops/` already holds deployment files.
-- **The manifest records the choice.** `scripts/.okf-bootstrap.json` gains a `bundles` map
-  from role to folder. The tools read a bundle's role from that map and never from the
-  folder's name. The npm scripts are generated from it.
+  `edukai/`. The design folder is chosen with `--design-dir`, for a project where `design/`
+  already holds mock-ups. An ops bundle is made with `good2go new ops`, in whatever folder the
+  project likes. A dedicated `--ops` flag with the starter sections below is still to do.
+- **The manifest records the choice.** `.okf-bootstrap.json` records the design folder
+  (`designDir`) today. A `bundles` map from role to folder, which the tools would read instead of
+  a folder's name, is still to do. The npm scripts are generated from the design folder.
 - **An existing `okf/` is kept.** A manifest with no `bundles` map means `design: okf`. A
   re-run or an update never renames a folder; moving to `design/` is a `git mv` and one
   manifest edit that the project chooses to make.
@@ -76,8 +92,9 @@ In detail:
   the format and of the tools.
 - **The starter subfolder `design/` inside the bundle is renamed**, so no project gets
   `design/design/`.
-- **This repository follows.** Its own `okf/` and `examples/demo/okf/` move to `design/` in
-  the change that implements this record.
+- **This repository follows.** Its own `okf/` moved to `design/` in 0.7.0. The demo
+  (`examples/demo/okf/`) deliberately keeps the default `okf/`, so it shows what a project scaffolded
+  with the defaults looks like and its pinned lesson digests stay valid.
 
 ## Consequences
 

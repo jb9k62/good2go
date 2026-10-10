@@ -21,14 +21,7 @@ Paths are relative to the skill directory.
 | `references/PLAYBOOK.md` | This file: the full procedure, conventions, review checklist, version migration. |
 | `references/EXPLAINERS.md` | Guided tours, quizzes and widgets: why, how, and the review checklist. |
 | `references/okf-spec/` | The OKF spec (`SPEC.md`, its `LICENSE.md`), vendored from upstream; `UPSTREAM.json` records the commit and version. |
-| `assets/bootstrap.mts` | Turnkey scaffold: copies templates + tools into a target project. |
-| `assets/okf-view.mts` | The validator + viewer, based on the Google `knowledge-catalog` reference viewer; also the render gate under `--check-render`. |
-| `assets/okf-mermaid.mts` | Parses every mermaid block in the bundle with mermaid-cli (`mmdc`); self-contained. |
-| `assets/okf-search.mts` | Ranked search over the bundle that understands trust tier, staleness, tags and links; see "Finding concepts". |
-| `assets/okf-core.mts` | Parsing shared by the viewer and search: frontmatter, trust tier, staleness, links. |
-| `assets/okf-rank.mts` | The ranking itself: pure, with no imports. `okf-search` runs it, and the viewer inlines it (types stripped) for its search box. |
-| `assets/okf-edukai.mts` | The memory bundle's tool (`new`, `verify`, `supersede`, `index`, `recheck`); `verify` and `recheck` also work on a design bundle with `--bundle okf`. |
-| `assets/okf-edukai-hook.mts` | What the harness hooks run (`brief`, `cites`, `debt`) and the lesson-state rules; no dependencies. The validator imports its `check` rules. |
+| The tools | Not in the skill. They are the npm package `@jb9k62/good2go` and its `good2go` command (`init`, `new`, `validate`, `fix`, `view`, `mermaid`, `search`, `recheck`, `edukai`, `hook`, `update`, `skills`). A project depends on the package and holds no copies. |
 | `assets/templates/edukai/`, `assets/templates/edukai-recheck.yml` | The memory bundle's `index.md` and `log.md` (scaffolded by `--edukai`), and a CI workflow to copy by hand. |
 | `assets/templates/okf/` | `index.md`, `log.md` (reserved), `adr/readme.md`, `adr/template.md`. |
 | `assets/templates/concept.md` | Ready-to-fill reference concept (scaffolded as `okf-concept-template.md`). |
@@ -36,8 +29,8 @@ Paths are relative to the skill directory.
 | `assets/templates/okf-widgets/` | The React widget package (scaffolded to `packages/okf-widgets` by `--widgets`). |
 | `assets/templates/package-json-scripts.md` | The `okf:` npm scripts and CLI reference. |
 
-All the tools are TypeScript that Node 24+ runs directly (type stripping): no build step,
-and `.mts` is always ESM, so a project's `package.json` `"type"` is never touched.
+The tools ship compiled in the package, so a project's `package.json` `"type"` is never touched.
+Claude Code and pi are the supported harnesses.
 
 ---
 
@@ -45,62 +38,77 @@ and `.mts` is always ESM, so a project's `package.json` `"type"` is never touche
 
 ### Fast path: run the scaffold
 
+The design bundle is the first bundle bootstrapped. Its folder is configurable
+(`--design-dir <name>`, default `okf`) and recorded in `scripts/.okf-bootstrap.json`.
+
 ```bash
-# target = the project directory (where you want okf/ + scripts/)
-node <skill dir>/assets/bootstrap.mts <project-dir> --name "Project Name"
+cd <project-dir>
+npm install -D @jb9k62/good2go
+npx good2go init . --name "Project Name"      # add --design-dir design, --widgets, --edukai
 ```
 
+A project with no `package.json` runs `npx @jb9k62/good2go@<version> init <project-dir> ...`
+instead, and the scripts below are used as `npx @jb9k62/good2go@<version> <command>`.
+
 This creates:
-- `okf/index.md`, `okf/log.md`
-- `okf/adr/readme.md`, `okf/adr/template.md`
-- `okf/design/` and `okf/<slug>/` (blank, with `.gitkeep`)
-- `scripts/okf-view.mts` (the validator + viewer), `scripts/okf-mermaid.mts` (the Mermaid parse checker), `scripts/okf-search.mts` (search), `scripts/okf-core.mts` (parsing), `scripts/okf-rank.mts` (the ranking; also run by the viewer's search box), and `scripts/okf-edukai.mts` with `scripts/okf-edukai-hook.mts` (pins and re-checks; the memory bundle's tool)
-- `scripts/okf-start.mjs`, which every npm script loads first (`node --import ./scripts/okf-start.mjs …`): it turns on Node's compile cache under `node_modules/.cache/okf-compile`, so a tool's TypeScript is stripped once and not on every run
+- `<design dir>/index.md`, `<design dir>/log.md`
+- `<design dir>/adr/readme.md`, `<design dir>/adr/template.md`
+- the `<design dir>/<slug>/` concept folder (blank, with `.gitkeep`)
 - `okf-concept-template.md` and `okf-explainer-template.md` (authoring aids, kept *outside* the bundle so they are not scanned)
 - with `--widgets`: `packages/okf-widgets/`, added to the npm `workspaces`
 - with `--edukai`: `edukai/index.md` and `edukai/log.md`, the `edukai:` scripts, and a marked snippet in `AGENTS.md`
-- adds `okf:validate`, `okf:fix`, `okf:view`, `okf:mermaid`, `okf:mermaid:render`, `okf:search`, `okf:recheck` (and with widgets,
-  `okf:widgets:build`, `okf:widgets:test`, `okf:widgets:typecheck`) to `package.json`, plus
-  `yaml` as a devDependency
+- `okf:validate`, `okf:fix`, `okf:view`, `okf:mermaid`, `okf:mermaid:render`, `okf:search`, `okf:recheck` (and with widgets,
+  `okf:widgets:build`, `okf:widgets:test`, `okf:widgets:typecheck`) in `package.json`; each calls `good2go`
+- `scripts/.okf-bootstrap.json`, the manifest `good2go update` reads
+
+No tool is copied into the project.
 
 Then install and verify:
 
 ```bash
-cd <project-dir>
 npm install
 npm install -D @mermaid-js/mermaid-cli@11 playwright && npx playwright install chromium
 npm run okf:validate        # expect: 0 issues (types, links, timestamps)
-npm run okf:view            # writes okf/viz.html, open it in a browser
+npm run okf:view            # writes viz.html in the bundle, open it in a browser
 npm run okf:mermaid         # every mermaid block parses in mmdc
 npm run okf:mermaid:render  # every diagram, quiz and widget works (headless Chromium)
 ```
 
-Re-running the scaffold is safe: `okf/index.md`, `okf/log.md`, the ADR index and template, and
-the two authoring templates are kept if they exist (the run lists what it kept), and only
-`--force` replaces them. `packages/okf-widgets` is never replaced, not even by `--force`: it is
-the project's code once scaffolded. The `scripts/okf-*.mts` tools are generated copies and are
-always refreshed (and old `.mjs` copies removed), so `--tools-only` is the way to pull newer
-tooling into a project whose bundle is already written.
+Re-running the scaffold is safe: the index, log, ADR index and template, and the two
+authoring templates are kept if they exist (the run lists what it kept), and only `--force`
+replaces them. `packages/okf-widgets` is never replaced, not even by `--force`: it is the
+project's code once scaffolded.
+
+### Adding another bundle
+
+Any other kind of knowledge gets its own bundle, such as `ops/` for runbooks, on-call and
+escalation. The design bundle's rules apply to it.
+
+```bash
+npx good2go new ops --name "Operations" --intent "Runbooks and escalation for the service"
+npx good2go validate ops && npx good2go view ops
+```
+
+`ops/` invites content that must not be public: names, phone numbers, escalation contacts.
+Point to where those live; do not copy them in.
 
 ### Manual path (what the scaffold does, step by step)
 
-1. **Create the bundle dir** `okf/` in the project root.
-2. **Skeleton**, copied from `templates/`:
+1. **Create the bundle folder** (default `okf/`) in the project root.
+2. **Skeleton**, copied from the package's `templates/`:
    - `index.md`: the root index. Frontmatter is only `okf_version: "0.2"`; `index.md` and
      `log.md` are **reserved** and do **not** need a `type`.
    - `log.md`: dated update history.
    - `adr/readme.md` and `adr/template.md`: the decisions area.
-3. **Copy the tools** `okf-view.mts`, `okf-mermaid.mts`, `okf-search.mts`, `okf-core.mts` and
-   `okf-rank.mts` to `scripts/` (from the skill's `assets/`).
-4. **Add npm scripts** to `package.json` (and `yaml` as a devDependency; no `"type"` change,
-   the tools are `.mts`):
+3. **Depend on the tools**: `npm install -D @jb9k62/good2go`.
+4. **Add npm scripts** to `package.json`:
    ```jsonc
-   "okf:validate":       "node --import ./scripts/okf-start.mjs scripts/okf-view.mts okf --validate",
-   "okf:fix":            "node --import ./scripts/okf-start.mjs scripts/okf-view.mts okf --validate --fix",
-   "okf:view":           "node --import ./scripts/okf-start.mjs scripts/okf-view.mts okf",
-   "okf:mermaid":        "node --import ./scripts/okf-start.mjs scripts/okf-mermaid.mts okf",
-   "okf:mermaid:render": "node --import ./scripts/okf-start.mjs scripts/okf-view.mts okf --check-render",
-   "okf:search":         "node --import ./scripts/okf-start.mjs scripts/okf-search.mts"
+   "okf:validate":       "good2go validate okf",
+   "okf:fix":            "good2go fix okf",
+   "okf:view":           "good2go view okf",
+   "okf:mermaid":        "good2go mermaid okf",
+   "okf:mermaid:render": "good2go view okf --check-render",
+   "okf:search":         "good2go search"
    ```
 5. **Author the first concepts** in `okf/<slug>/` (overview, architecture, domain model, API)
    and record the first ADR, including the one for using OKF itself (see the checklist below).
@@ -108,8 +116,8 @@ tooling into a project whose bundle is already written.
 6. **Validate and view**: `npm run okf:validate` (0 issues: types and links), then
    `npm run okf:view`, then the two Mermaid gates (see the
    [Mermaid](#mermaid-two-gates) section).
-7. **Git commit** the bundle (`okf/`), the tool (`scripts/`), and the `package.json` changes.
-   `okf/viz.html` is generated; either gitignore it or commit it and regenerate on demand.
+7. **Git commit** the bundle and the `package.json` changes. `viz.html` is generated;
+   either gitignore it or commit it and regenerate on demand.
 
 ---
 
@@ -239,10 +247,10 @@ The viewer derives per concept:
   with `human:`), else `machine-confirmed`.
 - **Stale**: true when `stale_after` is a date on or before today.
 
-### Finding concepts (`okf-search.mts`)
+### Finding concepts (`good2go search`)
 
 Before reading files, ask the bundle. `npm run okf:search -- <command>` (default bundle
-`okf/`; `--bundle <dir>` for another) ranks concepts by BM25F over title, tags, path,
+the design bundle; `--bundle <dir>` for another) ranks concepts by BM25F over title, tags, path,
 description, headings, cited files (`sources`, `check`) and body, then applies the spec: stale (§5.5) and `deprecated` (§5.4)
 concepts are demoted and flagged, never hidden; `human-reviewed` outranks `machine-confirmed`
 outranks `unverified` (§5.3); concepts others link to get a small boost. `--explain` shows the
@@ -271,14 +279,14 @@ date. A cache under `node_modules/.cache/okf-search/` (or the OS temp dir) is ke
 file's mtime and size, re-checked on every run; `--no-cache` skips it. Files it cannot index
 (bad frontmatter, no `type`) are named on stderr; `--strict` makes that exit 1.
 
-### Two bundles: design (`okf/`) and memory (`edukai/`)
+### Bundles: design (`okf/` by default) and memory (`edukai/`)
 
-`bootstrap.mts --edukai` (or `--tools-only --edukai` later) adds a second OKF bundle,
+`good2go init --edukai` (or `--tools-only --edukai` later) adds a second OKF bundle,
 `edukai/`: what agents have learned, as **lessons** (`type: Lesson`, one claim each, in
 `<domain>/lessons/YYYY-MM-DD-short-claim.md`) and one `type: Overview` per domain. It is
 written by agents for agents, and its rules are in the separate `edukai` skill. Keep the two
-apart: how the system is designed, for people, goes in `okf/`; a fact an agent found out, for
-the next agent, goes in `edukai/`.
+apart: how the system is designed, for people, goes in the design bundle; a fact an agent found out, for
+the next agent, goes in `edukai/`. Further bundles (ops, say) come from `good2go new`.
 
 What the design bundle shares with it:
 
@@ -288,7 +296,7 @@ What the design bundle shares with it:
   `okf:validate` reports a `supersede` issue when the two do not name each other, the old one
   is not deprecated, a target is missing, or the chain loops. Search flags the old concept as
   replaced. Never delete the old concept.
-- **`okf:recheck`.** `node scripts/okf-edukai.mts verify <concept> --bundle okf --by human:<id>`
+- **`okf:recheck`.** `good2go edukai verify <concept> --bundle okf --by human:<id>`
   pins a digest of each file in the concept's `sources` and sets `verified` and `stale_after`.
   After that, `npm run okf:recheck` lists the concept as `suspect` when a pinned file changes
   and `broken` when one disappears (`-- --strict` exits 1 on those, never on `stale`). Only
@@ -324,18 +332,18 @@ Both gates share one exit-code contract, so a green run always means the same th
 | 1 | a diagram is broken | fix the markdown; the output names file and line, or file and concept (the render gate also fails here when a diagram's pan/zoom controls are missing or dead) |
 | 2 | the gate could not run | fix the setup; **nothing is proven about the diagrams** |
 
-1. **Parse gate** - `npm run okf:mermaid` (`scripts/okf-mermaid.mts`) extracts every
+1. **Parse gate** - `npm run okf:mermaid` (`good2go mermaid`) extracts every
    top-level ```mermaid fenced block (with file + line) and runs each one through
    mermaid-cli (`mmdc`), so only diagrams the real Mermaid parser accepts pass.
    Unclosed fences fail without ever invoking `mmdc`. A fence nested inside a wider
    fence is an example rather than a diagram and is skipped, matching what the viewer
    renders; `~~~mermaid` counts. `mmdc` is resolved from PATH, else from a
    `node_modules/.bin` at or above the bundle, and the binary that answered
-   `--version` is the one that gets spawned, so running the script directly works as
+   `--version` is the one that gets spawned, so `good2go mermaid` works as
    well as `npm run`. Flags: `--json` for machine output, `--timeout <s>` of wall clock
    per diagram (default 60), `--jobs <n>` parallel `mmdc` runs (default 2 - each one
    spawns a browser, so keep this low in constrained CI).
-2. **Render gate** - `npm run okf:mermaid:render` (`scripts/okf-view.mts --check-render`)
+2. **Render gate** - `npm run okf:mermaid:render` (`good2go view --check-render`)
    builds the widgets (when the project has them), writes `viz.html`, opens it in headless Chromium via the project-local `playwright`
    (falling back to `playwright-core`), walks every concept, and fails if any diagram
    ends in `error`, never leaves `pending` (20s per concept), or a concept renders a
@@ -373,7 +381,7 @@ Notes:
   whatever Chromium `npx playwright install chromium` downloaded for the
   project-local playwright version. If a browser refuses to launch, run that install
   command (or re-run the gate on a machine where it worked) before editing the tools.
-- `okf-mermaid.mts` is deliberately self-contained (its own walk and fence extraction)
+- the Mermaid gate (`good2go mermaid`) is deliberately self-contained (its own walk and fence extraction)
   so it can live in a project with no other tooling.
 
 ### Design working notes are often *not* concepts
@@ -391,7 +399,7 @@ report, which trains everyone to ignore the report.
 
 ---
 
-## Viewer features (`okf-view.mts`)
+## Viewer features (`good2go view`)
 
 Based on the viewer in `GoogleCloudPlatform/knowledge-catalog`, not a verbatim copy. It walks
 the bundle, checks conformance, builds a concept graph, and writes one self-contained
@@ -440,13 +448,13 @@ version adds:
   tool implements
 
 ```bash
-node scripts/okf-view.mts okf                # validate + write okf/viz.html
-node scripts/okf-view.mts okf --validate     # validate only
-node scripts/okf-view.mts okf --fix         # first write the key under every ER diagram (see above)
-node scripts/okf-view.mts okf --strict       # exit 1 on any issue
-node scripts/okf-view.mts okf --out PATH     # custom output path
-node scripts/okf-view.mts okf --check-render # + headless-browser audit: diagrams, quizzes, widgets
-node scripts/okf-view.mts okf --widgets PATH # inline this widget bundle (default: packages/okf-widgets/dist/okf-widgets.js)
+good2go view okf                # validate + write okf/viz.html
+good2go validate okf               # validate only
+good2go fix okf                    # first write the key under every ER diagram (see above)
+good2go view okf --strict        # exit 1 on any issue
+good2go view okf --out PATH     # custom output path
+good2go view okf --check-render # + headless-browser audit: diagrams, quizzes, widgets
+good2go view okf --widgets PATH # inline this widget bundle (default: packages/okf-widgets/dist/okf-widgets.js)
 ```
 
 Validation report prints: bundle path, okf_version, valid concept count, graph edge count,

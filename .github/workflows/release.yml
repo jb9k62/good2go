@@ -1,0 +1,87 @@
+name: release
+
+# Publishes @jb9k62/good2go when a version tag is pushed. Publishing uses npm trusted
+# publishing (OIDC): there is no NPM_TOKEN secret, and the npm registry issues a provenance
+# attestation for each release. See docs/RELEASING.md.
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Tag and manifest versions agree
+        run: |
+          node -e '
+            const fs = require("node:fs");
+            const tag = process.env.GITHUB_REF_NAME;
+            const json = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
+            const found = {
+              "package.json": json("package.json").version,
+              ".claude-plugin/plugin.json": json(".claude-plugin/plugin.json").version,
+              ".claude-plugin/marketplace.json": json(".claude-plugin/marketplace.json").plugins[0].version,
+              "VERSION in bootstrap.mts": fs.readFileSync("skills/okf-bootstrap/assets/bootstrap.mts", "utf8").match(/const VERSION = \x27([^\x27]+)\x27/)?.[1],
+            };
+            const expected = found["package.json"];
+            const bad = Object.entries(found).filter(([, v]) => v !== expected);
+            if (tag !== "v" + expected || bad.length) {
+              console.error("Version mismatch: tag is " + tag + ", package.json is " + expected);
+              for (const [file, v] of Object.entries(found)) console.error("  " + file + ": " + v);
+              process.exit(1);
+            }
+            console.log("Tag " + tag + " and all manifests agree on " + expected);
+          '
+
+      - run: npm ci
+      - run: npm run check
+      - run: npm run build
+
+      - name: Pack and smoke-test the tarball
+        run: |
+          set -euo pipefail
+          PACK_DIR="$RUNNER_TEMP/pack"
+          mkdir -p "$PACK_DIR"
+          TARBALL="$PACK_DIR/$(npm pack --silent --pack-destination "$PACK_DIR")"
+          SMOKE="$RUNNER_TEMP/smoke"
+          mkdir -p "$SMOKE"
+          cd "$SMOKE"
+          npm init -y > /dev/null
+          npm install --no-audit --no-fund "$TARBALL"
+          npx --no-install good2go --version
+          npx --no-install good2go init "$SMOKE/project"
+          test -d "$SMOKE/project"
+
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24
+          cache: npm
+      # Trusted publishing needs npm 11.5.1 or later. Node 24 may bundle an older npm.
+      # No registry-url here: setup-node would write a token placeholder into .npmrc.
+      - run: npm install -g npm@latest
+      - run: npm ci
+      - run: npm run build
+      - run: npm publish --provenance --access public

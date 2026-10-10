@@ -25,5 +25,5 @@ When you register a widget, add a demo tour that uses it in the same change.
 
 ## Caveats
 
-- The rule covers the demo bundle only. This repository's own `okf/` tours may use just some
+- The rule covers the demo bundle only. This repository's own `design/` tours may use just some
   of the registered widgets.

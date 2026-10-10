@@ -13,6 +13,7 @@ sources:
 # ADR-0003: Run the tools from the skill's assets, not generated copies
 
 - **Status:** accepted
+- **Note:** [ADR-0006](/adr/0006-publish-the-tools-to-npm.md) replaced the "generated copies in projects" half of this record: a scaffolded project now depends on the `@jb9k62/good2go` package and holds no tool copies. This record still stands for this repository's own layout, which runs the tools from `skills/okf-bootstrap/assets/`.
 - **Date:** 2026-10-08
 - **Deciders:** the maintainers
 

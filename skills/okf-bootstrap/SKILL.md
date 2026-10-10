@@ -2,26 +2,28 @@
 name: okf-bootstrap
 description: >
   Scaffold and maintain an OKF (Open Knowledge Format) knowledge bundle in any project:
-  an okf/ doc pack (index, log, ADRs, concepts), a validator and self-contained graph viewer
+  a design bundle (index, log, ADRs, concepts; `okf/` by default), a validator and self-contained graph viewer
   (viz.html), Mermaid parse and render gates, and optional interactive explainers: callouts,
   click-to-check quizzes and React "micro-world" widgets that let a reader play with how the
   system behaves. Use when asked to "bootstrap an okf" or set up structured design docs, when
   writing a guided tour, tutorial or explainer of code or a change (especially agent-written
   code someone must understand before building on it), when adding a quiz or interactive
   widget to docs, when moving a bundle to a new OKF spec version, or when updating a project's
-  okf tools to a newer okf-bootstrap release.
+  okf tools to a newer okf-bootstrap release or when adding another bundle such as ops.
 license: MIT
-compatibility: Node 24+ (runs TypeScript directly). npm. Chromium via playwright for the render gate.
+compatibility: Node 24+. npm. Chromium via playwright for the render gate. Harnesses: Claude Code and pi.
 ---
 
 # OKF Bootstrap
 
 Scaffolds the **app-knowledge** flavour of an [OKF](references/okf-spec/SPEC.md) doc pack into
-a project and keeps it honest: an `okf/` bundle (index, dated log, ADR area, `design/` and
-`<slug>/` concept dirs), the `okf-view.mts` validator + graph viewer, the `okf-mermaid.mts`
-parse checker, the `okf-search.mts` freshness-aware search, the `okf:` npm scripts, and optionally `packages/okf-widgets` for interactive
-explainers and `edukai/`, a second bundle for what agents learn (see "Two bundles"). It models knowledge *about* a project: decisions, architecture, domain model, API,
-and the guided tours that make them understandable.
+a project and keeps it honest. The design bundle is the first bundle bootstrapped: an index,
+a dated log, an ADR area and concept folders for decisions, architecture, domain model, API and
+the guided tours that make them understandable. Its folder is configurable and defaults to
+`okf/`. Other bundles are added later with `good2go new` (see "Bundles").
+
+The tools are the npm package `@jb9k62/good2go` and its `good2go` command. A project depends
+on the package and holds no copies of the tools. The supported harnesses are Claude Code and pi.
 
 Read these as the task needs them (paths relative to this file):
 
@@ -30,53 +32,56 @@ Read these as the task needs them (paths relative to this file):
 | [references/PLAYBOOK.md](references/PLAYBOOK.md) | Any bundle work: layout, frontmatter, links, the gates, the review checklist, version migration |
 | [references/EXPLAINERS.md](references/EXPLAINERS.md) | Before writing an `Explainer` concept, a quiz, or a widget |
 | [references/okf-spec/SPEC.md](references/okf-spec/SPEC.md) | The OKF spec itself (vendored; `UPSTREAM.json` says which commit) |
-| `assets/templates/okf-widgets/README.md` | Before adding or changing a widget |
+| `packages/okf-widgets/README.md` (in the project) | Before adding or changing a widget |
 
 ## Invocation
 
 pi: `/skill:okf-bootstrap [targetDir] [flags]`. Claude Code: `/okf-bootstrap [targetDir] [flags]`
-(or `/okf-bootstrap:okf-bootstrap` when installed as a plugin). Or just ask: "bootstrap an okf
-for this project", "write an explainer for this change with a quiz", "add a widget that shows X".
+(or `/okf-bootstrap:okf-bootstrap` as a plugin). Or just ask: "bootstrap an okf for this
+project", "write an explainer for this change with a quiz", "add a widget that shows X".
 
-The scaffold is `assets/bootstrap.mts`. It resolves its templates relative to itself, so run it
-from anywhere with the skill directory's absolute path:
+Scaffold with `good2go init`. In a project with a `package.json`, install the package first:
 
 ```bash
-node <skill dir>/assets/bootstrap.mts <targetDir> --name "Project Name" [--widgets]
+npm install -D @jb9k62/good2go
+npx good2go init <targetDir> --name "Project Name" [--design-dir okf] [--widgets] [--edukai]
 ```
+
+With no `package.json`, run it without installing, pinned to a version:
+`npx @jb9k62/good2go@<version> init <targetDir> --name "Project Name"`.
 
 | Flag | Effect |
 | --- | --- |
-| `--name` | Title for `okf/index.md` (default: the target's folder name) |
-| `--slug` | Concept dir id (default: kebab-case of the name) |
+| `--name` | Title for the design bundle's `index.md` (default: the target's folder name) |
+| `--slug` | Concept folder id (default: kebab-case of the name) |
+| `--design-dir` | The design bundle's folder (default `okf`); recorded so every command finds it |
 | `--widgets` | Also scaffold `packages/okf-widgets` (React micro-worlds), add it to the npm workspaces, and build it before `okf:view` and the render gate |
-| `--edukai` | Also scaffold `edukai/`, the agent memory bundle (see "Two bundles"), add the `edukai:` scripts, and write a short marked snippet into `AGENTS.md` once |
-| `--tools-only` | Refresh `scripts/okf-*.mts`, `scripts/okf-start.mjs` (the compile-cache preload the scripts load) and the `okf:` scripts only; add `--widgets` to add widgets, or `--edukai` to add the memory bundle, to a project that already has `okf/`. Every run writes `scripts/.okf-bootstrap.json`, the manifest `okf:update` reads |
+| `--edukai` | Also scaffold `edukai/`, the agent memory bundle (see "Bundles"), add the `edukai:` scripts, and write a short marked snippet into `AGENTS.md` once |
+| `--tools-only` | Refresh the npm scripts and manifest only; add `--widgets` or `--edukai` to add either to a project that already has its design bundle |
 | `--no-scripts` | Leave `package.json` alone |
 | `--force` | Replace the authored files (index, log, ADR index and template, authoring templates) with fresh templates. Never touches `packages/okf-widgets` |
 
-A plain re-run keeps every authored file and lists what it kept, so re-running to pick up newer
-tooling never costs `log.md`'s history. The `scripts/okf-*.mts` tools are generated copies: always
-refreshed, and older `.mjs` copies are removed.
+A plain re-run keeps every authored file and lists what it kept, so re-running costs
+`log.md` nothing.
 
 ## Procedure
 
-1. **Scaffold.** Run the command above. Pass `--widgets` when the project will have explainers
-   (tours, tutorials, onboarding); it can be added later with `--tools-only --widgets`.
-2. **Install.** The tools are `.mts`: Node 24+ runs them with no build and no `"type"` change.
+1. **Scaffold** with the command above. Pass `--widgets` when the project will have explainers
+   (tours, tutorials, onboarding); it can be added later.
+2. **Install.**
    ```bash
-   npm install                      # yaml (added as a devDependency), and the widget workspace
+   npm install
    npm install -D @mermaid-js/mermaid-cli@11 playwright
    npx playwright install chromium
    ```
    Without the last two, the Mermaid gates exit 2 ("could not run"): a failure, never a pass.
 3. **Author.**
-   - First ADR: `okf/adr/0001-...` recording the decision to keep design knowledge in an OKF
-     bundle (where it lives, why, what was rejected). Copy `okf/adr/template.md` and add a row
-     to `okf/adr/readme.md`.
-   - First concepts in `okf/<slug>/`: overview, architecture, domain model, API. Start from
-     `okf-concept-template.md`. Every non-reserved `.md` needs a `type`, every internal link
-     must resolve, and every timestamp is an ISO 8601 datetime with an offset.
+   - First ADR: `<design dir>/adr/0001-...` recording the decision to keep design knowledge in
+     an OKF bundle (where it lives, why, what was rejected). Copy `adr/template.md` and add a
+     row to `adr/readme.md`.
+   - First concepts in `<design dir>/<slug>/`: overview, architecture, domain model, API. Start
+     from `okf-concept-template.md`. Every non-reserved `.md` needs a `type`, every internal
+     link must resolve, and every timestamp is an ISO 8601 datetime with an offset.
    - Explainers: start from `okf-explainer-template.md` and follow
      [EXPLAINERS.md](references/EXPLAINERS.md): background, intuition, details, then a quiz.
    - **Check every claim against the code before it goes in** (the playbook's checklist).
@@ -84,7 +89,7 @@ refreshed, and older `.mjs` copies are removed.
    ```bash
    npm run okf:fix               # writes the relationship key under every ER diagram
    npm run okf:validate          # frontmatter, links, timestamps, ER keys: expect 0 issues
-   npm run okf:view              # (builds widgets,) validates, writes okf/viz.html
+   npm run okf:view              # (builds widgets,) validates, writes viz.html
    npm run okf:mermaid           # every mermaid block parses in mmdc
    npm run okf:mermaid:render    # headless Chromium: diagrams, quizzes, widgets all work
    npm run okf:widgets:typecheck && npm run okf:widgets:test   # with --widgets
@@ -92,81 +97,79 @@ refreshed, and older `.mjs` copies are removed.
    Exit codes are shared: **0** pass, **1** something is broken (file and line named), **2**
    the gate could not run. Read 2 as "unproven", never as "fine". Then open `viz.html` and
    look, in light and dark: the gates prove it works, not that it reads well.
-5. **Commit** `okf/`, `scripts/`, `packages/okf-widgets/`, the two authoring templates and
-   `package.json`. Gitignore `okf/viz.html` (generated).
+5. **Commit** the bundle, `packages/okf-widgets/`, the two authoring templates and
+   `package.json`. Gitignore `viz.html` (generated).
+
+## Bundles
+
+A project can hold several OKF bundles. They stay separate because they have different
+readers and different rules.
+
+| Bundle | Folder | Reader | Added with |
+| --- | --- | --- | --- |
+| Design | `okf/` by default, set by `init --design-dir` | The team, in `viz.html` | `good2go init` (always first) |
+| Memory | `edukai/` | The agent, through harness hooks | `good2go init --edukai` |
+| Ops, or any other | Your choice, for example `ops/` | Whoever the bundle is for | `good2go new` |
+
+```bash
+npx good2go new ops --name "Operations" --intent "Runbooks, on-call and escalation for the service"
+```
+
+`new` scaffolds an index, a log and a starter page into `<dir>`, and the bundle then takes the
+same gates: `good2go validate ops`, `good2go view ops`, `good2go search search "query" --bundle ops`.
+
+This skill covers the design bundle and any other people-written bundle. Reading and writing
+lessons is the **`edukai` skill** (installed beside this one); use it for anything under
+`edukai/`. Never put lessons in the design bundle, or design docs in `edukai/`. Two things from
+the memory side also work on a design bundle: `supersedes` / `superseded_by` in frontmatter
+(an ADR that replaces another; the validator checks the pair), and `npm run okf:recheck`, which
+reports concepts whose pinned `sources` changed (`good2go edukai verify <concept> --bundle okf --by <actor>`
+pins them).
 
 ## Updating
 
-`npm run okf:update` brings a project's generated tools (`scripts/okf-*`) up to a release. It
-runs only when someone runs it: nothing checks for updates in the background.
-When asked to update:
+Update by raising the package version: `npm install -D @jb9k62/good2go@latest`. The tools
+come with it. What the project already holds is the scaffolded templates, which `good2go update`
+compares with the installed release. It runs only when someone runs it.
 
-1. **Dry run.** `npm run okf:update` prints what would change between the installed version
-   and the release (default: the latest tag; `-- --ref vX.Y.Z` picks one), and the release's
-   `CHANGELOG.md` entries since the installed version. It fetches the tag into a temporary
-   folder, runs none of its code, and writes nothing in the project.
-2. **Summarise** the changes in plain words, from that changelog and the list of files.
-3. **Ask the user** before applying. Mention anything that needs their decision: a generated
-   script they edited (kept, with the upstream copy written beside it as `<name>.new`), and a
-   template the release changed (their file is never overwritten; the release's copy goes under
-   `.okf-update/` for a hand diff).
-4. **Apply** with `npm run okf:update -- --apply`. It refuses on a dirty git tree, so commit or
-   stash first and `git diff` is the undo. `--allow-dirty` only when the user asks for it. Applying an older release
-   needs `--allow-downgrade`, again only when asked; `--dir <project>` targets another directory.
+1. **Dry run.** `npx good2go update` lists which scaffolded templates the installed release
+   changed, and the changelog entries since the version in the manifest. It writes nothing.
+2. **Summarise** the changes in plain words, from that report.
+3. **Ask the user** before applying. A template the user edited is never overwritten: the
+   release's copy goes beside it for a hand diff.
+4. **Apply** with `npx good2go update --apply`. It refuses on a dirty git tree, so commit or
+   stash first and `git diff` is the undo. `--allow-dirty` only when the user asks for it.
 5. **Verify** with `npm run okf:validate`.
 
 Exit codes: **0** up to date, dry run ok, or applied. **1** `--apply` refused or could not
-complete (a dirty tree, a failed release bootstrap, or a backup left by an apply that did not
-finish), and the report names what needs a person. **2** could not run (offline, no git, no such
-tag, no manifest).
+complete and the report names what needs a person. **2** could not run.
 
-A project scaffolded before this feature has no `scripts/.okf-bootstrap.json` and no
-`okf:update` script. Run `node <skill dir>/assets/bootstrap.mts . --tools-only` once from the new
-skill to add both. That run replaces every `scripts/okf-*` file, edited or not, so commit first and
-check `git diff scripts/` for local edits to carry over.
-
-## Two bundles
-
-The scaffold can set up two OKF bundles. They stay separate because they have different
-readers and different rules.
-
-| | Design bundle, `okf/` | Memory bundle, `edukai/` (with `--edukai`) |
-| --- | --- | --- |
-| Reader | The team, in `viz.html` | The agent, through harness hooks |
-| Unit | A concept: one topic, many claims | A lesson: one claim, with the files it rests on |
-| Written | When the design changes | Whenever an agent learns something |
-| Trust aim | Reviewed by a person | Confirmed by a script or an agent |
-
-This skill covers the design bundle. Reading and writing lessons is the **`edukai` skill**
-(installed beside this one); use it for anything under `edukai/`. Never put lessons in `okf/`,
-or design docs in `edukai/`. Two things from the memory side also work on a design bundle:
-`supersedes` / `superseded_by` in frontmatter (an ADR that replaces another; the validator
-checks the pair), and `npm run okf:recheck`, which reports concepts whose pinned `sources`
-changed (`node scripts/okf-edukai.mts verify <concept> --bundle okf --by <actor>` pins them).
+A project scaffolded before the package existed holds copies in `scripts/okf-*.mts`. Install
+the package, run `npx good2go init . --tools-only`, and delete the old copies.
 
 ## Finding things in a bundle
 
-Do not read a whole bundle to answer a question. `npm run okf:search -- <command>` ranks
-concepts by text and by what the spec says about them (trust tier, stale, deprecated, links):
-`facets` (the tags and types in use), `search "query" [--fresh --tag t --trust human --cites src/file.ts]`,
+Do not read a whole bundle to answer a question. `npm run okf:search -- <command>` (that is,
+`good2go search`) ranks concepts by text and by what the spec says about them (trust tier,
+stale, deprecated, links): `facets` (the tags and types in use), `search "query" [--fresh --tag t --trust human --cites src/file.ts]`,
 `show <id> --outline` then `--section <heading>`, `related <id>`, `stale`. Add `--json`. The
-viewer's search box runs the same ranking. Treat a
-`stale` or `unverified` hit as a lead to check, not a fact. Details: the playbook's "Finding concepts".
+viewer's search box runs the same ranking. Treat a `stale` or `unverified` hit as a lead to
+check, not a fact. Details: the playbook's "Finding concepts".
 
 ## Writing rules (short version)
 
 - Root `index.md` and `log.md` are reserved (no `type`). Every other `.md` needs YAML
   frontmatter on line 1 with a non-empty `type`. Working notes without a type live outside
-  `okf/`.
+  the bundle.
 - `generated: { by: <agent>/<version>, at: 2026-06-30T14:00:00Z }`. Omit `status` while it is
   `stable`; add `verified` only after a person has actually reviewed the text.
 - Short concepts, plain words, link instead of repeating. Bundle-root links
   (`[text](/path/concept.md)`) or relative ones; a link to a missing file is an issue.
 - Mermaid: `fill`, `stroke` and `color` on every `classDef`; any `%%{init}%%` on one line.
-- Every `erDiagram` is followed by the generated key that reads each relationship in words and explains `||--o{`
-  and friends. Never write it by hand: run `npm run okf:fix`; `okf:validate` fails without it.
-  For a complicated schema, or when asked, add a ` ```widget ` with `sql-erd` and the schema's
-  SQL (scenarios, design review, join paths, delete impact): see EXPLAINERS.md.
+- Every `erDiagram` is followed by the generated key that reads each relationship in words.
+  Never write it by hand: run `npm run okf:fix`; `okf:validate` fails without it. For a
+  complicated schema, or when asked, add a ` ```widget ` with `sql-erd` and the schema's SQL:
+  see EXPLAINERS.md.
 - Callouts `> [!definition] Term`; quizzes in a ` ```quiz ` block (exactly one `- [x]` per
   question); widgets in a ` ```widget ` block naming a registered widget.
 

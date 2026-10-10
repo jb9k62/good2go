@@ -7,6 +7,9 @@ on:
   schedule:
     - cron: '0 6 * * 1' # weekly: notices when the upstream OKF spec moves
 
+permissions:
+  contents: read
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -15,6 +18,8 @@ jobs:
         node: [24, 26]
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node }}
@@ -22,10 +27,40 @@ jobs:
       - run: npm ci
       - run: npm run check
 
+  pack:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Pack, install the tarball in a fresh project, and smoke-test the CLI
+        run: |
+          set -euo pipefail
+          PACK_DIR="$RUNNER_TEMP/pack"
+          mkdir -p "$PACK_DIR"
+          TARBALL="$PACK_DIR/$(npm pack --silent --pack-destination "$PACK_DIR")"
+          SMOKE="$RUNNER_TEMP/smoke"
+          mkdir -p "$SMOKE"
+          cd "$SMOKE"
+          npm init -y > /dev/null
+          npm install --no-audit --no-fund "$TARBALL"
+          npx --no-install good2go --version
+          npx --no-install good2go init "$SMOKE/project"
+          test -d "$SMOKE/project"
+
   render:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v5
         with:
           node-version: 24
@@ -41,6 +76,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v5
         with:
           node-version: 24

@@ -1,5 +1,11 @@
 # Bundle update log
 
+## 2026-10-10
+* **Implemented**: [ADR-0006](/adr/0006-publish-the-tools-to-npm.md) in 0.7.0: the tools ship as
+  the `@jb9k62/good2go` package and projects no longer hold copies. [ADR-0005](/adr/0005-name-bundles-by-what-they-hold.md)
+  is accepted in part: the design bundle is the first one bootstrapped and its folder is
+  configurable (`--design-dir`), and `good2go new` scaffolds any further bundle.
+
 ## 2026-10-09
 * **Proposed**: two decision records, neither implemented yet. Bundles named for what they
   hold, with `design/` as the default and an optional `ops/`

@@ -1,55 +1,52 @@
 #!/usr/bin/env node
 /**
- * Bootstrap an OKF knowledge bundle + tooling into a project.
+ * Bootstrap an OKF knowledge bundle into a project: `good2go init`.
  *
- * TypeScript that Node runs directly (type stripping, Node 24+): no build step, no install.
+ * The tools are not copied into the project. It depends on the `@jb9k62/good2go` package, and
+ * the npm scripts this adds call its `good2go` command. Run from source, this is TypeScript
+ * that Node runs directly (Node 24+); from the package it is compiled JavaScript.
  *
  * Scaffolds into a target project directory (default: current dir):
- *   okf/index.md              : bundle root index (reserved, no `type` needed)
- *   okf/log.md                : update history (reserved)
- *   okf/adr/readme.md         : decision records index (type: Reference)
- *   okf/adr/template.md       : ADR template (type: Reference)
- *   scripts/okf-view.mts      : validator + viewer + render gate (copied verbatim)
- *   scripts/okf-mermaid.mts   : mermaid parse checker via mmdc (copied verbatim)
- *   scripts/okf-search.mts    : ranked, freshness-aware search for agents (copied verbatim)
- *   scripts/okf-core.mts      : parsing shared by the view and search tools (copied verbatim)
- *   scripts/okf-rank.mts      : the ranking, shared by search and the viewer's search box (copied verbatim)
- *   scripts/okf-edukai.mts    : lessons, pins and re-checks for the memory bundle (copied verbatim)
- *   scripts/okf-edukai-hook.mts : what the harness hooks run, and lesson states (copied verbatim)
- *   scripts/okf-start.mjs     : loaded first by every npm script: Node's compile cache, so a
- *                               tool's TypeScript is stripped once and not on every run
- *   scripts/okf-update.mts    : brings these tools up to a later release (copied verbatim)
- *   scripts/.okf-bootstrap.json : the install manifest: version, and the sha256 of each generated
- *                               script and of each template, which okf-update.mts compares
+ *   <design>/index.md         : the design bundle's root index (reserved, no `type` needed);
+ *                               <design> is okf/ unless --design-dir says otherwise
+ *   <design>/log.md           : update history (reserved)
+ *   <design>/adr/readme.md    : decision records index (type: Reference)
+ *   <design>/adr/template.md  : ADR template (type: Reference)
+ *   .okf-bootstrap.json       : the install manifest: version, name, the design folder, and the
+ *                               sha256 of each template, which `good2go update` compares
  *   edukai/index.md, log.md   : with --edukai, the memory bundle: what agents have learned
  *   AGENTS.md                 : with --edukai, a short marked snippet pointing agents at it
  *   okf-concept-template.md   : authoring aid for a reference concept (outside the bundle)
  *   okf-explainer-template.md : authoring aid for a guided tour: callouts, widgets, a quiz
  *   packages/okf-widgets/     : with --widgets, the React micro-world package (a workspace)
  *
- * and adds the okf: npm scripts to package.json.
+ * and adds the okf: npm scripts and a `@jb9k62/good2go` devDependency to package.json.
+ * Other bundles (ops, runbooks, notes) are made with `good2go new`.
  *
  * Re-running is safe: authored files (index.md, log.md in either bundle, the ADR index and
  * template, the two authoring templates) are kept if they already exist, and only --force
  * replaces them. The AGENTS.md snippet is written once and never replaced.
  * packages/okf-widgets is the project's own code once scaffolded, so it is never replaced,
- * not even by --force. The tools under scripts/ are generated, so they are always
- * refreshed, and older .mjs copies of them are removed.
+ * not even by --force.
+ *
+ * A project scaffolded by an older release holds copies of the tools in scripts/okf-*.mts.
+ * A re-run removes each copy that still matches the hash the old manifest recorded, and keeps
+ * (and names) one the project edited.
  *
  * Usage:
- *   node bootstrap.mts [target-dir] [--name "Project Name"] [--slug project-slug]
- *                      [--widgets] [--edukai] [--tools-only] [--no-scripts] [--force]
+ *   good2go init [target-dir] [--name "Project Name"] [--slug project-slug] [--design-dir okf]
+ *                [--widgets] [--edukai] [--tools-only] [--no-scripts] [--force]
  *
  *   --name        Human title used in index.md (default: basename of target dir).
  *   --slug        Lowercase id for the concept dir (default: kebab-case of name).
+ *   --design-dir  The design bundle's folder (default: okf, or the one the manifest records).
+ *                 Choose it on the first run; a re-run never renames a folder.
  *   --widgets     Also scaffold packages/okf-widgets (React widgets for explainers), add it
  *                 to the npm workspaces, and build it before okf:view and the render gate.
  *   --edukai      Also scaffold edukai/, the agent memory bundle, add the edukai: scripts, and
  *                 write a short snippet into AGENTS.md (once; a marker guards it).
- *   --tools-only  Re-scaffold the tooling only (scripts/ + package.json scripts), leaving
- *                 existing okf/ content untouched. Use this to upgrade the tools in a
- *                 project that already has a bundle. Combine with --widgets to add widgets,
- *                 or with --edukai to add the memory bundle.
+ *   --tools-only  Only migrate and refresh package.json (scripts, dependency) and remove old
+ *                 script copies, leaving the bundle content untouched.
  *   --no-scripts  Do not add the `okf:` scripts to package.json.
  *   --force       Overwrite authored files with the templates again. This throws away
  *                 hand-written content, including log.md's history.
@@ -63,13 +60,15 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const TEMPLATES = path.join(HERE, 'templates');
 // The producer stamped into scaffolded frontmatter (OKF actor convention: <producer>/<version>).
 // Kept equal to package.json's version by the test suite.
-const VERSION = '0.6.0';
-const TOOLS = ['okf-view', 'okf-mermaid', 'okf-search', 'okf-core', 'okf-rank', 'okf-edukai', 'okf-edukai-hook'] as const;
-const LEGACY_MJS: readonly string[] = ['okf-view', 'okf-mermaid'];
-const UPDATE_TOOL = 'okf-update';
-// Written into the target on every run that refreshes scripts/: which generated files came from
-// this bootstrap, and their sha256, so a later run can tell generated content from edits.
-const MANIFEST = path.join('scripts', '.okf-bootstrap.json');
+const VERSION = '0.7.0';
+const PACKAGE = '@jb9k62/good2go';
+// The range written into a project's devDependencies: this release and compatible later ones.
+const DEPENDENCY_RANGE = '^' + VERSION;
+// Written into the target on every run: the version and name, the design folder, and the sha256
+// of each template, so `good2go update` can tell a template a release changed from one edited.
+const MANIFEST = '.okf-bootstrap.json';
+// DEPRECATED, remove in 0.9.0 with the migration block below (TODO.md). Releases before the package kept it here, with the hash of each copied script.
+const LEGACY_MANIFEST = path.join('scripts', '.okf-bootstrap.json');
 // The templates the manifest records, keyed by their path under templates/. okf-update.mts has
 // the same list (TEMPLATE_MAP), with where each is scaffolded.
 const MANIFEST_TEMPLATES: readonly string[] = [
@@ -99,6 +98,7 @@ interface Options {
   dir: string;
   name: string | null;
   slug: string | null;
+  designDir: string | null;
   scripts: boolean;
   toolsOnly: boolean;
   force: boolean;
@@ -123,6 +123,7 @@ function parseArgs(argv: string[]): Options {
     dir: '.',
     name: null,
     slug: null,
+    designDir: null,
     scripts: true,
     toolsOnly: false,
     force: false,
@@ -133,6 +134,7 @@ function parseArgs(argv: string[]): Options {
     const a = argv[i]!;
     if (a === '--name') out.name = argv[++i] ?? null;
     else if (a === '--slug') out.slug = argv[++i] ?? null;
+    else if (a === '--design-dir') out.designDir = argv[++i] ?? null;
     else if (a === '--tools-only') out.toolsOnly = true;
     else if (a === '--no-scripts') out.scripts = false;
     else if (a === '--force') out.force = true;
@@ -140,8 +142,8 @@ function parseArgs(argv: string[]): Options {
     else if (a === '--edukai') out.edukai = true;
     else if (a === '-h' || a === '--help') {
       console.log(
-        'usage: node bootstrap.mts [target-dir] [--name "Project Name"] [--slug slug]\n' +
-          '                          [--widgets] [--edukai] [--tools-only] [--no-scripts] [--force]',
+        'usage: good2go init [target-dir] [--name "Project Name"] [--slug slug] [--design-dir okf]\n' +
+          '                    [--widgets] [--edukai] [--tools-only] [--no-scripts] [--force]',
       );
       process.exit(0);
     } else if (a.startsWith('-')) {
@@ -175,11 +177,10 @@ function copyTree(src: string, dest: string): void {
   });
 }
 
-const [major = 0, minor = 0] = process.versions.node.split('.').map(Number);
-if (major < 22 || (major === 22 && minor < 18)) {
+const [major = 0] = process.versions.node.split('.').map(Number);
+if (major < 24) {
   console.error(
-    `Node ${process.versions.node} cannot run TypeScript directly. The OKF tools need Node 24+ ` +
-      '(22.18+ works too).',
+    `Node ${process.versions.node} is too old for the OKF tools. They need Node 24+.`,
   );
   process.exit(2);
 }
@@ -188,7 +189,6 @@ const opts = parseArgs(process.argv.slice(2));
 const target = path.resolve(opts.dir);
 const created: string[] = [];
 const kept: string[] = [];
-const removed: string[] = [];
 const shortPath = (p: string) => path.relative(target, p) || p;
 
 /**
@@ -206,22 +206,32 @@ function writeUnlessPresent(dest: string, write: () => void): boolean {
   return true;
 }
 
-if (!fs.existsSync(target)) {
-  console.error(`Target dir not found: ${target}`);
-  process.exit(2);
+fs.mkdirSync(target, { recursive: true });
+// A project keeps the name and the design folder it was scaffolded with: the manifest remembers
+// them, so a re-run (or an update) renders templates the same way.
+interface Manifest {
+  name?: string;
+  designDir?: string;
+  files?: Record<string, string>;
 }
-// A project keeps the name it was scaffolded with: the manifest remembers it, so a re-run (or an
-// update) renders templates with the same PROJECT_NAME and not the folder's name.
-function previousManifest(): { name?: string } | null {
+function readManifest(rel: string): Manifest | null {
   try {
-    return JSON.parse(fs.readFileSync(path.join(target, MANIFEST), 'utf8')) as { name?: string };
+    return JSON.parse(fs.readFileSync(path.join(target, rel), 'utf8')) as Manifest;
   } catch {
     return null;
   }
 }
+function previousManifest(): Manifest | null {
+  return readManifest(MANIFEST) ?? readManifest(LEGACY_MANIFEST);
+}
 const previous = previousManifest();
 const name = opts.name ?? (typeof previous?.name === 'string' ? previous.name : path.basename(target));
 const slug = opts.slug ?? kebab(name);
+const designDir = opts.designDir ?? (typeof previous?.designDir === 'string' ? previous.designDir : 'okf');
+if (designDir.split(/[\\/]/).includes('..') || path.isAbsolute(designDir) || designDir === '' || designDir === '.') {
+  console.error(`--design-dir must be a folder inside the project, not "${designDir}"`);
+  process.exit(2);
+}
 const vars: Vars = {
   PROJECT_NAME: name,
   PROJECT_SLUG: slug,
@@ -232,15 +242,16 @@ const vars: Vars = {
 };
 
 // --- bundle skeleton (skipped entirely by --tools-only) ---------------------
-const okf = path.join(target, 'okf');
+const okf = path.join(target, designDir);
 if (opts.toolsOnly) {
   if (!fs.existsSync(okf)) {
-    console.error(`--tools-only needs an existing okf/ bundle in ${target}`);
+    console.error(`--tools-only needs an existing ${designDir}/ bundle in ${target}`);
     process.exit(2);
   }
 } else {
   fs.mkdirSync(path.join(okf, 'adr'), { recursive: true });
-  for (const extra of ['design', slug]) {
+  // A design bundle named design/ would otherwise hold design/design/.
+  for (const extra of [...new Set([designDir === 'design' ? 'architecture' : 'design', slug])]) {
     fs.mkdirSync(path.join(okf, extra), { recursive: true });
     if (!fs.existsSync(path.join(okf, extra, '.gitkeep'))) {
       fs.writeFileSync(path.join(okf, extra, '.gitkeep'), '');
@@ -277,26 +288,33 @@ if (opts.edukai) {
 const hasEdukai = fs.existsSync(path.join(edukai, 'index.md'));
 
 // --- tooling ----------------------------------------------------------------
-// The scripts are generated copies, so they are always refreshed; that is the point of
-// --tools-only. A project bootstrapped before the tools became TypeScript has .mjs copies;
-// they are removed so there is one copy of each tool, and package.json points at the new one.
-copyFile(path.join(HERE, 'okf-start.mjs'), path.join(target, 'scripts', 'okf-start.mjs'));
-for (const tool of TOOLS) {
-  copyFile(path.join(HERE, `${tool}.mts`), path.join(target, 'scripts', `${tool}.mts`));
-  // Only the two tools that once shipped as .mjs have a legacy copy; a project's own
-  // scripts/okf-search.mjs is not ours to delete.
-  const legacy = path.join(target, 'scripts', `${tool}.mjs`);
-  if (LEGACY_MJS.includes(tool) && fs.existsSync(legacy)) {
-    fs.rmSync(legacy);
-    removed.push(shortPath(legacy));
+// The tools live in the package, not the project. A project scaffolded before that holds copies
+// in scripts/: remove each one that still matches what the old manifest recorded, and name any
+// the project has edited, which are never deleted.
+const migrated: string[] = [];
+const editedCopies: string[] = [];
+{
+  const old = readManifest(LEGACY_MANIFEST);
+  for (const [rel, hash] of Object.entries(old?.files ?? {})) {
+    const file = path.join(target, rel);
+    if (!fs.existsSync(file) || !fs.statSync(file).isFile()) continue;
+    if (sha256(file) === hash) {
+      fs.rmSync(file);
+      migrated.push(rel);
+    } else {
+      editedCopies.push(rel);
+    }
   }
-}
-const generated = ['okf-start.mjs', ...TOOLS.map((tool) => `${tool}.mts`)];
-// okf-update is copied only when this bootstrap ships its source.
-const updateSrc = path.join(HERE, `${UPDATE_TOOL}.mts`);
-if (fs.existsSync(updateSrc)) {
-  copyFile(updateSrc, path.join(target, 'scripts', `${UPDATE_TOOL}.mts`));
-  generated.push(`${UPDATE_TOOL}.mts`);
+  if (old !== null) {
+    fs.rmSync(path.join(target, LEGACY_MANIFEST));
+    migrated.push(LEGACY_MANIFEST);
+    // Leave scripts/ if the project put nothing else in it.
+    try {
+      fs.rmdirSync(path.join(target, 'scripts'));
+    } catch {
+      // Not empty, or not there: not ours to remove.
+    }
+  }
 }
 // The authoring templates are aids people edit, so they follow the bundle content's rule.
 for (const [template, dest] of [
@@ -310,20 +328,17 @@ for (const [template, dest] of [
   writeUnlessPresent(out, () => copyFile(path.join(TEMPLATES, template), out));
 }
 
-// The manifest lists the generated scripts with the hash of what was written, keys sorted, and
-// the hash of each template this version ships, so okf-update can tell which ones a release
-// changed. It is generated, so it is always overwritten, like the scripts it describes (which
-// --no-scripts refreshes too; that flag is about package.json).
+// The manifest holds the hash of each template this version ships, so `good2go update` can tell
+// which ones a release changed. It is generated, so it is always overwritten.
 {
-  const files: Record<string, string> = {};
-  for (const name of [...generated].sort()) {
-    files[`scripts/${name}`] = sha256(path.join(target, 'scripts', name));
-  }
   const templates: Record<string, string> = {};
   for (const rel of MANIFEST_TEMPLATES) {
     if (fs.existsSync(path.join(TEMPLATES, rel))) templates[rel] = sha256(path.join(TEMPLATES, rel));
   }
-  fs.writeFileSync(path.join(target, MANIFEST), JSON.stringify({ version: VERSION, name, files, templates }, null, 2) + '\n');
+  fs.writeFileSync(
+    path.join(target, MANIFEST),
+    JSON.stringify({ version: VERSION, name, designDir, templates }, null, 2) + '\n',
+  );
 }
 
 // --- widgets ------------------------------------------------------------------
@@ -347,22 +362,22 @@ if (opts.scripts) {
       const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
       pkg.scripts = pkg.scripts || {};
       const build = hasWidgets ? 'npm run okf:widgets:build && ' : '';
-      pkg.scripts['okf:validate'] = 'node --import ./scripts/okf-start.mjs scripts/okf-view.mts okf --validate';
-      pkg.scripts['okf:fix'] = 'node --import ./scripts/okf-start.mjs scripts/okf-view.mts okf --validate --fix';
-      pkg.scripts['okf:view'] = build + 'node --import ./scripts/okf-start.mjs scripts/okf-view.mts okf';
-      pkg.scripts['okf:mermaid'] = 'node --import ./scripts/okf-start.mjs scripts/okf-mermaid.mts okf';
-      pkg.scripts['okf:search'] = 'node --import ./scripts/okf-start.mjs scripts/okf-search.mts';
-      pkg.scripts['okf:mermaid:render'] = build + 'node --import ./scripts/okf-start.mjs scripts/okf-view.mts okf --check-render';
-      pkg.scripts['okf:recheck'] = 'node --import ./scripts/okf-start.mjs scripts/okf-edukai.mts recheck --bundle okf';
-      pkg.scripts['okf:update'] = 'node --import ./scripts/okf-start.mjs scripts/okf-update.mts';
+      const d = designDir;
+      pkg.scripts['okf:validate'] = `good2go validate ${d}`;
+      pkg.scripts['okf:fix'] = `good2go fix ${d}`;
+      pkg.scripts['okf:view'] = build + `good2go view ${d}`;
+      pkg.scripts['okf:mermaid'] = `good2go mermaid ${d}`;
+      pkg.scripts['okf:search'] = 'good2go search';
+      pkg.scripts['okf:mermaid:render'] = build + `good2go view ${d} --check-render`;
+      pkg.scripts['okf:recheck'] = `good2go recheck --bundle ${d}`;
+      pkg.scripts['okf:update'] = 'good2go update';
       if (hasEdukai) {
-        pkg.scripts['edukai:validate'] =
-          'node --import ./scripts/okf-start.mjs scripts/okf-view.mts edukai --validate --strict && node --import ./scripts/okf-start.mjs scripts/okf-edukai.mts index --check';
-        pkg.scripts['edukai:index'] = 'node --import ./scripts/okf-start.mjs scripts/okf-edukai.mts index';
-        pkg.scripts['edukai:recheck'] = 'node --import ./scripts/okf-start.mjs scripts/okf-edukai.mts recheck';
-        pkg.scripts['edukai:brief'] = 'node --import ./scripts/okf-start.mjs scripts/okf-edukai.mts index && node --import ./scripts/okf-start.mjs scripts/okf-edukai-hook.mts brief';
-        pkg.scripts['edukai:search'] = 'node --import ./scripts/okf-start.mjs scripts/okf-search.mts --bundle edukai';
-        pkg.scripts['edukai:view'] = 'node --import ./scripts/okf-start.mjs scripts/okf-view.mts edukai';
+        pkg.scripts['edukai:validate'] = 'good2go validate edukai --strict && good2go edukai index --check';
+        pkg.scripts['edukai:index'] = 'good2go edukai index';
+        pkg.scripts['edukai:recheck'] = 'good2go recheck';
+        pkg.scripts['edukai:brief'] = 'good2go edukai index && good2go hook brief';
+        pkg.scripts['edukai:search'] = 'good2go search --bundle edukai';
+        pkg.scripts['edukai:view'] = 'good2go view edukai';
       }
       if (hasWidgets) {
         pkg.scripts['okf:widgets:build'] = `npm run build -w ${WIDGETS_PKG}`;
@@ -383,16 +398,15 @@ if (opts.scripts) {
           }
         }
       }
-      // okf-view.mts imports `yaml`. Without it the tool dies on a raw ERR_MODULE_NOT_FOUND
-      // that says nothing about this scaffold.
-      const hasYaml = pkg.dependencies?.yaml || pkg.devDependencies?.yaml;
-      if (!hasYaml) {
+      // The tools are a dependency, pinned by the lockfile and upgraded with `npm update`.
+      const hasTools = pkg.dependencies?.[PACKAGE] || pkg.devDependencies?.[PACKAGE];
+      if (!hasTools) {
         pkg.devDependencies = pkg.devDependencies || {};
-        pkg.devDependencies.yaml = '^2.9.1';
+        pkg.devDependencies[PACKAGE] = DEPENDENCY_RANGE;
       }
       fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
       console.log(`  added the okf: ${hasEdukai ? 'and edukai: ' : ''}scripts to ` + pkgPath);
-      if (!hasYaml) console.log('  added the yaml devDependency; run npm install');
+      if (!hasTools) console.log(`  added the ${PACKAGE} devDependency; run npm install`);
     } catch (e) {
       console.warn(
         '  could not edit package.json (' + (e as Error).message + '); add scripts manually.',
@@ -400,23 +414,15 @@ if (opts.scripts) {
     }
   } else {
     console.warn(
-      '  no package.json found; add the okf: scripts manually (see templates/package-json-scripts.md).',
+      `  no package.json found: run the tools with npx ${PACKAGE}@${VERSION} <command> (validate, view, search, ...).`,
     );
   }
 }
 
 // --- report -------------------------------------------------------------------
-console.log('\nBootstrapped OKF bundle + tooling in: ' + target);
-if (!opts.toolsOnly) console.log(`  okf/${slug}/, okf/design/   (fill with your first concepts)`);
-console.log('  scripts/okf-view.mts       (validator + viewer + --check-render)  refreshed');
-console.log('  scripts/okf-mermaid.mts    (mermaid parse check via mmdc)         refreshed');
-console.log('  scripts/okf-search.mts     (ranked, freshness-aware search)       refreshed');
-console.log('  scripts/okf-core.mts       (parsing shared by view and search)    refreshed');
-console.log('  scripts/okf-rank.mts       (the ranking, also run in the viewer)  refreshed');
-console.log('  scripts/okf-edukai.mts     (lessons, pins and re-checks)          refreshed');
-console.log('  scripts/okf-edukai-hook.mts (harness hooks, lesson states)        refreshed');
-console.log('  scripts/okf-start.mjs      (compile cache, loaded by the scripts) refreshed');
-if (fs.existsSync(updateSrc)) console.log('  scripts/okf-update.mts     (updates these tools to a release)     refreshed');
+console.log('\nBootstrapped OKF bundle in: ' + target);
+if (!opts.toolsOnly) console.log(`  ${designDir}/${slug}/, ${designDir}/design/   (fill with your first concepts)`);
+console.log(`  The tools come from the ${PACKAGE} package (the good2go command); none are copied here.`);
 if (opts.edukai) console.log('  edukai/                    (the agent memory bundle: lessons are added as agents learn)');
 if (created.length) {
   console.log('\nCreated:');
@@ -426,9 +432,13 @@ if (kept.length) {
   console.log('\nKept (already there, not touched; --force replaces the authored files):');
   for (const f of kept) console.log('  ' + f);
 }
-if (removed.length) {
-  console.log('\nRemoved (replaced by the .mts tools):');
-  for (const f of removed) console.log('  ' + f);
+if (migrated.length) {
+  console.log(`\nRemoved (the old copies of the tools; ${PACKAGE} replaces them):`);
+  for (const f of migrated) console.log('  ' + f);
+}
+if (editedCopies.length) {
+  console.log('\nKept, because they differ from what the old release wrote (delete them once you no longer need your edits):');
+  for (const f of editedCopies) console.log('  ' + f);
 }
 console.log('\nSet up (once):');
 console.log('  npm install');
@@ -436,12 +446,12 @@ console.log('  npm i -D @mermaid-js/mermaid-cli@11 playwright && npx playwright 
 console.log('\nChecks (expect all to pass before you commit):');
 console.log('  npm run okf:validate        # frontmatter + link conformance');
 console.log('  npm run okf:fix             # write the relationship key under every ER diagram');
-console.log('  npm run okf:view            # validate + write okf/viz.html');
+console.log('  npm run okf:view            # validate + write viz.html');
 console.log('  npm run okf:mermaid         # every mermaid block parses (needs mmdc)');
 console.log('  npm run okf:mermaid:render  # every diagram, quiz and widget works in the viewer');
 console.log('  npm run okf:search -- search "query"   # find concepts before reading them');
 console.log('  npm run okf:recheck         # do the files that concepts cite still say what was pinned?');
-console.log('  npm run okf:update          # what a newer release would change in the tools (-- --apply to do it)');
+console.log('  npm run okf:update          # which templates a newer release changed (-- --write puts them under .okf-update/)');
 if (hasEdukai) {
   console.log('\nMemory bundle (edukai/):');
   console.log('  npm run edukai:index        # rebuild the syllabus and the cache the hooks read (run once after a clone)');
@@ -454,6 +464,6 @@ if (hasEdukai) {
 if (hasWidgets) {
   console.log('  npm run okf:widgets:typecheck && npm run okf:widgets:test');
 }
-console.log('\nThe tools are .mts: Node 24+ runs them as-is, and no package.json "type" change');
-console.log("is needed. Next: author the first concepts, then commit. The skill's PLAYBOOK.md");
+console.log('\nUpgrade the tools with `npm update ' + PACKAGE + '`. Next: author the first concepts,');
+console.log("then commit. The skill's PLAYBOOK.md");
 console.log('has the full procedure, and EXPLAINERS.md covers tours, quizzes and widgets.');

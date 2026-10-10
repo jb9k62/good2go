@@ -124,17 +124,25 @@ describe('render gates', { timeout: 600_000 }, () => {
 
   // A consumer project outside this repo, so nothing resolves from this repo's node_modules:
   // it catches a template that only works because the workspace root happens to provide a
-  // dependency. Installs from the npm registry.
+  // dependency. The tools come from the packed tarball (the package is the thing consumers get),
+  // and everything else installs from the npm registry.
   it('works in a fresh consumer project scaffolded with --widgets', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'okf-consumer-'));
     try {
-      fs.writeFileSync(path.join(dir, 'package.json'), '{ "name": "consumer", "private": true }\n');
+      const pack = spawnSync('npm', ['pack', '--silent', '--pack-destination', dir], { cwd: ROOT, encoding: 'utf8', timeout: 600_000 });
+      assert.equal(pack.status, 0, pack.stdout + pack.stderr);
+      const tarball = path.join(dir, pack.stdout.trim().split('\n').pop()!);
+      fs.writeFileSync(
+        path.join(dir, 'package.json'),
+        JSON.stringify({ name: 'consumer', private: true, devDependencies: { '@jb9k62/good2go': `file:${tarball}` } }) + '\n',
+      );
       const sh = (cmd: string) => {
         const r = spawnSync(cmd, { cwd: dir, shell: true, encoding: 'utf8', timeout: 600_000 });
         assert.equal(r.status, 0, `${cmd}\n${r.stdout}${r.stderr}`);
         return r.stdout;
       };
-      sh(`node ${JSON.stringify(path.join(ASSETS, 'bootstrap.mts'))} . --name Consumer --widgets`);
+      sh('npm install --no-audit --no-fund');
+      sh('npx good2go init . --name Consumer --widgets');
       sh('npm install --no-audit --no-fund');
       sh('npm install -D --no-audit --no-fund playwright');
       sh('npm run okf:widgets:typecheck');

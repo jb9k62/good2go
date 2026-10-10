@@ -114,11 +114,15 @@ const OKF_VERSION = '0.2';
 const DEFAULT_WIDGETS_BUNDLE = fileURLToPath(
   new URL('../packages/okf-widgets/dist/okf-widgets.js', import.meta.url),
 );
+// Run from the npm package there is no ../packages next to the tool; the project's own is found from the working directory.
+const PROJECT_WIDGETS_BUNDLE = path.resolve('packages/okf-widgets/dist/okf-widgets.js');
 
 // The viewer's search box runs the same ranking as `okf-search` (okf-rank.mts). That file is pure
 // TypeScript with no imports, so Node strips its types and it goes into the page as plain script.
 function rankScript(): string {
-  const source = fs.readFileSync(new URL('./okf-rank.mts', import.meta.url), 'utf8');
+  // From source this is okf-rank.mts; from the published package it is the compiled okf-rank.mjs.
+  const rankUrl = new URL('./okf-rank.mts', import.meta.url);
+  const source = fs.readFileSync(fs.existsSync(rankUrl) ? rankUrl : new URL('./okf-rank.mjs', import.meta.url), 'utf8');
   const js = stripTypeScriptTypes(source).replace(/^export /gm, '');
   const api = 'buildEntry, buildIndex, search, snippet, freshness, freshnessLabel, matchesFilters, NO_FILTERS, stripCode, HEADING_RE';
   // A "</script" inside the code would end the inline block early.
@@ -4450,7 +4454,9 @@ async function main() {
   if (!opts.validateOnly) {
     const widgetsFile = opts.widgets
       ? path.resolve(opts.widgets)
-      : DEFAULT_WIDGETS_BUNDLE;
+      : fs.existsSync(DEFAULT_WIDGETS_BUNDLE)
+        ? DEFAULT_WIDGETS_BUNDLE
+        : PROJECT_WIDGETS_BUNDLE;
     const widgetsJs = readWidgetsBundle(widgetsFile);
     const usesWidgets = concepts.some((c) => /^\s*(`{3,}|~{3,})\s*widget\s*$/m.test(c.body));
     if (widgetsJs === null && usesWidgets) {
