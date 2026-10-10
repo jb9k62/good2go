@@ -4,7 +4,7 @@
 
 Please do not open a public issue for a security problem. Report it privately through GitHub's
 private vulnerability reporting: go to the repository's **Security** tab and choose
-**Report a vulnerability** (or open <https://github.com/jb9k62/okf-bootstrap/security/advisories/new>).
+**Report a vulnerability** (or open <https://github.com/jb9k62/good2go/security/advisories/new>).
 
 Include the version (`good2go --version`), the steps to reproduce, and what you expect the impact
 to be. You should get an acknowledgement within a week. Fixes are released as a new patch or minor

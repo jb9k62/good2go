@@ -29,8 +29,8 @@ test('installs both skills, without their tools, for the agents whose home exist
   assert.ok(fs.existsSync(path.join(home, '.claude', 'skills', 'okf-bootstrap', 'references', 'PLAYBOOK.md')));
   assert.ok(!fs.existsSync(path.join(home, '.claude', 'skills', 'okf-bootstrap', 'assets')));
   assert.ok(!fs.existsSync(path.join(home, '.pi')));
-  assert.match(r.stdout, /plugin marketplace add jb9k62\/okf-bootstrap/);
-  assert.match(r.stdout, /pi install git:github\.com\/jb9k62\/okf-bootstrap/);
+  assert.match(r.stdout, /plugin marketplace add jb9k62\/good2go/);
+  assert.match(r.stdout, /pi install git:github\.com\/jb9k62\/good2go/);
 });
 
 test('flags choose the targets, and an explicit flag creates the home', () => {

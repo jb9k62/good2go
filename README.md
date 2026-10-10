@@ -1,6 +1,6 @@
 # okf-bootstrap
 
-[![ci](https://github.com/jb9k62/okf-bootstrap/actions/workflows/ci.yml/badge.svg)](https://github.com/jb9k62/okf-bootstrap/actions/workflows/ci.yml)
+[![ci](https://github.com/jb9k62/good2go/actions/workflows/ci.yml/badge.svg)](https://github.com/jb9k62/good2go/actions/workflows/ci.yml)
 [![licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
 ![node >= 24](https://img.shields.io/badge/node-%3E%3D24-339933.svg)
 
@@ -140,20 +140,20 @@ with provenance ([SECURITY.md](SECURITY.md)).
 **pi**, as a package (pin a tag for reproducible installs):
 
 ```bash
-pi install git:github.com/jb9k62/okf-bootstrap@v0.7.0
+pi install git:github.com/jb9k62/good2go@v0.7.0
 ```
 
 **Claude Code**, as a plugin from this repo's marketplace:
 
 ```text
-/plugin marketplace add jb9k62/okf-bootstrap
+/plugin marketplace add jb9k62/good2go
 /plugin install okf-bootstrap@okf-bootstrap
 ```
 
 or by cloning straight into your skills directory, where it loads as a local plugin:
 
 ```bash
-git clone https://github.com/jb9k62/okf-bootstrap ~/.claude/skills/okf-bootstrap
+git clone https://github.com/jb9k62/good2go ~/.claude/skills/okf-bootstrap
 ```
 
 **Anywhere else**, copy the skills from the package, with no clone:
@@ -262,7 +262,7 @@ review checklist; [SKILL.md](skills/okf-bootstrap/SKILL.md) is what the agents r
 ## Try the demo
 
 ```bash
-git clone https://github.com/jb9k62/okf-bootstrap && cd okf-bootstrap
+git clone https://github.com/jb9k62/good2go && cd okf-bootstrap
 npm install
 npm run demo                # builds the widgets, writes examples/demo/okf/viz.html
 npm run demo:edukai         # the memory bundle: the session brief, then the re-check report

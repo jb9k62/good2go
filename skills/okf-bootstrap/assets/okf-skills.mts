@@ -119,8 +119,8 @@ function main(argv: string[]): number {
   }
 
   console.log('\nSkills only. The memory hooks need the plugin or package:');
-  console.log('  Claude Code: /plugin marketplace add jb9k62/okf-bootstrap');
-  console.log('  pi:          pi install git:github.com/jb9k62/okf-bootstrap');
+  console.log('  Claude Code: /plugin marketplace add jb9k62/good2go');
+  console.log('  pi:          pi install git:github.com/jb9k62/good2go');
   return refused ? 1 : 0;
 }
 

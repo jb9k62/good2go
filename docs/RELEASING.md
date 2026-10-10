@@ -24,7 +24,7 @@ Do this once, before the first automated release.
 3. **Trusted publisher.** On npmjs.com open the package's **Settings**, then **Trusted Publisher**,
    and choose **GitHub Actions**. Enter:
    - Organisation or user: `jb9k62`
-   - Repository: `okf-bootstrap`
+   - Repository: `good2go`
    - Workflow filename: `release.yml`
    - Environment name: `npm`
 
