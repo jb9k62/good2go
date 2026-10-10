@@ -18,6 +18,8 @@
  *   AGENTS.md                 : with --edukai, a short marked snippet pointing agents at it
  *   okf-concept-template.md   : authoring aid for a reference concept (outside the bundle)
  *   okf-explainer-template.md : authoring aid for a guided tour: callouts, widgets, a quiz
+ *   .claude/skills/<skill>/   : the skills (SKILL.md and references, no tools), so a clone has them
+ *   .agents/skills/<skill>/   : the same, for pi and other agents that read the shared location
  *   packages/okf-widgets/     : with --widgets, the React micro-world package (a workspace)
  *
  * and adds the okf: npm scripts and a `@jb9k62/good2go` devDependency to package.json.
@@ -27,7 +29,8 @@
  * template, the two authoring templates) are kept if they already exist, and only --force
  * replaces them. The AGENTS.md snippet is written once and never replaced.
  * packages/okf-widgets is the project's own code once scaffolded, so it is never replaced,
- * not even by --force.
+ * not even by --force. A skill folder that already exists is kept (--force replaces it); the
+ * skills are not recorded in the manifest.
  *
  * A project scaffolded by an older release holds copies of the tools in scripts/okf-*.mts.
  * A re-run removes each copy that still matches the hash the old manifest recorded, and keeps
@@ -35,7 +38,7 @@
  *
  * Usage:
  *   good2go init [target-dir] [--name "Project Name"] [--slug project-slug] [--design-dir okf]
- *                [--widgets] [--edukai] [--tools-only] [--no-scripts] [--force]
+ *                [--widgets] [--edukai] [--tools-only] [--no-scripts] [--no-skills] [--force]
  *
  *   --name        Human title used in index.md (default: basename of target dir).
  *   --slug        Lowercase id for the concept dir (default: kebab-case of name).
@@ -48,6 +51,7 @@
  *   --tools-only  Only migrate and refresh package.json (scripts, dependency) and remove old
  *                 script copies, leaving the bundle content untouched.
  *   --no-scripts  Do not add the `okf:` scripts to package.json.
+ *   --no-skills   Do not copy the skills into .claude/skills/ and .agents/skills/.
  *   --force       Overwrite authored files with the templates again. This throws away
  *                 hand-written content, including log.md's history.
  */
@@ -100,6 +104,7 @@ interface Options {
   slug: string | null;
   designDir: string | null;
   scripts: boolean;
+  skills: boolean;
   toolsOnly: boolean;
   force: boolean;
   widgets: boolean;
@@ -125,6 +130,7 @@ function parseArgs(argv: string[]): Options {
     slug: null,
     designDir: null,
     scripts: true,
+    skills: true,
     toolsOnly: false,
     force: false,
     widgets: false,
@@ -137,13 +143,14 @@ function parseArgs(argv: string[]): Options {
     else if (a === '--design-dir') out.designDir = argv[++i] ?? null;
     else if (a === '--tools-only') out.toolsOnly = true;
     else if (a === '--no-scripts') out.scripts = false;
+    else if (a === '--no-skills') out.skills = false;
     else if (a === '--force') out.force = true;
     else if (a === '--widgets') out.widgets = true;
     else if (a === '--edukai') out.edukai = true;
     else if (a === '-h' || a === '--help') {
       console.log(
         'usage: good2go init [target-dir] [--name "Project Name"] [--slug slug] [--design-dir okf]\n' +
-          '                    [--widgets] [--edukai] [--tools-only] [--no-scripts] [--force]',
+          '                    [--widgets] [--edukai] [--tools-only] [--no-scripts] [--no-skills] [--force]',
       );
       process.exit(0);
     } else if (a.startsWith('-')) {
@@ -328,6 +335,50 @@ for (const [template, dest] of [
   writeUnlessPresent(out, () => copyFile(path.join(TEMPLATES, template), out));
 }
 
+// --- skills -------------------------------------------------------------------
+// A clone carries its skills, so a teammate needs no plugin. The folder is the skills shipped
+// beside this file (the package) or the repository's own (from source). Same rule as authored
+// files: an existing skill folder is kept unless --force. Nothing is recorded in the manifest.
+/** Copy a skill's SKILL.md and references; symlinks and the tools (assets, node_modules, dist) are left out. */
+function copySkill(source: string, dest: string): void {
+  fs.mkdirSync(dest, { recursive: true });
+  for (const entry of fs.readdirSync(source, { withFileTypes: true })) {
+    if (entry.isSymbolicLink()) continue;
+    if (['assets', 'node_modules', 'dist'].includes(entry.name) || entry.name.includes('..')) continue;
+    const from = path.join(source, entry.name);
+    const to = path.join(dest, entry.name);
+    if (entry.isDirectory()) copySkill(from, to);
+    else if (entry.isFile()) fs.copyFileSync(from, to);
+  }
+}
+if (opts.skills) {
+  const root = [path.join(HERE, 'skills'), path.resolve(HERE, '..', '..')].find((dir) =>
+    fs.existsSync(path.join(dir, 'okf-bootstrap', 'SKILL.md')),
+  );
+  if (root === undefined) {
+    console.warn('  no skills found beside this tool; skipped copying them (--no-skills hides this).');
+  } else {
+    const names = fs
+      .readdirSync(root, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && fs.existsSync(path.join(root, e.name, 'SKILL.md')))
+      .map((e) => e.name)
+      .sort();
+    for (const home of ['.claude', '.agents']) {
+      for (const skill of names) {
+        const dest = path.join(target, home, 'skills', skill);
+        if (fs.lstatSync(dest, { throwIfNoEntry: false }) && !opts.force) {
+          kept.push(shortPath(dest) + '/');
+          continue;
+        }
+        // rmSync removes a symbolic link itself, never what it points at.
+        fs.rmSync(dest, { recursive: true, force: true });
+        copySkill(path.join(root, skill), dest);
+        created.push(shortPath(dest) + '/');
+      }
+    }
+  }
+}
+
 // The manifest holds the hash of each template this version ships, so `good2go update` can tell
 // which ones a release changed. It is generated, so it is always overwritten.
 {
@@ -440,6 +491,7 @@ if (editedCopies.length) {
   console.log('\nKept, because they differ from what the old release wrote (delete them once you no longer need your edits):');
   for (const f of editedCopies) console.log('  ' + f);
 }
+if (opts.skills) console.log('\nThe skills are in .claude/skills/ and .agents/skills/ (--no-skills skips them). The memory hooks are per user: `good2go hooks`.');
 console.log('\nSet up (once):');
 console.log('  npm install');
 console.log('  npm i -D @mermaid-js/mermaid-cli@11 playwright && npx playwright install chromium');

@@ -16,6 +16,7 @@ generated: { by: okf-bootstrap/0.6.0, at: 2026-10-08T20:00:00Z }
 | [0004](/adr/0004-viz-html-stays-one-file.md) | Keep `viz.html` one self-contained file, with no bundler | accepted |
 | [0005](/adr/0005-name-bundles-by-what-they-hold.md) | Name each bundle for what it holds: `design/`, and an optional `ops/` | accepted in part |
 | [0006](/adr/0006-publish-the-tools-to-npm.md) | Publish the tools to npm as `@jb9k62/good2go` | accepted |
+| [0007](/adr/0007-install-hooks-and-skills-from-the-package.md) | Install the hooks and skills from the package, per user by default | accepted |
 
 ## Adding one
 

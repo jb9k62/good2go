@@ -97,6 +97,36 @@ describe('bootstrap', () => {
     assert.doesNotMatch(read(log), /history/);
   });
 
+  it('copies the skills into the project, keeps them on a re-run, and --force replaces them', () => {
+    const dir = project('copied');
+    const r = run(BOOTSTRAP, [dir]);
+    assert.equal(r.code, 0, r.out);
+    for (const home of ['.claude', '.agents']) {
+      for (const skill of ['okf-bootstrap', 'edukai']) {
+        assert.ok(fs.existsSync(path.join(dir, home, 'skills', skill, 'SKILL.md')), `${home} ${skill}`);
+      }
+      assert.ok(fs.existsSync(path.join(dir, home, 'skills', 'okf-bootstrap', 'references', 'PLAYBOOK.md')));
+      assert.ok(!fs.existsSync(path.join(dir, home, 'skills', 'okf-bootstrap', 'assets')), 'no tools');
+    }
+    assert.doesNotMatch(read(path.join(dir, '.okf-bootstrap.json')), /skills/);
+    const mine = path.join(dir, '.claude', 'skills', 'edukai', 'SKILL.md');
+    fs.writeFileSync(mine, 'my edit\n');
+    const again = run(BOOTSTRAP, [dir]);
+    assert.equal(again.code, 0, again.out);
+    assert.match(again.out, /Kept[\s\S]*\.claude\/skills\/edukai/);
+    assert.equal(read(mine), 'my edit\n');
+    run(BOOTSTRAP, [dir, '--force']);
+    assert.match(read(mine), /^---\nname: edukai/);
+  });
+
+  it('copies no skills with --no-skills', () => {
+    const dir = project('noskills');
+    const r = run(BOOTSTRAP, [dir, '--no-skills']);
+    assert.equal(r.code, 0, r.out);
+    assert.ok(!fs.existsSync(path.join(dir, '.claude')));
+    assert.ok(!fs.existsSync(path.join(dir, '.agents')));
+  });
+
   it('leaves an existing good2go dependency alone', () => {
     const dir = project('has-dep', { name: 'has-dep', devDependencies: { '@jb9k62/good2go': '^0.6.0' } });
     const r = run(BOOTSTRAP, [dir]);

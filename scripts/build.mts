@@ -39,6 +39,8 @@ for (const skill of fs.readdirSync(path.join(ROOT, 'skills'))) {
     filter: (src) => !path.relative(from, src).startsWith('assets'),
   });
 }
+// The pi extension that `good2go hooks` installs, with its hook path resolved at install time.
+fs.copyFileSync(path.join(ROOT, 'extensions', 'edukai.ts'), path.join(DIST, 'templates', 'pi-extension.ts'));
 // The command's entry: a plain .js file so `bin` needs no extension rewriting.
 const cli = path.join(DIST, 'good2go.mjs');
 if (!fs.existsSync(cli)) {

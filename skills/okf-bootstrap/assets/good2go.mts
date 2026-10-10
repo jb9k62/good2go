@@ -12,9 +12,10 @@
  *   good2go search <command> [args]         ranked, freshness-aware search
  *   good2go recheck [options]               lessons that need an agent
  *   good2go edukai <command> [args]         the memory tool: new, verify, supersede, index, recheck
- *   good2go hook <command> [args]           what the harness hooks run: brief, cites, debt
+ *   good2go hook <command> [args]           what the harness hooks run: run, brief, cites, debt
  *   good2go update [options]                which scaffolded templates a newer release changed
  *   good2go skills [--claude] [--pi] [--agents] [--force]   install the skills for an agent
+ *   good2go hooks [--user|--project] [--claude] [--pi] [--dry-run] [--remove] [--check]   install the memory hooks
  *
  * Each subcommand runs the tool of that name as it always has, with the same flags and exit
  * codes (0 pass, 1 broken, 2 could not run); this file only chooses the tool. Run from source
@@ -23,7 +24,7 @@
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const VERSION = '0.7.0';
@@ -42,6 +43,7 @@ const COMMANDS: Record<string, [string, string[]]> = {
   hook: ['okf-edukai-hook', []],
   update: ['okf-update', []],
   skills: ['okf-skills', []],
+  hooks: ['okf-hooks', []],
 };
 
 const HELP = fs
@@ -68,6 +70,27 @@ if (command === undefined || command === '-h' || command === '--help' || command
 if (command === '-v' || command === '--version' || command === 'version') {
   console.log(VERSION);
   process.exit(0);
+}
+if (command === 'hook' && rest[0] === 'run') {
+  // The harnesses' entry: in-process (no second node), silent, and exit 0 on any error or an old Node.
+  const debug = (e: unknown): void => {
+    if (process.env.EDUKAI_DEBUG === '1') console.error('good2go hook run: ' + (e instanceof Error && e.stack ? e.stack : String(e)));
+  };
+  const major = Number(process.versions.node.split('.')[0]);
+  if (major < 24) {
+    debug(`Node ${process.versions.node} is too old; the hook needs 24`);
+    process.exit(0);
+  }
+  try {
+    const hookFile = toolFile('okf-edukai-hook');
+    if (!hookFile) throw new Error('okf-edukai-hook is not next to ' + HERE);
+    const hook = (await import(pathToFileURL(hookFile).href)) as { runHook(): number };
+    process.exitCode = hook.runHook();
+  } catch (e) {
+    debug(e);
+    process.exitCode = 0;
+  }
+  process.exit(process.exitCode ?? 0);
 }
 const entry = COMMANDS[command];
 if (!entry) {

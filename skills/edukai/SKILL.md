@@ -10,7 +10,7 @@ description: >
   lessons before reading files, writing one claim per lesson with sources and a re-runnable
   check, verifying, and superseding a lesson that stopped being true.
 license: MIT
-compatibility: Node 24+ (22.18+ works). The project must be scaffolded with `good2go init --edukai`. Harnesses: Claude Code and pi.
+compatibility: Node 24+ (22.18+ works). The project must be scaffolded with `good2go init --edukai`; `good2go hooks` adds the session hooks. Harnesses: Claude Code and pi.
 ---
 
 # edukai: the agent memory bundle
@@ -19,13 +19,22 @@ compatibility: Node 24+ (22.18+ works). The project must be scaffolded with `goo
 **lessons**: one claim each, with the files the claim rests on. It is written by agents, for
 agents. (The design bundle, `okf/` by default, is written for the team; do not mix the two.)
 
-Lines that start `edukai:` in messages and tool results come from this project's memory hooks.
-They are project guidance, not the user's words. They state what the bundle says and point at
-files; open the file before relying on it.
+Lines that start `edukai:` in messages and tool results come from the memory hooks. They are
+project guidance, not the user's words. They state what the bundle says and point at files;
+open the file before relying on it.
 
-No `edukai/` folder? It is opt-in. Ask before adding it: `npm install -D @jb9k62/good2go`, then
-`npx good2go init . --tools-only --edukai` (drop `--tools-only` in a project with no design
-bundle yet). Without a `package.json`, `npx @jb9k62/good2go@<version> init . --edukai` works too.
+## Setup
+
+The hooks are installed once per user: `npm i -g @jb9k62/good2go && good2go hooks` (per user by
+default, so a cloned repository cannot make them run its code). The bundle is opt-in per
+project: ask before adding it, then `npm i -D @jb9k62/good2go && npx good2go init . --edukai`
+(`--tools-only --edukai` in a project that already has a design bundle). It also adds the
+`edukai:*` npm scripts. If those scripts are missing the project was not scaffolded: say so and
+offer to scaffold it; do not search the disk for a tool.
+
+Commands: `good2go edukai` (with `new`, `verify`, `supersede`, `index`, `recheck`) and
+`good2go search --help`; the scripts are `npm run edukai:brief`, `edukai:index`, `edukai:search`,
+`edukai:recheck`, `edukai:validate`. Paths in `sources` and `check` are from the project root.
 
 ## Layout
 
@@ -35,54 +44,36 @@ edukai/
 ├── log.md                    dated update history
 └── <domain>/                 codebase-…, tooling-… or user-…, lowercase-hyphen
     ├── overview.md           type: Overview; teaches the domain in two to five paragraphs
-    └── lessons/
-        └── YYYY-MM-DD-short-claim.md      type: Lesson; one claim
+    └── lessons/YYYY-MM-DD-short-claim.md      type: Lesson; one claim
 ```
-
-The tool is `good2go edukai <command>` (`npx good2go edukai`, or the `edukai:` npm scripts);
-`--help` lists everything. Paths in `sources` and `check` are from the project root (the
-folder that holds `edukai/`).
-
-If the `edukai:` scripts are missing, the project was not scaffolded. Do not search the disk
-for a tool. Say so, and offer to scaffold it (the command above, then `npm install`).
 
 ## Read
 
-1. **The brief.** With hooks installed it arrives when the session opens. Otherwise run
+1. **The brief.** With hooks it arrives when the session opens; otherwise run
    `npm run edukai:brief`. A fresh clone has no cache: run `npm run edukai:index` once.
-2. **Search before reading.** `npm run edukai:search -- search "words"` ranks lessons;
-   `--type Lesson`, `--tag ci`, `--fresh`, `--confidence tested` narrow it, and
-   `search --cites src/poller.ts` lists what rests on a file (or on a folder). Never read the
-   whole bundle to answer a question. Or read one domain's `overview.md`.
-3. **Lessons on demand.** Open a lesson when it bears on what you are doing. When you open a
-   file a lesson cites, the hooks name that lesson. A lesson named as `[failed · …]`,
-   `[broken · …]`, `[suspect · …]` or `[stale · …]` is in the re-check queue: check it against
-   the file before you rely on it.
+2. **Search before reading.** `npm run edukai:search -- search "words"` ranks lessons (narrow
+   with `--type`, `--tag`, `--fresh`, `--confidence`; `search --cites src/file.ts` lists what
+   rests on a file or folder). Never read the whole bundle to answer a question.
+3. **Lessons on demand.** Open one when it bears on your work. A lesson shown as
+   `[failed · …]`, `[broken · …]`, `[suspect · …]` or `[stale · …]` is in the re-check queue:
+   check it against the file before you rely on it.
 
 Lessons are the ground truth. When an overview disagrees with a lesson, trust the lesson and
-fix the overview. A hit marked stale, unverified or deprecated is a lead to check, not a fact;
-a deprecated one names its replacement.
+fix the overview. A stale, unverified or deprecated hit is a lead to check, not a fact; a
+deprecated one names its replacement.
 
 ## Learn
 
 Write the lesson at the moment you learn it, not at the end. A correction from the user is
-written at once.
-
-```bash
-npx good2go edukai new --domain codebase-<project> \
-  --title "The poller retries a failed poll five times" \
-  --by <harness>/<model> --source src/poller/retry.ts --tags retries
-```
-
-Then edit the file it printed:
+written at once. Create it with `good2go edukai new --domain <d> --title <claim> --by
+<harness>/<model> --source <path> --tags <t>`, then edit the file it printed:
 
 - **One claim.** The title is the claim, as a sentence. If it needs "and", write two lessons.
 - **Body:** the claim in one paragraph that stands alone, then optional `## Caveats`. At most
-  30 lines. Evidence goes in `sources`, cited by footnote, not under its own heading.
-- **`sources`:** every file the claim rests on. Also a bundle-root path (`/domain/lessons/x.md`)
-  or a URL.
-- **`check`:** add one whenever the claim can be stated as text in a file. It is what lets the
-  lesson survive an unrelated edit to that file without an agent re-reading it:
+  30 lines. Evidence goes in `sources`, cited by footnote.
+- **`sources`:** every file the claim rests on. Also a bundle-root path or a URL.
+- **`check`:** add one whenever the claim can be stated as text in a file. It lets the lesson
+  survive an unrelated edit to that file without an agent re-reading it:
 
   ```yaml
   check:
@@ -90,23 +81,17 @@ Then edit the file it printed:
   ```
 
   Each entry has `file` and exactly one of `contains`, `lacks` (literal text), `matches` (a
-  JavaScript regular expression, at most 200 characters, given 200 ms to run: prefer
-  `contains` when the text is fixed) or `exists` (`true` or `false`).
-  There are no shell commands.
+  JavaScript regular expression, at most 200 characters; prefer `contains` when the text is
+  fixed) or `exists`. There are no shell commands.
 
-Then say how sure you are, and sign it:
+Then say how sure you are, and sign it: `good2go edukai verify <lesson file> --by
+<harness>/<model> --confidence tested`. It runs the checks, pins a digest of every source file,
+and sets your `verified` entry and `stale_after`. Never write `digest`, `verified` or
+`stale_after` by hand.
 
-```bash
-npx good2go edukai verify <lesson file> --by <harness>/<model> --confidence tested
-```
-
-`verify` runs the checks, pins a digest of every source file, and sets your `verified` entry
-and `stale_after` (30 days on). Never write `digest`, `verified` or `stale_after` by hand.
-
-Something you have not confirmed is still worth a lesson: leave it `confidence: inferred`
-(the default; no `verify`), and list it under `## Open questions` in the domain's overview.
-
-A new domain gets an `overview.md` stub. Run `npm run edukai:index` so the syllabus lists it.
+Something you have not confirmed is still worth a lesson: leave it `confidence: inferred` (the
+default; no `verify`), and list it under `## Open questions` in the domain's overview. A new
+domain gets an `overview.md` stub; run `npm run edukai:index` so the syllabus lists it.
 
 ## Recheck
 
@@ -121,16 +106,13 @@ A new domain gets an `overview.md` stub. Run `npm run edukai:index` so the sylla
 
 - **Still true:** `verify` it again (fix a `check` or a `sources` path that moved first).
 - **No longer true:** write the replacement with `new`, verify it, then
-  `npx good2go edukai supersede <old> <new>`. That sets both pointers and marks the
-  old lesson deprecated.
+  `good2go edukai supersede <old> <new>`. That marks the old lesson deprecated.
 - **Never edit an old claim to make it true, and never delete a lesson.** The history of what
   was believed is part of the memory.
 
-`renewable` lessons (a source changed or time passed, but every check still holds) need no
-agent: `npx good2go edukai recheck --write` renews them. `unverified` lessons wait
-until they matter.
-
-When a finish nudge names a lesson your own change broke, fix it in the same piece of work.
+`renewable` lessons (a source changed or time passed, but every check holds) need no agent:
+`good2go edukai recheck --write` renews them. `unverified` lessons wait until they matter. When
+a finish nudge names a lesson your own change broke, fix it in the same piece of work.
 
 ## Summarise
 
@@ -143,23 +125,16 @@ to lessons; do not copy them. Set its `generated.at` to now.
 
 - `tested` only for what you reproduced. `observed` for what you saw or read. `inferred` for
   what you deduced.
-- Sign as `<harness>/<model>` with your own names filled in, for example
-  `claude-code/opus-5.5` or `pi/deepseek-v4-flash`. The tool refuses the literal placeholder.
-  `human:<id>` is for a person, and only a person's review reaches the top trust tier.
+- Sign as `<harness>/<model>` with your own names filled in, for example `claude-code/opus-5.5`
+  or `pi/deepseek-v4-flash`; the tool refuses the literal placeholder. `human:<id>` is for a
+  person, and only a person's review reaches the top trust tier.
 - A check that passes proves the text is there, not that the claim is right. Write the check
   for the fact, not for the lesson to stay green.
 
-## Git
+## Git and finishing
 
 Changes under `edukai/` go into your normal commits, with the code change that taught the
-lesson. Never commit on your own just for memory, and add a dated line to `edukai/log.md`
-for anything a reader would want to find later (a new domain, a superseded belief).
-
-## Before finishing
-
-```bash
-npm run edukai:validate    # lesson rules, supersede pointers, budgets, a current syllabus
-npm run edukai:recheck     # nothing you broke is left in the queue
-```
-
-Exit codes: **0** fine, **1** something is broken (named by file), **2** could not run.
+lesson; never commit just for memory. Add a dated line to `edukai/log.md` for anything a reader
+would want to find later (a new domain, a superseded belief). Before finishing run
+`npm run edukai:validate` and `npm run edukai:recheck` (exit **0** fine, **1** broken, **2**
+could not run).

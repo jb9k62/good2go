@@ -17,107 +17,57 @@ Paths are relative to the skill directory.
 
 | Path | Purpose |
 |------|---------|
-| `SKILL.md` | The skill entry: when to use, invocation, procedure, rules. |
-| `references/PLAYBOOK.md` | This file: the full procedure, conventions, review checklist, version migration. |
+| `SKILL.md` | The skill entry: when to use, setup, rules. |
+| `references/PLAYBOOK.md` | This file: conventions, review checklist, version migration. |
 | `references/EXPLAINERS.md` | Guided tours, quizzes and widgets: why, how, and the review checklist. |
-| `references/okf-spec/` | The OKF spec (`SPEC.md`, its `LICENSE.md`), vendored from upstream; `UPSTREAM.json` records the commit and version. |
-| The tools | Not in the skill. They are the npm package `@jb9k62/good2go` and its `good2go` command (`init`, `new`, `validate`, `fix`, `view`, `mermaid`, `search`, `recheck`, `edukai`, `hook`, `update`, `skills`). A project depends on the package and holds no copies. |
-| `assets/templates/edukai/`, `assets/templates/edukai-recheck.yml` | The memory bundle's `index.md` and `log.md` (scaffolded by `--edukai`), and a CI workflow to copy by hand. |
-| `assets/templates/okf/` | `index.md`, `log.md` (reserved), `adr/readme.md`, `adr/template.md`. |
-| `assets/templates/concept.md` | Ready-to-fill reference concept (scaffolded as `okf-concept-template.md`). |
-| `assets/templates/explainer.md` | Ready-to-fill guided tour (scaffolded as `okf-explainer-template.md`). |
-| `assets/templates/okf-widgets/` | The React widget package (scaffolded to `packages/okf-widgets` by `--widgets`). |
-| `assets/templates/package-json-scripts.md` | The `okf:` npm scripts and CLI reference. |
+| `references/okf-spec/` | The OKF spec, vendored from upstream; `UPSTREAM.json` records the commit and version. |
+| The tools | Not in the skill. They are the npm package `@jb9k62/good2go` and its `good2go` command; `good2go --help` lists them. A project depends on the package and holds no copies. |
 
-The tools ship compiled in the package, so a project's `package.json` `"type"` is never touched.
-Claude Code and pi are the supported harnesses.
+The templates the scaffold copies (the design bundle's index, log and ADR files, the concept
+and explainer templates, the memory bundle's index and log, the `okf-widgets` package) live in
+the package. Claude Code and pi are the supported harnesses.
 
 ---
 
 ## Bootstrap procedure for "bootstrap an okf for project X"
 
-### Fast path: run the scaffold
-
-The design bundle is the first bundle bootstrapped. Its folder is configurable
-(`--design-dir <name>`, default `okf`) and recorded in `scripts/.okf-bootstrap.json`.
-
 ```bash
 cd <project-dir>
 npm install -D @jb9k62/good2go
-npx good2go init . --name "Project Name"      # add --design-dir design, --widgets, --edukai
+npx good2go init . --name "Project Name"      # see `good2go init --help` for the flags
+npm install
+npm install -D @mermaid-js/mermaid-cli@11 playwright && npx playwright install chromium
 ```
 
 A project with no `package.json` runs `npx @jb9k62/good2go@<version> init <project-dir> ...`
-instead, and the scripts below are used as `npx @jb9k62/good2go@<version> <command>`.
+instead, and uses `npx @jb9k62/good2go@<version> <command>` where the text says `npm run`.
 
-This creates:
-- `<design dir>/index.md`, `<design dir>/log.md`
-- `<design dir>/adr/readme.md`, `<design dir>/adr/template.md`
-- the `<design dir>/<slug>/` concept folder (blank, with `.gitkeep`)
-- `okf-concept-template.md` and `okf-explainer-template.md` (authoring aids, kept *outside* the bundle so they are not scanned)
-- with `--widgets`: `packages/okf-widgets/`, added to the npm `workspaces`
-- with `--edukai`: `edukai/index.md` and `edukai/log.md`, the `edukai:` scripts, and a marked snippet in `AGENTS.md`
-- `okf:validate`, `okf:fix`, `okf:view`, `okf:mermaid`, `okf:mermaid:render`, `okf:search`, `okf:recheck` (and with widgets,
-  `okf:widgets:build`, `okf:widgets:test`, `okf:widgets:typecheck`) in `package.json`; each calls `good2go`
-- `scripts/.okf-bootstrap.json`, the manifest `good2go update` reads
+The scaffold writes the design bundle (default `okf/`: `index.md`, `log.md`, `adr/`, a blank
+concept folder), the two authoring templates (`okf-concept-template.md`,
+`okf-explainer-template.md`, kept *outside* the bundle so they are not scanned), the `okf:`
+npm scripts, the manifest `.okf-bootstrap.json` that `good2go update` reads, and a copy of the
+skills in `.claude/skills/` and `.agents/skills/`. With `--widgets` it adds
+`packages/okf-widgets/` as an npm workspace; with `--edukai` the memory bundle and a marked
+snippet in `AGENTS.md`. No tool is copied. A re-run keeps every authored file (and lists what
+it kept); only `--force` replaces them, and `packages/okf-widgets` never is: it is the project's
+code once scaffolded.
 
-No tool is copied into the project.
+Then the gates, all expected to pass: `npm run okf:validate` (0 issues: types, links,
+timestamps), `okf:view` (writes `viz.html`), `okf:mermaid` (every block parses), and
+`okf:mermaid:render` (every diagram, quiz and widget works in headless Chromium).
 
-Then install and verify:
-
-```bash
-npm install
-npm install -D @mermaid-js/mermaid-cli@11 playwright && npx playwright install chromium
-npm run okf:validate        # expect: 0 issues (types, links, timestamps)
-npm run okf:view            # writes viz.html in the bundle, open it in a browser
-npm run okf:mermaid         # every mermaid block parses in mmdc
-npm run okf:mermaid:render  # every diagram, quiz and widget works (headless Chromium)
-```
-
-Re-running the scaffold is safe: the index, log, ADR index and template, and the two
-authoring templates are kept if they exist (the run lists what it kept), and only `--force`
-replaces them. `packages/okf-widgets` is never replaced, not even by `--force`: it is the
-project's code once scaffolded.
+Author the first concepts in `<design dir>/<slug>/` (overview, architecture, domain model,
+API) and the first ADR, including the one for using OKF itself (see the checklist below).
+Every non-reserved `.md` needs a `type`; `index.md` and `log.md` are reserved and need none.
+Commit the bundle and `package.json`; `viz.html` is generated, so gitignore it.
 
 ### Adding another bundle
 
 Any other kind of knowledge gets its own bundle, such as `ops/` for runbooks, on-call and
-escalation. The design bundle's rules apply to it.
-
-```bash
-npx good2go new ops --name "Operations" --intent "Runbooks and escalation for the service"
-npx good2go validate ops && npx good2go view ops
-```
-
-`ops/` invites content that must not be public: names, phone numbers, escalation contacts.
-Point to where those live; do not copy them in.
-
-### Manual path (what the scaffold does, step by step)
-
-1. **Create the bundle folder** (default `okf/`) in the project root.
-2. **Skeleton**, copied from the package's `templates/`:
-   - `index.md`: the root index. Frontmatter is only `okf_version: "0.2"`; `index.md` and
-     `log.md` are **reserved** and do **not** need a `type`.
-   - `log.md`: dated update history.
-   - `adr/readme.md` and `adr/template.md`: the decisions area.
-3. **Depend on the tools**: `npm install -D @jb9k62/good2go`.
-4. **Add npm scripts** to `package.json`:
-   ```jsonc
-   "okf:validate":       "good2go validate okf",
-   "okf:fix":            "good2go fix okf",
-   "okf:view":           "good2go view okf",
-   "okf:mermaid":        "good2go mermaid okf",
-   "okf:mermaid:render": "good2go view okf --check-render",
-   "okf:search":         "good2go search"
-   ```
-5. **Author the first concepts** in `okf/<slug>/` (overview, architecture, domain model, API)
-   and record the first ADR, including the one for using OKF itself (see the checklist below).
-   Every non-reserved `.md` needs a `type`.
-6. **Validate and view**: `npm run okf:validate` (0 issues: types and links), then
-   `npm run okf:view`, then the two Mermaid gates (see the
-   [Mermaid](#mermaid-two-gates) section).
-7. **Git commit** the bundle and the `package.json` changes. `viz.html` is generated;
-   either gitignore it or commit it and regenerate on demand.
+escalation: `npx good2go new ops --name "Operations" --intent "..."`. The design bundle's rules
+and gates apply to it (`good2go validate ops`, `good2go view ops`). `ops/` invites content that
+must not be public: names, phone numbers, escalation contacts. Point to where those live; do
+not copy them in.
 
 ---
 
@@ -262,15 +212,10 @@ tried as the start of a word ("retr"), then as a near spelling ("jiter"), each a
 weight. Words a question is asked with ("how", "does", "the") are ignored beside real ones, so
 a question can be pasted as it is. `--all` requires every remaining word.
 
-```bash
-npm run okf:search -- facets                          # the tags, types, trust tiers in use; start here
-npm run okf:search -- search "retry backoff" --fresh  # ranked; --tag, --type, --status, --trust human,machine
-npm run okf:search -- show parcel-tracker/retry-policy --outline   # headings only; "retry-policy" alone will do when one concept ends that way
-npm run okf:search -- show parcel-tracker/overview --section "What it does"   # one section, not the file
-npm run okf:search -- related adr/0003-full-jitter-retries   # links, backlinks, shared tags
-npm run okf:search -- stale --expires-within 14d      # the review queue
-npm run okf:search -- search --cites src/poller       # what rests on a file, or on any file under a folder
-```
+Commands: `facets` (the tags, types and trust tiers in use; start here), `search "query"`
+(filters `--fresh`, `--tag`, `--type`, `--status`, `--trust`, `--cites <file or folder>`),
+`show <id> --outline` then `--section "<heading>"`, `related <id>`, `stale --expires-within 14d`.
+`good2go search --help` has the rest.
 
 The workflow for an agent: `facets` to learn the vocabulary, `search` with filters, `show
 --outline` then `show --section` to read only what is needed, `related` to follow links. Prefer
