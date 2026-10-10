@@ -4,6 +4,7 @@
  */
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { after, describe, it } from 'node:test';
@@ -56,7 +57,7 @@ describe('bootstrap', () => {
     assert.equal(pkg.scripts['okf:validate'], 'good2go validate okf');
     assert.equal(pkg.scripts['okf:view'], 'good2go view okf');
     assert.equal(pkg.scripts['okf:fix'], 'good2go fix okf');
-    assert.equal(pkg.scripts['okf:search'], 'good2go search');
+    assert.equal(pkg.scripts['okf:search'], 'good2go search --bundle okf');
     assert.equal(pkg.scripts['okf:update'], undefined, 'there is no updater: upgrades are npm update');
     assert.equal(pkg.scripts['okf:widgets:build'], undefined);
     assert.equal(pkg.devDependencies['@jb9k62/good2go'], `^${pkgOf(ROOT).version}`);
@@ -107,15 +108,40 @@ describe('bootstrap', () => {
       assert.ok(fs.existsSync(path.join(dir, home, 'skills', 'good2go', 'references', 'PLAYBOOK.md')));
       assert.ok(!fs.existsSync(path.join(dir, home, 'src')), 'no tools');
     }
-    assert.doesNotMatch(read(path.join(dir, '.good2go.json')), /skills/);
+    const recorded = JSON.parse(read(path.join(dir, '.good2go.json'))).skills;
+    assert.match(recorded.edukai['SKILL.md'], /^[0-9a-f]{64}$/);
     const mine = path.join(dir, '.claude', 'skills', 'edukai', 'SKILL.md');
     fs.writeFileSync(mine, 'my edit\n');
     const again = run(BOOTSTRAP, [dir]);
     assert.equal(again.code, 0, again.out);
-    assert.match(again.out, /Kept[\s\S]*\.claude\/skills\/edukai/);
+    assert.match(again.out, /Kept[\s\S]*\.claude\/skills\/edukai\/ \(edited/);
     assert.equal(read(mine), 'my edit\n');
     run(BOOTSTRAP, [dir, '--force']);
     assert.match(read(mine), /^---\nname: edukai/);
+  });
+
+  it('refreshes skills that still match what was installed, and keeps edited ones', () => {
+    const dir = project('refresh');
+    assert.equal(run(BOOTSTRAP, [dir]).code, 0);
+    const manifest = path.join(dir, '.good2go.json');
+    const claudeGood = path.join(dir, '.claude', 'skills', 'good2go', 'SKILL.md');
+    const agentsGood = path.join(dir, '.agents', 'skills', 'good2go', 'SKILL.md');
+    const shipped = read(claudeGood);
+    // Pretend an older release installed these: change the files and record the old hashes.
+    const m = JSON.parse(read(manifest));
+    const old = 'an older release\n';
+    fs.writeFileSync(claudeGood, old);
+    m.skills.good2go['SKILL.md'] = createHash('sha256').update(old).digest('hex');
+    fs.writeFileSync(agentsGood, 'edited by hand\n');
+    fs.writeFileSync(manifest, JSON.stringify(m));
+    const r = run(BOOTSTRAP, [dir]);
+    assert.equal(r.code, 0, r.out);
+    assert.equal(read(claudeGood), shipped, 'unchanged since install: refreshed');
+    assert.match(r.out, /\.claude\/skills\/good2go\/ \(refreshed/);
+    assert.equal(read(agentsGood), 'edited by hand\n', 'edited: kept');
+    assert.match(r.out, /\.agents\/skills\/good2go\/ \(edited/);
+    assert.equal(run(BOOTSTRAP, [dir, '--force']).code, 0);
+    assert.equal(read(agentsGood), shipped, '--force replaces');
   });
 
   it('copies no skills with --no-skills', () => {
@@ -134,18 +160,8 @@ describe('bootstrap', () => {
     assert.doesNotMatch(r.out, /added the @jb9k62\/good2go devDependency/);
   });
 
-  it('refuses --tools-only without a bundle', () => {
-    const r = run(BOOTSTRAP, [project('empty'), '--tools-only']);
-    assert.equal(r.code, 2);
-  });
-
-  it('rewires the scripts with --tools-only and leaves the bundle alone', () => {
-    const dir = project('tools-only', { name: 'tools-only', scripts: { 'okf:view': 'node scripts/g2g-view.mjs okf' } });
-    fs.mkdirSync(path.join(dir, 'okf'));
-    const r = run(BOOTSTRAP, [dir, '--tools-only']);
-    assert.equal(r.code, 0, r.out);
-    assert.equal(pkgOf(dir).scripts['okf:view'], 'good2go view okf');
-    assert.ok(!fs.existsSync(path.join(dir, 'okf', 'index.md')), '--tools-only leaves okf/ alone');
+  it('no longer has --tools-only', () => {
+    assert.equal(run(BOOTSTRAP, [project('no-tools-only'), '--tools-only']).code, 2);
   });
 
   it('writes the install manifest at the project root, with the version, name and design folder', () => {
@@ -156,7 +172,7 @@ describe('bootstrap', () => {
     assert.ok(text.endsWith('}\n'), 'trailing newline');
     assert.equal(text, JSON.stringify(JSON.parse(text), null, 2) + '\n', '2-space indent');
     const manifest = JSON.parse(text);
-    assert.deepEqual(Object.keys(manifest), ['version', 'name', 'designDir']);
+    assert.deepEqual(Object.keys(manifest), ['version', 'name', 'designDir', 'skills']);
     assert.equal(manifest.version, pkgOf(ROOT).version);
     assert.equal(manifest.name, 'Manifest App');
     assert.equal(manifest.designDir, 'okf');
@@ -206,6 +222,31 @@ describe('bootstrap', () => {
   });
 });
 
+describe('templates', () => {
+  it('names no tool path from the old layout', () => {
+    const walk = (d: string): string[] =>
+      fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => {
+        if (['node_modules', 'dist'].includes(e.name)) return [];
+        const f = path.join(d, e.name);
+        return e.isDirectory() ? walk(f) : [f];
+      });
+    for (const file of walk(path.join(ROOT, 'src', 'templates'))) {
+      if (file.endsWith('package.json')) continue;
+      assert.doesNotMatch(read(file), /scripts\/(g2g|okf)-|\b(g2g|okf)-[a-z]+\.m[tj]s\b/, file);
+    }
+    assert.match(read(path.join(ROOT, 'src', 'templates', 'edukai-recheck.yml')), /npx good2go recheck/);
+  });
+
+  it('stores the widgets .gitignore as gitignore (npm drops dotfiles of that name) and restores it', () => {
+    assert.ok(fs.existsSync(path.join(ROOT, 'src', 'templates', 'okf-widgets', 'gitignore')));
+    assert.ok(!fs.existsSync(path.join(ROOT, 'src', 'templates', 'okf-widgets', '.gitignore')));
+    const dir = project('widgets-ignore');
+    assert.equal(run(BOOTSTRAP, [dir, '--widgets']).code, 0);
+    assert.match(read(path.join(dir, 'packages', 'okf-widgets', '.gitignore')), /node_modules/);
+    assert.ok(!fs.existsSync(path.join(dir, 'packages', 'okf-widgets', 'gitignore')));
+  });
+});
+
 describe('bootstrap --design-dir', () => {
   it('points the scripts at the folder, records it, and keeps it on a re-run', () => {
     const dir = project('design-dir');
@@ -242,10 +283,48 @@ describe('bootstrap --design-dir', () => {
     assert.equal(run(GOOD2GO, ['validate', 'design', '--strict'], dir).code, 0);
   });
 
-  it('rejects a folder outside the project', () => {
-    for (const bad of ['../x', '/abs', '.']) {
-      assert.equal(run(BOOTSTRAP, [project('bad-design'), '--design-dir', bad]).code, 2, bad);
+  it('rejects a folder outside the project, and one that is not a plain name', () => {
+    for (const bad of ['../x', '/abs', '.', '', '../../x', 'a/../b', 'docs;touch PWNED', 'Docs', 'a b', '$(id)', 'a\\b']) {
+      const dir = project('bad-design');
+      assert.equal(run(BOOTSTRAP, [dir, '--design-dir', bad]).code, 2, bad);
+      assert.ok(!fs.existsSync(path.join(dir, 'PWNED')));
+      assert.ok(!fs.existsSync(path.join(dir, '.good2go.json')), 'nothing is written: ' + bad);
     }
+  });
+
+  it('accepts a nested folder of plain names', () => {
+    const dir = project('nested-design');
+    assert.equal(run(BOOTSTRAP, [dir, '--design-dir', 'docs/design.v2']).code, 0);
+    assert.equal(pkgOf(dir).scripts['okf:validate'], 'good2go validate docs/design.v2');
+  });
+
+  it('rejects a poisoned design folder in a committed manifest', () => {
+    for (const bad of ['docs;touch PWNED', '../../x', '/etc']) {
+      const dir = project('poisoned');
+      fs.writeFileSync(path.join(dir, '.good2go.json'), JSON.stringify({ version: '0.1.0', name: 'x', designDir: bad }));
+      const r = run(BOOTSTRAP, [dir]);
+      assert.equal(r.code, 2, bad);
+      assert.match(r.out, /\.good2go\.json/);
+      assert.deepEqual(pkgOf(dir).scripts ?? {}, {});
+    }
+  });
+
+  it('sanitises --slug: kebab-case or refused, never a path', () => {
+    const dir = project('slugs');
+    assert.equal(run(BOOTSTRAP, [dir, '--slug', 'My Service_2']).code, 0);
+    assert.ok(fs.existsSync(path.join(dir, 'okf', 'my-service-2', '.gitkeep')));
+    for (const bad of ['../../escaped', 'a/b', 'x;touch PWNED', '..', '', '-']) {
+      const d = project('bad-slug');
+      assert.equal(run(BOOTSTRAP, [d, '--slug', bad]).code, 2, bad);
+      assert.ok(!fs.existsSync(path.join(scratch, 'escaped')));
+      assert.ok(!fs.existsSync(path.join(d, 'okf')), 'nothing is written: ' + bad);
+    }
+  });
+
+  it('names the folders it made, design/ or architecture/', () => {
+    const r = run(BOOTSTRAP, [project('named'), '--design-dir', 'design', '--name', 'Thing']);
+    assert.match(r.out, /design\/architecture\/, design\/thing\//);
+    assert.doesNotMatch(r.out, /design\/design\//);
   });
 });
 
@@ -394,15 +473,12 @@ describe('g2g-view ER diagram keys', () => {
 describe('release metadata', () => {
   const pkg = JSON.parse(read(path.join(ROOT, 'package.json')));
 
-  it('keeps one version in package.json, both plugin manifests, g2g-init.mts and good2go.mts', () => {
-    const v = pkg.version.replace(/\./g, '\\.');
-    assert.equal(pkg.version, '0.7.0');
-    assert.match(read(BOOTSTRAP), new RegExp(`const VERSION = '${v}'`));
-    assert.match(read(GOOD2GO), new RegExp(`const VERSION = '${v}'`));
-    const plugin = JSON.parse(read(path.join(ROOT, '.claude-plugin', 'plugin.json')));
-    const market = JSON.parse(read(path.join(ROOT, '.claude-plugin', 'marketplace.json')));
-    assert.equal(plugin.version, pkg.version);
-    assert.equal(market.plugins[0].version, pkg.version);
+  it('stamps the package.json version into the manifest and the scaffolded frontmatter', () => {
+    const dir = project('stamped');
+    assert.equal(run(BOOTSTRAP, [dir]).code, 0);
+    assert.equal(JSON.parse(read(path.join(dir, '.good2go.json'))).version, pkg.version);
+    assert.match(read(path.join(dir, 'okf', 'index.md')) + read(path.join(dir, 'okf', 'adr', 'readme.md')), new RegExp(`good2go/${pkg.version.replace(/\./g, '\\.')}`));
+    assert.doesNotMatch(read(BOOTSTRAP), /const VERSION = '/);
   });
 
   it('publishes the good2go command from dist/', () => {

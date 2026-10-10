@@ -17,10 +17,12 @@ Do this once, before the first automated release.
    ```sh
    npm login
    npm run build
-   npm publish --access public
+   npm publish --access public --provenance=false
    ```
 
-   Check the version with `npm view @jb9k62/good2go version` afterwards.
+   `--provenance=false` is needed because a provenance attestation can only be made inside a
+   supported CI run, not from a laptop. The first version therefore has no attestation; every
+   release after it, published by the workflow, does. Check the version with `npm view @jb9k62/good2go version` afterwards.
 3. **Trusted publisher.** On npmjs.com open the package's **Settings**, then **Trusted Publisher**,
    and choose **GitHub Actions**. Enter:
    - Organisation or user: `jb9k62`
@@ -39,13 +41,9 @@ Do this once, before the first automated release.
 ## Per release
 
 1. Make sure `main` is green in CI and the working tree is clean.
-2. Choose the version (semver). Set the same version in these four places:
-   - `package.json` (`version`)
-   - `.claude-plugin/plugin.json` (`version`)
-   - `.claude-plugin/marketplace.json` (`plugins[0].version`)
-   - `VERSION` in `src/g2g-init.mts`
-
-   The release workflow fails if they differ from each other or from the tag.
+2. Choose the version (semver). Set it in `package.json` (`npm version X.Y.Z --no-git-tag-version` also
+   updates `package-lock.json`). The tools read their version from it at run time, so there is
+   nowhere else to change. The release workflow fails if the tag is not `v` plus that version.
 3. In `CHANGELOG.md`, move the entries under `## Unreleased` into a new heading
    `## X.Y.Z - YYYY-MM-DD`, and leave `## Unreleased` empty.
 4. Commit the bump on `main` and push it. Let CI finish.
@@ -56,9 +54,10 @@ Do this once, before the first automated release.
    git push origin vX.Y.Z
    ```
 
-6. The `release` workflow runs. The `verify` job runs the checks and the tarball smoke test. Then
-   the `publish` job waits for approval in the `npm` environment. Approve it only after `verify`
-   has passed.
+6. The `release` workflow runs. The `verify` job installs with `--ignore-scripts`, runs the
+   checks, packs the tarball, smoke-tests it and uploads it. Then the `publish` job waits for
+   approval in the `npm` environment and publishes that same tarball (it does not build again).
+   Approve it only after `verify` has passed.
 7. Confirm the release: `npm view @jb9k62/good2go version`, and `npm audit signatures` in a
    scratch project after `npm install @jb9k62/good2go`.
 

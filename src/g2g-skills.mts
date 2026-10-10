@@ -19,17 +19,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-
-/** The skills folder: beside this file in the package, else the repository's own when run from source. */
-function skillsRoot(): string | null {
-  for (const dir of [path.join(HERE, 'skills'), path.resolve(HERE, '..', 'skills')]) {
-    if (fs.existsSync(path.join(dir, 'good2go', 'SKILL.md'))) return dir;
-  }
-  return null;
-}
+import { copySkill, helpFromComment, skillsRoot } from './g2g-shared.mts';
 
 function skillNames(root: string): string[] {
   return fs
@@ -39,25 +29,15 @@ function skillNames(root: string): string[] {
     .sort();
 }
 
-/** Copy a skill's files; symlinks and the tools (node_modules, dist) are left out. */
-function copySkill(source: string, dest: string): void {
-  fs.mkdirSync(dest, { recursive: true });
-  for (const entry of fs.readdirSync(source, { withFileTypes: true })) {
-    if (entry.isSymbolicLink()) continue;
-    if (['node_modules', 'dist'].includes(entry.name) || entry.name.includes('..')) continue;
-    const from = path.join(source, entry.name);
-    const to = path.join(dest, entry.name);
-    if (entry.isDirectory()) copySkill(from, to);
-    else if (entry.isFile()) fs.copyFileSync(from, to, fs.constants.COPYFILE_EXCL);
-  }
-}
-
 function main(argv: string[]): number {
   const flags = new Set<string>();
   let dir: string | null = null;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
-    if (a === '--dir') {
+    if (a === '--help' || a === '-h') {
+      console.log(helpFromComment(import.meta.url));
+      return 0;
+    } else if (a === '--dir') {
       dir = argv[++i] ?? null;
       if (!dir) {
         console.error('--dir needs a folder');
@@ -70,7 +50,7 @@ function main(argv: string[]): number {
     }
   }
 
-  const root = skillsRoot();
+  const root = skillsRoot(import.meta.url);
   const names = root ? skillNames(root) : [];
   if (!root || names.length === 0) {
     console.error('No skills found beside this tool.');
@@ -102,7 +82,6 @@ function main(argv: string[]): number {
     const skillsDir = path.join(target.home, 'skills');
     for (const skill of names) {
       const dest = path.join(skillsDir, skill);
-      if (path.dirname(dest) !== skillsDir) continue;
       if (fs.lstatSync(dest, { throwIfNoEntry: false })) {
         if (!flags.has('--force')) {
           console.error(`  ${target.name}: ${dest} already exists; pass --force to replace it`);
@@ -118,9 +97,7 @@ function main(argv: string[]): number {
     }
   }
 
-  console.log('\nSkills only. The memory hooks: `good2go hooks`, or the plugin or package:');
-  console.log('  Claude Code: /plugin marketplace add jb9k62/good2go');
-  console.log('  pi:          pi install git:github.com/jb9k62/good2go');
+  console.log('\nSkills only. The memory hooks are separate: `good2go hooks`.');
   return refused ? 1 : 0;
 }
 

@@ -3,9 +3,10 @@
  * moments: when a session opens or is compacted, when the agent reads or edits a file a
  * lesson cites, and when it is about to finish with a lesson it has just broken.
  *
- * It holds no logic. Every answer comes from g2g-hook.mts, which reads only the JSON
- * cache `npm run edukai:index` writes and never runs code from the project. In a project with
- * no edukai/index.md it does nothing, and any error is swallowed unless EDUKAI_DEBUG=1.
+ * It holds no logic. Every answer comes from `good2go hook <command>`, which reads only the
+ * JSON cache `good2go edukai index` writes. In a project with no edukai/index.md it does
+ * nothing, and any error (including no `good2go` on PATH) is swallowed unless EDUKAI_DEBUG=1.
+ * `good2go hooks` copies this file into pi's extensions folder; at project scope it sets BIN.
  * EDUKAI_NUDGE=0 turns the finish nudge off. Needs pi 1.0 or later: on earlier versions a
  * follow-up sent from inside `agent_end` started no turn.
  *
@@ -13,7 +14,6 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
 
 interface TextContent {
   type: 'text';
@@ -63,10 +63,9 @@ interface Pi {
   sendMessage(message: CustomMessage, options?: { triggerTurn?: boolean; deliverAs?: 'steer' | 'followUp' | 'nextTurn' }): void;
 }
 
-const CORE = fileURLToPath(new URL('../src/g2g-hook.mts', import.meta.url));
-// Loaded before the core, it keeps Node from stripping the core's TypeScript on every call.
-const COMPILE_CACHE = fileURLToPath(new URL('../hooks/compile-cache.mjs', import.meta.url));
-const NODE_ARGS = fs.existsSync(COMPILE_CACHE) ? ['--import', pathToFileURL(COMPILE_CACHE).href] : [];
+// null: run `good2go` from PATH (user scope). `good2go hooks --project` replaces this line with
+// the project's own copy, which is used only while that file exists.
+const BIN: string | null = null;
 // A model is right to be wary of instructions that turn up inside a tool result, so the
 // prefix is declared where it does trust what it reads: the system prompt.
 const PREFIX_NOTE =
@@ -97,8 +96,12 @@ export default function edukai(pi: Pi): void {
     try {
       const bundle = bundleOf(ctx);
       if (bundle === null) return '';
-      const args = [...NODE_ARGS, CORE, command, ...extra, '--bundle', bundle, '--session', ctx.sessionManager.getSessionId()];
-      const result = await pi.exec('node', args, { timeout: 5000, cwd: ctx.cwd });
+      if (BIN !== null && !fs.existsSync(BIN)) return '';
+      const args = ['hook', command, ...extra, '--bundle', bundle, '--session', ctx.sessionManager.getSessionId()];
+      const result =
+        BIN === null
+          ? await pi.exec('good2go', args, { timeout: 5000, cwd: ctx.cwd })
+          : await pi.exec('node', [BIN, ...args], { timeout: 5000, cwd: ctx.cwd });
       if (result.code !== 0) {
         debug(`${command} exited ${result.code}: ${result.stderr}`);
         return '';

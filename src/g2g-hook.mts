@@ -10,7 +10,7 @@
  * g2g-edukai.mts writes, and the files that cache names.
  *
  * Usage:
- *   node g2g-hook.mts <command> [arguments] [options]
+ *   good2go hook <command> [arguments] [options]
  *
  *   brief              what an agent is told when a session opens (at most 2,000 characters)
  *   cites <path>       the lessons that cite a file (at most 3; none shown twice in a session)
@@ -936,6 +936,10 @@ export function parseFlags(argv: string[], valueFlags: Set<string>, boolFlags: S
   const rest: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
+    if (a === '-h') {
+      flags.set('help', ['true']);
+      continue;
+    }
     if (!a.startsWith('--')) {
       rest.push(a);
       continue;
@@ -963,7 +967,9 @@ export function parseNow(raw: string | null): Date {
 
 /** The comment at the top of a tool, as its --help. */
 export function helpText(url: string): string {
-  return fs.readFileSync(new URL(url), 'utf8').split('*/')[0]!.replace(/^#!.*\n\/\*\*\n/, '').replace(/^ \* ?/gm, '');
+  const text = fs.readFileSync(new URL(url), 'utf8');
+  const start = text.indexOf('/**');
+  return text.slice(start + 3, text.indexOf('*/', start)).replace(/^\s*\n/, '').replace(/^ \* ?/gm, '').trimEnd();
 }
 
 export function runHook(): number {

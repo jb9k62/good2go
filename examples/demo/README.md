@@ -160,14 +160,14 @@ That run allowed only `Read` and `Edit`, so the model stopped at the commands it
 [tool]                edit src/poller/retry.ts          RETRIES = 4
 [assistant]           DONE
 [follow-up turn]      edukai: your changes left 1 lesson wrong. Fix it before you finish: supersede it, or verify it. …
-[tools]               g2g-edukai new … / verify … / supersede …
+[tools]               good2go edukai new … / verify … / supersede …
 [assistant]           The lesson I broke is fixed. Done.
                       - Replaced "five times" with a new verified lesson "The poller retries a failed poll four times"
                         (check: RETRIES = 4), and superseded the old one (marked deprecated). …
 ```
 
-This folder is not a scaffolded project, so it has no `scripts/g2g-edukai.mts`: here the tool
-is run from `src/`, which works because this repository has `yaml`
+This folder is not a scaffolded project, so it has no `good2go` dependency: here the tool
+is run from the repository's `src/`, which works because this repository has `yaml`
 installed. In that pi run the model went looking for the tool across the whole disk before it
 found it. The skill now tells an agent not to search, and to offer to scaffold instead.
-(Both transcripts predate one change: the Stop hook now runs through `hooks/edukai-hook.mjs`.)
+(Both transcripts predate one change: the Stop hook now runs through `good2go hook run`.)

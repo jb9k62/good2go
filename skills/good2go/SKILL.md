@@ -34,8 +34,8 @@ This file is the judgement. The commands are the `good2go` command of the npm pa
 ## Setup
 
 `npm i -g @jb9k62/good2go` installs the `good2go` command. `good2go hooks` then wires the
-memory hooks for Claude Code and pi; they are per user by default, so a cloned repository
-cannot make them run its code. In a project, `npm i -D @jb9k62/good2go && npx good2go init . --name "Project Name"`
+memory hooks for Claude Code and pi at user scope, so a cloned repository cannot make them run
+its code (`good2go hooks --project` is the alternative for a project devDependency). In a project, `npm i -D @jb9k62/good2go && npx good2go init . --name "Project Name"`
 scaffolds the design bundle, adds the `okf:*` npm scripts and copies these skills into
 `.claude/skills/` and `.agents/skills/`. Without a `package.json`, use `npx @jb9k62/good2go@<version> init`.
 
@@ -44,7 +44,7 @@ Run `good2go --help` for every command and `good2go init --help`, `good2go new -
 The scaffolded scripts are the checks: `npm run okf:fix`, `okf:validate`, `okf:view`,
 `okf:mermaid`, `okf:mermaid:render`, `okf:search`, `okf:recheck`. The Mermaid
 gates need `npm i -D @mermaid-js/mermaid-cli@11 playwright && npx playwright install chromium`;
-without them they exit 2 ("could not run"). A plain re-run of `init` keeps authored files.
+without them they exit 2 ("could not run"). A plain re-run of `init` keeps authored files and refreshes the skills copies you have not edited.
 
 Invoke with `/skill:good2go` (pi), `/good2go` (Claude Code), or just ask: "bootstrap
 an okf for this project", "write an explainer for this change with a quiz".

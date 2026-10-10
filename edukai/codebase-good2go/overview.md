@@ -32,7 +32,7 @@ new widget is not done until a tour uses it.
 - [g2g-rank.mts imports nothing so the viewer can inline it](/codebase-good2go/lessons/2026-10-08-rank-has-no-imports.md)
 - [g2g-hook.mts imports only node: built-ins and g2g-rank.mts](/codebase-good2go/lessons/2026-10-08-hook-is-dependency-free.md)
 - [The viewer loads its libraries from a pinned CDN](/codebase-good2go/lessons/2026-10-08-viewer-uses-a-pinned-cdn.md)
-- [The harness adapters resolve the memory hook from the skill assets](/codebase-good2go/lessons/2026-10-08-adapters-resolve-from-assets.md)
+- [The harness adapters call good2go hook, not a file path](/codebase-good2go/lessons/2026-10-08-adapters-call-good2go-hook.md)
 - [Every registered widget must appear in a demo tour](/codebase-good2go/lessons/2026-10-08-every-widget-has-a-tour.md)
 
 ## Open questions

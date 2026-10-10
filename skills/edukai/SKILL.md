@@ -10,7 +10,7 @@ description: >
   lessons before reading files, writing one claim per lesson with sources and a re-runnable
   check, verifying, and superseding a lesson that stopped being true.
 license: MIT
-compatibility: Node 24+ (22.18+ works). The project must be scaffolded with `good2go init --edukai`; `good2go hooks` adds the session hooks. Harnesses: Claude Code and pi.
+compatibility: Node 24+. The project must be scaffolded with `good2go init --edukai`; `good2go hooks` adds the session hooks. Harnesses: Claude Code and pi.
 ---
 
 # edukai: the agent memory bundle
@@ -25,10 +25,11 @@ open the file before relying on it.
 
 ## Setup
 
-The hooks are installed once per user: `npm i -g @jb9k62/good2go && good2go hooks` (per user by
-default, so a cloned repository cannot make them run its code). The bundle is opt-in per
+The hooks are installed once per user: `npm i -g @jb9k62/good2go && good2go hooks` (user scope, so
+a cloned repository cannot make them run its code; a project that has the package as a
+devDependency can install them project-scope instead: see `good2go hooks --help`). The bundle is opt-in per
 project: ask before adding it, then `npm i -D @jb9k62/good2go && npx good2go init . --edukai`
-(`--tools-only --edukai` in a project that already has a design bundle). It also adds the
+(also fine in a project that already has a design bundle; re-running `init` is how skills are refreshed). It also adds the
 `edukai:*` npm scripts. If those scripts are missing the project was not scaffolded: say so and
 offer to scaffold it; do not search the disk for a tool.
 

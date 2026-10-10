@@ -33,7 +33,7 @@ describe('the built package', () => {
   });
 
   it('compiles every tool to JavaScript beside the templates and the skills', () => {
-    for (const tool of ['good2go', 'g2g-init', 'g2g-view', 'g2g-search', 'g2g-rank', 'g2g-core', 'g2g-edukai', 'g2g-hook', 'g2g-new', 'g2g-mermaid']) {
+    for (const tool of ['good2go', 'g2g-init', 'g2g-view', 'g2g-search', 'g2g-rank', 'g2g-core', 'g2g-edukai', 'g2g-hook', 'g2g-new', 'g2g-mermaid', 'g2g-install-hooks', 'g2g-skills', 'g2g-shared']) {
       assert.ok(fs.existsSync(path.join(DIST, `${tool}.mjs`)), `${tool}.mjs`);
       assert.ok(!fs.existsSync(path.join(DIST, `${tool}.mts`)), `no TypeScript source for ${tool}`);
     }
@@ -43,6 +43,33 @@ describe('the built package', () => {
     assert.ok(!fs.existsSync(path.join(DIST, 'src')), 'skills ship without the tools');
     assert.match(read(CLI), /^#!\/usr\/bin\/env node/, 'a shebang, so bin works');
     assert.ok(fs.statSync(CLI).mode & 0o100, 'executable');
+  });
+
+  it('prints its own help from the compiled code, not a compiler helper', () => {
+    for (const args of [['--help'], ['help']]) {
+      const r = cli(args, scratch);
+      assert.equal(r.code, 0, r.out);
+      assert.match(r.out, /^good2go:/, 'help starts with the comment, not tsc\'s helper code');
+      assert.doesNotMatch(r.out, /__rewriteRelativeImportExtension/);
+      assert.match(r.out, /good2go hooks /);
+    }
+    assert.match(cli(['hooks', '--help'], scratch).out, /^Install the memory hooks/);
+  });
+
+  it('packs without tests or sources, and with the templates, skills and pi extension', () => {
+    const r = spawnSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], { cwd: ROOT, encoding: 'utf8' });
+    assert.equal(r.status, 0, r.stderr);
+    const files: string[] = JSON.parse(r.stdout)[0].files.map((f: { path: string }) => f.path);
+    const has = (p: string) => files.includes(p);
+    assert.ok(has('dist/good2go.mjs'));
+    assert.ok(has('dist/templates/okf/index.md'));
+    assert.ok(has('dist/templates/pi-extension.ts'));
+    assert.ok(has('dist/skills/good2go/SKILL.md'));
+    assert.ok(has('package.json') && has('README.md') && has('LICENSE') && has('SECURITY.md'));
+    assert.deepEqual(files.filter((f) => /^(test|scripts|src|hooks|extensions|\.claude-plugin|\.github|examples|edukai|design|vendor)\//.test(f)), []);
+    assert.deepEqual(files.filter((f) => /node_modules|\.map$|\.env/.test(f)), []);
+    // npm drops a file called .gitignore from a tarball, so the template ships as `gitignore`.
+    assert.ok(has('dist/templates/okf-widgets/gitignore'));
   });
 
   it('reports the package version', () => {

@@ -8,11 +8,11 @@ generated: { by: pi/deepseek-ai/DeepSeek-V4.1-Flash, at: 2026-10-08T20:03:17Z }
 verified:
   - { by: pi/deepseek-ai/DeepSeek-V4.1-Flash, at: 2026-10-08T20:07:51Z }
   - { by: process:edukai-recheck, at: 2026-10-08T20:16:39Z }
-  - { by: claude-code/claude-sonnet-5-5, at: 2026-10-10T17:42:20Z }
-stale_after: 2026-11-09T17:42:20Z
+  - { by: claude-code/claude-sonnet-5-5, at: 2026-10-10T18:14:15Z }
+stale_after: 2026-11-09T18:14:15Z
 sources:
   - resource: package.json
-    digest: sha256:acb63c3efe5688f1
+    digest: sha256:c8a3b5ec8cc3d1de
 check:
   - { file: package.json, contains: "npm run test:views && npm run okf:validate && npm run edukai:validate" }
 ---
@@ -27,4 +27,4 @@ rest, in this order: `npm run typecheck` (the tools and the widget workspace), `
 
 - Green does not prove the views render: the browser tests skip when there is no Chromium.
   Install Playwright's Chromium, or set `OKF_CHROMIUM`, to make them run.
-- CI runs `check` on Node 24 and 26. Node 22.18+ also runs the tools locally.
+- CI runs `check` on Node 24 and 26.

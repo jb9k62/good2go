@@ -34,7 +34,7 @@ There are two bundles because there are two readers
 | --- | --- |
 | `skills/good2go/` | The design-bundle skill: `SKILL.md`, the playbook and explainer guides, the vendored OKF spec, the tools and the templates |
 | `skills/edukai/` | The memory-bundle skill: when a lesson is worth writing, how sure to be, and what to do with one that stopped being true |
-| `src/` | The tools (`good2go.mts` and `okf-*.mts`) and the templates a scaffold copies. `npm run build` compiles them to `dist/` for the package; `g2g-start.mjs` is only for this repository's own npm scripts |
+| `src/` | The tools (`good2go.mts` and the `g2g-*.mts` tools) and the templates a scaffold copies. `npm run build` compiles them to `dist/` for the package; `g2g-start.mjs` is only for this repository's own npm scripts |
 | `hooks/`, `extensions/` | The harness adapters: Claude Code hooks and a pi extension that read the memory bundle at the moments it matters |
 | `scripts/` | Maintainer tools only: build the package, install the skill, refresh the vendored spec, regenerate screenshots |
 | `design/` | This repository's own design bundle (this one) |

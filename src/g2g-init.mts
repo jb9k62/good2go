@@ -28,40 +28,44 @@
  * template, the two authoring templates) are kept if they already exist, and only --force
  * replaces them. The AGENTS.md snippet is written once and never replaced.
  * packages/okf-widgets is the project's own code once scaffolded, so it is never replaced,
- * not even by --force. A skill folder that already exists is kept (--force replaces it); the
- * skills are not recorded in the manifest.
+ * not even by --force. A skill folder in .claude/skills or .agents/skills is refreshed on a
+ * re-run when every file in it still matches what an earlier run installed (the manifest holds
+ * a hash per skill file); an edited one is kept and reported. --force replaces it regardless.
  *
  * Usage:
  *   good2go init [target-dir] [--name "Project Name"] [--slug project-slug] [--design-dir okf]
- *                [--widgets] [--edukai] [--tools-only] [--no-scripts] [--no-skills] [--force]
+ *                [--widgets] [--edukai] [--no-scripts] [--no-skills] [--force]
  *
  *   --name        Human title used in index.md (default: basename of target dir).
- *   --slug        Lowercase id for the concept dir (default: kebab-case of name).
- *   --design-dir  The design bundle's folder (default: okf, or the one the manifest records).
- *                 Choose it on the first run; a re-run never renames a folder.
+ *   --slug        Lowercase kebab-case id for the concept dir (default: kebab-case of name).
+ *   --design-dir  The design bundle's folder, relative to the project, lowercase letters,
+ *                 digits, . _ - and / between segments (default: okf, or the one the manifest
+ *                 records). Choose it on the first run; a re-run never renames a folder.
  *   --widgets     Also scaffold packages/okf-widgets (React widgets for explainers), add it
  *                 to the npm workspaces, and build it before okf:view and the render gate.
  *   --edukai      Also scaffold edukai/, the agent memory bundle, add the edukai: scripts, and
  *                 write a short snippet into AGENTS.md (once; a marker guards it).
- *   --tools-only  Only refresh package.json (scripts, dependency), leaving the bundle content
- *                 untouched.
  *   --no-scripts  Do not add the `okf:` scripts to package.json.
  *   --no-skills   Do not copy the skills into .claude/skills/ and .agents/skills/.
  *   --force       Overwrite authored files with the templates again. This throws away
  *                 hand-written content, including log.md's history.
  */
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { copySkill, packageVersion, renderTemplate, skillsRoot } from './g2g-shared.mts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const TEMPLATES = path.join(HERE, 'templates');
 // The producer stamped into scaffolded frontmatter (OKF actor convention: <producer>/<version>).
-// Kept equal to package.json's version by the test suite.
-const VERSION = '0.7.0';
+const VERSION = packageVersion(import.meta.url);
 const PACKAGE = '@jb9k62/good2go';
 // The range written into a project's devDependencies: this release and compatible later ones.
 const DEPENDENCY_RANGE = '^' + VERSION;
+// Both end up in shell commands (the npm scripts) and paths, so they are checked, not escaped.
+const DESIGN_DIR_PATTERN = /^[a-z0-9][a-z0-9._-]*(\/[a-z0-9][a-z0-9._-]*)*$/;
+const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 // Written into the target on every run: the version, the name and the design folder.
 const MANIFEST = '.good2go.json';
 const WIDGETS_DIR = 'packages/okf-widgets';
@@ -84,7 +88,6 @@ interface Options {
   designDir: string | null;
   scripts: boolean;
   skills: boolean;
-  toolsOnly: boolean;
   force: boolean;
   widgets: boolean;
   edukai: boolean;
@@ -98,8 +101,9 @@ function kebab(s: string): string {
 function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
-function render(text: string, vars: Vars): string {
-  return text.replace(/\{\{(\w+)\}\}/g, (_, k: string) => vars[k] ?? `<${k}>`);
+function fail(message: string): never {
+  console.error(message);
+  process.exit(2);
 }
 
 function parseArgs(argv: string[]): Options {
@@ -110,7 +114,6 @@ function parseArgs(argv: string[]): Options {
     designDir: null,
     scripts: true,
     skills: true,
-    toolsOnly: false,
     force: false,
     widgets: false,
     edukai: false,
@@ -120,7 +123,6 @@ function parseArgs(argv: string[]): Options {
     if (a === '--name') out.name = argv[++i] ?? null;
     else if (a === '--slug') out.slug = argv[++i] ?? null;
     else if (a === '--design-dir') out.designDir = argv[++i] ?? null;
-    else if (a === '--tools-only') out.toolsOnly = true;
     else if (a === '--no-scripts') out.scripts = false;
     else if (a === '--no-skills') out.skills = false;
     else if (a === '--force') out.force = true;
@@ -129,7 +131,7 @@ function parseArgs(argv: string[]): Options {
     else if (a === '-h' || a === '--help') {
       console.log(
         'usage: good2go init [target-dir] [--name "Project Name"] [--slug slug] [--design-dir okf]\n' +
-          '                    [--widgets] [--edukai] [--tools-only] [--no-scripts] [--no-skills] [--force]',
+          '                    [--widgets] [--edukai] [--no-scripts] [--no-skills] [--force]',
       );
       process.exit(0);
     } else if (a.startsWith('-')) {
@@ -148,7 +150,7 @@ function copyFile(src: string, dest: string): void {
 function writeRendered(src: string, dest: string, vars: Vars): void {
   const text = fs.readFileSync(src, 'utf8');
   fs.mkdirSync(path.dirname(dest), { recursive: true });
-  fs.writeFileSync(dest, render(text, vars));
+  fs.writeFileSync(dest, renderTemplate(text, vars));
 }
 
 /** Copy a template directory, leaving out what a build or an install left behind. */
@@ -162,7 +164,7 @@ function copyTree(src: string, dest: string): void {
 const [major = 0] = process.versions.node.split('.').map(Number);
 if (major < 24) {
   console.error(
-    `Node ${process.versions.node} is too old for the OKF tools. They need Node 24+.`,
+    `Node ${process.versions.node} is too old for good2go. It needs Node 24+.`,
   );
   process.exit(2);
 }
@@ -188,12 +190,13 @@ function writeUnlessPresent(dest: string, write: () => void): boolean {
   return true;
 }
 
-fs.mkdirSync(target, { recursive: true });
 // A project keeps the name and the design folder it was scaffolded with: the manifest remembers
-// them, so a re-run renders templates the same way.
+// them, so a re-run renders templates the same way. The manifest is committed, so what it holds
+// is checked like a flag: a poisoned one must not reach a shell command or a path.
 interface Manifest {
   name?: string;
   designDir?: string;
+  skills?: Record<string, Record<string, string>>;
 }
 function readManifest(rel: string): Manifest | null {
   try {
@@ -202,14 +205,35 @@ function readManifest(rel: string): Manifest | null {
     return null;
   }
 }
+function validDesignDir(dir: string): boolean {
+  return DESIGN_DIR_PATTERN.test(dir) && !dir.split('/').includes('..');
+}
+/** The recorded hashes, only where they have the expected shape. */
+function recordedSkills(m: Manifest | null): Record<string, Record<string, string>> {
+  const out: Record<string, Record<string, string>> = {};
+  const raw: unknown = m?.skills;
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return out;
+  for (const [skill, files] of Object.entries(raw)) {
+    if (typeof files !== 'object' || files === null || Array.isArray(files)) continue;
+    const entries = Object.entries(files).filter(([, h]) => typeof h === 'string') as [string, string][];
+    out[skill] = Object.fromEntries(entries);
+  }
+  return out;
+}
+
 const previous = readManifest(MANIFEST);
 const name = opts.name ?? (typeof previous?.name === 'string' ? previous.name : path.basename(target));
-const slug = opts.slug ?? kebab(name);
-const designDir = opts.designDir ?? (typeof previous?.designDir === 'string' ? previous.designDir : 'okf');
-if (designDir.split(/[\\/]/).includes('..') || path.isAbsolute(designDir) || designDir === '' || designDir === '.') {
-  console.error(`--design-dir must be a folder inside the project, not "${designDir}"`);
-  process.exit(2);
+const slug = opts.slug === null ? kebab(name) : opts.slug.trim().toLowerCase().replace(/[\s_]+/g, '-');
+if (!SLUG_PATTERN.test(slug)) {
+  fail(`--slug must be kebab-case (lowercase letters, digits and hyphens), not "${opts.slug}"`);
 }
+if (opts.designDir !== null && !validDesignDir(opts.designDir)) {
+  fail(`--design-dir must be a relative folder of lowercase letters, digits, . _ - and /, not "${opts.designDir}"`);
+}
+if (opts.designDir === null && typeof previous?.designDir === 'string' && !validDesignDir(previous.designDir)) {
+  fail(`${MANIFEST} records the design folder "${previous.designDir}", which is not a safe folder name; fix or delete it`);
+}
+const designDir = opts.designDir ?? (typeof previous?.designDir === 'string' ? previous.designDir : 'okf');
 const vars: Vars = {
   PROJECT_NAME: name,
   PROJECT_SLUG: slug,
@@ -219,31 +243,26 @@ const vars: Vars = {
   VERSION,
 };
 
-// --- bundle skeleton (skipped entirely by --tools-only) ---------------------
+fs.mkdirSync(target, { recursive: true });
+
+// --- bundle skeleton --------------------------------------------------------
 const okf = path.join(target, designDir);
-if (opts.toolsOnly) {
-  if (!fs.existsSync(okf)) {
-    console.error(`--tools-only needs an existing ${designDir}/ bundle in ${target}`);
-    process.exit(2);
+fs.mkdirSync(path.join(okf, 'adr'), { recursive: true });
+// A design bundle named design/ would otherwise hold design/design/.
+const extraDirs = [...new Set([designDir === 'design' ? 'architecture' : 'design', slug])];
+for (const extra of extraDirs) {
+  fs.mkdirSync(path.join(okf, extra), { recursive: true });
+  if (!fs.existsSync(path.join(okf, extra, '.gitkeep'))) {
+    fs.writeFileSync(path.join(okf, extra, '.gitkeep'), '');
   }
-} else {
-  fs.mkdirSync(path.join(okf, 'adr'), { recursive: true });
-  // A design bundle named design/ would otherwise hold design/design/.
-  for (const extra of [...new Set([designDir === 'design' ? 'architecture' : 'design', slug])]) {
-    fs.mkdirSync(path.join(okf, extra), { recursive: true });
-    if (!fs.existsSync(path.join(okf, extra, '.gitkeep'))) {
-      fs.writeFileSync(path.join(okf, extra, '.gitkeep'), '');
-    }
-  }
-  for (const rel of ['index.md', 'log.md', 'adr/readme.md', 'adr/template.md']) {
-    const dest = path.join(okf, rel);
-    writeUnlessPresent(dest, () => writeRendered(path.join(TEMPLATES, 'okf', rel), dest, vars));
-  }
+}
+for (const rel of ['index.md', 'log.md', 'adr/readme.md', 'adr/template.md']) {
+  const dest = path.join(okf, rel);
+  writeUnlessPresent(dest, () => writeRendered(path.join(TEMPLATES, 'okf', rel), dest, vars));
 }
 
 // --- memory bundle (--edukai) -------------------------------------------------
-// Opt-in, and unlike okf/ it may be added to a project that already has a design bundle, so
-// --tools-only does not skip it.
+// Opt-in, and unlike okf/ it may be added to a project that already has a design bundle.
 const edukai = path.join(target, 'edukai');
 if (opts.edukai) {
   for (const rel of ['index.md', 'log.md']) {
@@ -265,65 +284,95 @@ if (opts.edukai) {
 // A project that already has the memory bundle keeps its scripts, even on a plain re-run.
 const hasEdukai = fs.existsSync(path.join(edukai, 'index.md'));
 
-// --- tooling ----------------------------------------------------------------
+// --- authoring aids -----------------------------------------------------------
 // The authoring templates are aids people edit, so they follow the bundle content's rule.
 for (const [template, dest] of [
   ['concept.md', 'okf-concept-template.md'],
   ['explainer.md', 'okf-explainer-template.md'],
 ] as const) {
-  // A tools-only run on a project that has been bootstrapped before (it has a manifest) does not
-  // bring back an aid someone deleted.
-  if (opts.toolsOnly && previous !== null) continue;
   const out = path.join(target, dest);
   writeUnlessPresent(out, () => copyFile(path.join(TEMPLATES, template), out));
 }
 
 // --- skills -------------------------------------------------------------------
 // A clone carries its skills, so a teammate needs no plugin. The folder is the skills shipped
-// beside this file (the package) or the repository's own (from source). Same rule as authored
-// files: an existing skill folder is kept unless --force. Nothing is recorded in the manifest.
-/** Copy a skill's SKILL.md and references; symlinks and the tools (node_modules, dist) are left out. */
-function copySkill(source: string, dest: string): void {
-  fs.mkdirSync(dest, { recursive: true });
-  for (const entry of fs.readdirSync(source, { withFileTypes: true })) {
-    if (entry.isSymbolicLink()) continue;
-    if (['node_modules', 'dist'].includes(entry.name) || entry.name.includes('..')) continue;
-    const from = path.join(source, entry.name);
-    const to = path.join(dest, entry.name);
-    if (entry.isDirectory()) copySkill(from, to);
-    else if (entry.isFile()) fs.copyFileSync(from, to);
-  }
+// beside this file (the package) or the repository's own (from source). The manifest records a
+// hash per skill file, so a re-run can tell a skill nobody touched (refreshed to this version)
+// from an edited one (kept, and reported). --force replaces either.
+
+/** sha256 of every file under `dir`, keyed by the path relative to it; null when it is not a plain folder. */
+function hashTree(dir: string): Record<string, string> | null {
+  if (!fs.lstatSync(dir, { throwIfNoEntry: false })?.isDirectory()) return null;
+  const out: Record<string, string> = {};
+  const walk = (d: string, rel: string): void => {
+    for (const entry of fs.readdirSync(d, { withFileTypes: true })) {
+      const file = path.join(d, entry.name);
+      const key = rel ? rel + '/' + entry.name : entry.name;
+      if (entry.isDirectory()) walk(file, key);
+      else if (entry.isFile()) out[key] = createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+      else out[key] = 'not a plain file'; // a symlink: never equal to a recorded hash
+    }
+  };
+  walk(dir, '');
+  return out;
 }
+function sameHashes(a: Record<string, string>, b: Record<string, string>): boolean {
+  const keys = Object.keys(a);
+  return keys.length === Object.keys(b).length && keys.every((k) => a[k] === b[k]);
+}
+
+const skillHashes = recordedSkills(previous);
 if (opts.skills) {
-  const root = [path.join(HERE, 'skills'), path.resolve(HERE, '..', 'skills')].find((dir) =>
-    fs.existsSync(path.join(dir, 'good2go', 'SKILL.md')),
-  );
-  if (root === undefined) {
+  const root = skillsRoot(import.meta.url);
+  const names = root
+    ? fs
+        .readdirSync(root, { withFileTypes: true })
+        .filter((e) => e.isDirectory() && fs.existsSync(path.join(root, e.name, 'SKILL.md')))
+        .map((e) => e.name)
+        .sort()
+    : [];
+  if (root === null || !names.includes('good2go')) {
     console.warn('  no skills found beside this tool; skipped copying them (--no-skills hides this).');
   } else {
-    const names = fs
-      .readdirSync(root, { withFileTypes: true })
-      .filter((e) => e.isDirectory() && fs.existsSync(path.join(root, e.name, 'SKILL.md')))
-      .map((e) => e.name)
-      .sort();
-    for (const home of ['.claude', '.agents']) {
-      for (const skill of names) {
+    for (const skill of names) {
+      const shipped = hashTree(path.join(root, skill))!;
+      const recorded = skillHashes[skill];
+      let current = false; // some copy now holds exactly the shipped files
+      for (const home of ['.claude', '.agents']) {
         const dest = path.join(target, home, 'skills', skill);
-        if (fs.lstatSync(dest, { throwIfNoEntry: false }) && !opts.force) {
-          kept.push(shortPath(dest) + '/');
-          continue;
+        const shown = shortPath(dest) + '/';
+        let refreshed = false;
+        if (fs.lstatSync(dest, { throwIfNoEntry: false })) {
+          const onDisk = hashTree(dest);
+          if (onDisk !== null && sameHashes(onDisk, shipped)) {
+            kept.push(shown + ' (already this version)');
+            current = true;
+            continue;
+          }
+          const untouched = onDisk !== null && recorded !== undefined && sameHashes(onDisk, recorded);
+          if (!untouched && !opts.force) {
+            kept.push(shown + ' (edited or not installed by good2go; --force replaces it)');
+            continue;
+          }
+          refreshed = untouched;
         }
         // rmSync removes a symbolic link itself, never what it points at.
         fs.rmSync(dest, { recursive: true, force: true });
         copySkill(path.join(root, skill), dest);
-        created.push(shortPath(dest) + '/');
+        created.push(shown + (refreshed ? ' (refreshed to ' + VERSION + ')' : ''));
+        current = true;
       }
+      if (current) skillHashes[skill] = shipped;
     }
   }
 }
 
-// The manifest is generated, so it is always overwritten.
-fs.writeFileSync(path.join(target, MANIFEST), JSON.stringify({ version: VERSION, name, designDir }, null, 2) + '\n');
+// The manifest is generated, so it is always overwritten. `skills` carries what the last run
+// installed (kept as it was when this run copied no skills).
+fs.writeFileSync(
+  path.join(target, MANIFEST),
+  JSON.stringify({ version: VERSION, name, designDir, skills: skillHashes }, null, 2) + '\n',
+);
 
 // --- widgets ------------------------------------------------------------------
 const widgetsPath = path.join(target, WIDGETS_DIR);
@@ -332,6 +381,9 @@ if (opts.widgets) {
     kept.push(WIDGETS_DIR + '/ (project code; never replaced, not even by --force)');
   } else {
     copyTree(path.join(TEMPLATES, 'okf-widgets'), widgetsPath);
+    // npm drops a .gitignore from a package, so the template stores it as `gitignore`.
+    const stored = path.join(widgetsPath, 'gitignore');
+    if (fs.existsSync(stored)) fs.renameSync(stored, path.join(widgetsPath, '.gitignore'));
     created.push(WIDGETS_DIR + '/');
   }
 }
@@ -351,7 +403,7 @@ if (opts.scripts) {
       pkg.scripts['okf:fix'] = `good2go fix ${d}`;
       pkg.scripts['okf:view'] = build + `good2go view ${d}`;
       pkg.scripts['okf:mermaid'] = `good2go mermaid ${d}`;
-      pkg.scripts['okf:search'] = 'good2go search';
+      pkg.scripts['okf:search'] = `good2go search --bundle ${d}`;
       pkg.scripts['okf:mermaid:render'] = build + `good2go view ${d} --check-render`;
       pkg.scripts['okf:recheck'] = `good2go recheck --bundle ${d}`;
       if (hasEdukai) {
@@ -404,7 +456,7 @@ if (opts.scripts) {
 
 // --- report -------------------------------------------------------------------
 console.log('\nBootstrapped OKF bundle in: ' + target);
-if (!opts.toolsOnly) console.log(`  ${designDir}/${slug}/, ${designDir}/design/   (fill with your first concepts)`);
+console.log(`  ${extraDirs.map((e) => `${designDir}/${e}/`).join(', ')}   (fill with your first concepts)`);
 console.log(`  The tools come from the ${PACKAGE} package (the good2go command); none are copied here.`);
 if (opts.edukai) console.log('  edukai/                    (the agent memory bundle: lessons are added as agents learn)');
 if (created.length) {
@@ -439,6 +491,6 @@ if (hasEdukai) {
 if (hasWidgets) {
   console.log('  npm run okf:widgets:typecheck && npm run okf:widgets:test');
 }
-console.log('\nUpgrade the tools with `npm update ' + PACKAGE + '`. Next: author the first concepts,');
-console.log("then commit. The skill's PLAYBOOK.md");
+console.log('\nUpgrade with `npm update ' + PACKAGE + '`, then re-run `good2go init` to refresh the skills');
+console.log('(edited ones are kept). Next: author the first concepts, then commit. The skill\'s PLAYBOOK.md');
 console.log('has the full procedure, and EXPLAINERS.md covers tours, quizzes and widgets.');

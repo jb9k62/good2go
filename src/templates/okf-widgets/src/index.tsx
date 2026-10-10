@@ -1,6 +1,6 @@
 /**
  * The widget bundle's entry. Built as one IIFE that exposes `window.OkfWidgets`, which
- * scripts/g2g-view.mts calls for every ```widget block in a concept:
+ * good2go view calls for every ```widget block in a concept:
  *
  *   mount(element, name, source)
  *                         render widget `name` into `element`; false for an unknown name. `source`

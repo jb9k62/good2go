@@ -8,7 +8,7 @@
  * keywords, missing statements, invalid node ids, ...). Pair with the
  * client-side gate:
  *
- *   node scripts/g2g-view.mts okf --check-render
+ *   good2go view okf --check-render
  *
  * which opens the generated viz.html in headless Chromium and verifies every
  * diagram actually renders in the browser.
@@ -18,8 +18,9 @@
  * not extracted. Both ``` and ~~~ fences are recognised.
  *
  * Usage:
- *   node scripts/g2g-mermaid.mts [bundle] [options]
+ *   good2go mermaid [bundle] [options]
  *     bundle       OKF bundle directory (default: ./okf)
+ *     -h, --help   print this help and exit 0
  *     --json       machine-readable report on stdout
  *     --timeout N  wall-clock seconds per diagram (default: 60, covers mmdc
  *                  startup and its headless browser)
@@ -38,6 +39,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { helpFromComment } from './g2g-shared.mts';
 
 interface Block {
   line: number;
@@ -135,7 +137,7 @@ function extractMermaidBlocks(text: string): Block[] {
  * Resolve mmdc: PATH first, then a node_modules/.bin tree at or above the
  * bundle. Returns { cmd, version } for the binary that answered `--version`,
  * so the caller spawns the same one that was probed, or null if none did.
- * `npm run` puts node_modules/.bin on PATH; a direct `node scripts/...` run
+ * `npm run` puts node_modules/.bin on PATH; a direct run of the tool
  * does not, which is what the upward walk is for.
  */
 function findMmdc(bundleRoot: string): Mmdc | null {
@@ -328,7 +330,10 @@ function parseArgs(argv: string[]): Opts {
   const positional: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
-    if (a === '--json') opts.json = true;
+    if (a === '-h' || a === '--help') {
+      console.log(helpFromComment(import.meta.url));
+      process.exit(0);
+    } else if (a === '--json') opts.json = true;
     else if (a === '--timeout') opts.timeout = Number(argv[++i]);
     else if (a === '--jobs') opts.jobs = Number(argv[++i]);
     else if (a.startsWith('-')) {

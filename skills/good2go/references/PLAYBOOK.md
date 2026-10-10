@@ -18,14 +18,14 @@ Paths are relative to the skill directory.
 | Path | Purpose |
 |------|---------|
 | `SKILL.md` | The skill entry: when to use, setup, rules. |
-| `references/PLAYBOOK.md` | This file: conventions, review checklist, version migration. |
+| `references/PLAYBOOK.md` | This file: conventions and the review checklist. |
 | `references/EXPLAINERS.md` | Guided tours, quizzes and widgets: why, how, and the review checklist. |
 | `references/okf-spec/` | The OKF spec, vendored from upstream; `UPSTREAM.json` records the commit and version. |
 | The tools | Not in the skill. They are the npm package `@jb9k62/good2go` and its `good2go` command; `good2go --help` lists them. A project depends on the package and holds no copies. |
 
 The templates the scaffold copies (the design bundle's index, log and ADR files, the concept
 and explainer templates, the memory bundle's index and log, the `okf-widgets` package) live in
-the package. Claude Code and pi are the supported harnesses.
+the package. Claude Code and pi are the supported harnesses; the memory hooks for both come from `good2go hooks`.
 
 ---
 
@@ -226,7 +226,7 @@ file's mtime and size, re-checked on every run; `--no-cache` skips it. Files it 
 
 ### Bundles: design (`okf/` by default) and memory (`edukai/`)
 
-`good2go init --edukai` (or `--tools-only --edukai` later) adds a second OKF bundle,
+`good2go init --edukai` (also on a project that already has a design bundle) adds a second OKF bundle,
 `edukai/`: what agents have learned, as **lessons** (`type: Lesson`, one claim each, in
 `<domain>/lessons/YYYY-MM-DD-short-claim.md`) and one `type: Overview` per domain. It is
 written by agents for agents, and its rules are in the separate `edukai` skill. Keep the two
@@ -374,7 +374,7 @@ version adds:
 - raw-path link text replaced by the linked concept's title
 - graph nodes sized by incoming links, with neighbour focus when a node is selected
 - a legend
-- ranked search, the same ranking as `g2g-search` run in the page: a search modal, focused from
+- ranked search, the same ranking as `good2go search` run in the page: a search modal, focused from
   the top bar, with the results on the left (each concept's trust, freshness and best-matching
   line) and a preview on the right (its contents, then the start of the concept); non-matches
   dimmed, a Match column in the table; a mode switch to a plain "contains" match; type, trust and
@@ -413,9 +413,9 @@ bundle, not from markdown you received.
 
 ### Keep it in sync
 
-If the upstream Google reference viewer or a project's improved fork of `g2g-view.mts` gets
-better, port the change here (and `g2g-mermaid.mts` the same way), and update this list and
-`templates/package-json-scripts.md` to match the actual behaviour.
+If the upstream Google reference viewer or a project's improved fork of the viewer gets
+better, port the change into `src/g2g-view.mts` (and `src/g2g-mermaid.mts` the same way) in the
+`@jb9k62/good2go` package, and update this list to match the actual behaviour.
 
 ---
 

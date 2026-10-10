@@ -20,7 +20,7 @@
  * to get a small boost. `--explain` shows the arithmetic.
  *
  * Usage:
- *   node scripts/g2g-search.mts <command> [args] [options]
+ *   good2go search <command> [args] [options]
  *
  *   search [query]     ranked concepts (the query may be empty when a filter is given)
  *   show <id>          one concept; --section <heading> for part of it, --outline for headings.
@@ -60,6 +60,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { helpFromComment, siblingFile } from './g2g-shared.mts';
 import {
   errorMessage,
   extractLinks,
@@ -93,8 +94,9 @@ import type { Doc, Entry, EntryMeta, Filters, Freshness, Hit, Postings, RankInde
 // The cache is only valid for the code that wrote it: a hash of this file, g2g-core.mts and
 // g2g-rank.mts, so a refreshed copy of any never reads entries a different tokenizer produced.
 const sibling = (name: string): string => {
-  const ts = fileURLToPath(new URL(`./${name}.mts`, import.meta.url));
-  return fs.existsSync(ts) ? ts : fileURLToPath(new URL(`./${name}.mjs`, import.meta.url));
+  const file = siblingFile(import.meta.url, name);
+  if (!file) throw new Error(`${name} is not next to g2g-search`);
+  return file;
 };
 const CACHE_VERSION = crypto
   .createHash('sha1')
@@ -616,6 +618,10 @@ function parseArgs(argv: string[]): Options {
   const rest: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
+    if (a === '-h') {
+      flags.set('help', ['true']);
+      continue;
+    }
     if (!a.startsWith('--')) {
       rest.push(a);
       continue;
@@ -635,7 +641,7 @@ function parseArgs(argv: string[]): Options {
   const one = (n: string) => flags.get(n)?.at(-1) ?? null;
   const has = (n: string) => flags.has(n);
   if (has('help') || rest.length === 0) {
-    console.log(fs.readFileSync(new URL(import.meta.url), 'utf8').split('*/')[0]!.replace(/^#!.*\n\/\*\*\n/, '').replace(/^ \* ?/gm, ''));
+    console.log(helpFromComment(import.meta.url));
     process.exit(has('help') ? 0 : 2);
   }
   const command = rest[0]!;

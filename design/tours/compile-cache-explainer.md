@@ -5,7 +5,7 @@ description: "The two caches the tools keep for this repository's own scripts an
 tags: [explainer, guided-tour, caching, tooling]
 generated: { by: pi/deepseek-ai/DeepSeek-V4.1-Flash, at: 2026-10-08T20:30:00Z }
 sources:
-  - resource: src/g2g-start.mjs
+  - resource: scripts/g2g-start.mjs
   - resource: hooks/compile-cache.mjs
   - resource: src/g2g-search.mts
 ---
@@ -42,7 +42,7 @@ The answer is a cache. In fact there are two, of different kinds.
 **The compile cache** saves the stripping. It is switched on in two places:
 
 - `g2g-start.mjs` is loaded first by this repository's own npm scripts (`node --import
-  ./src/g2g-start.mjs src/g2g-search.mts`). It
+  ./scripts/g2g-start.mjs src/g2g-search.mts`). It
   is not copied to projects. It keeps the cache under the project's own
   `node_modules/.cache/okf-compile`, or in a private folder under the temp directory when
   there is no `node_modules` to write to.

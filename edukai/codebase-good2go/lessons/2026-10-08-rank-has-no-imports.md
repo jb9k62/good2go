@@ -7,11 +7,11 @@ confidence: observed
 generated: { by: pi/deepseek-ai/DeepSeek-V4.1-Flash, at: 2026-10-08T20:03:18Z }
 verified:
   - { by: pi/deepseek-ai/DeepSeek-V4.1-Flash, at: 2026-10-08T20:08:56Z }
-  - { by: claude-code/claude-sonnet-5-5, at: 2026-10-10T17:42:19Z }
-stale_after: 2026-11-09T17:42:19Z
+  - { by: claude-code/claude-sonnet-5-5, at: 2026-10-10T18:14:16Z }
+stale_after: 2026-11-09T18:14:16Z
 sources:
   - resource: src/g2g-rank.mts
-    digest: sha256:d438747ad10cc90a
+    digest: sha256:3c3218ba19719d51
 check:
   - { file: src/g2g-rank.mts, lacks: "import " }
 ---

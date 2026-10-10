@@ -31,7 +31,7 @@ upstream has moved, and `npm run spec -- update` brings the new version in.
 - [Run npm run check before finishing](/tooling-good2go/lessons/2026-10-08-run-npm-check.md)
 - [The tools are TypeScript that Node runs with no build step](/tooling-good2go/lessons/2026-10-08-typescript-runs-directly.md)
 - [The demo's lessons pin digests of files under examples/demo](/tooling-good2go/lessons/2026-10-08-demo-lessons-are-pinned.md)
-- [The release version lives in four places that must match](/tooling-good2go/lessons/2026-10-08-version-in-four-places.md)
+- [The release version is written once, in package.json](/tooling-good2go/lessons/2026-10-08-version-is-in-package-json.md)
 - [The vendored OKF spec is refreshed with npm run spec, never by hand](/tooling-good2go/lessons/2026-10-08-spec-is-vendored.md)
 
 ## Open questions

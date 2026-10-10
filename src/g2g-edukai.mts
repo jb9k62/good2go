@@ -10,7 +10,7 @@
  * so `--bundle okf` pins and re-checks design concepts too.
  *
  * Usage:
- *   node scripts/g2g-edukai.mts <command> [arguments] [options]
+ *   good2go edukai <command> [arguments] [options]
  *
  *   new --domain <d> --title <t> --by <actor>
  *                      create a lesson file and print its path; a new domain also gets an
@@ -52,7 +52,6 @@ import {
   checkProblem,
   CONFIDENCES,
   deriveState,
-  digestOf,
   errorText,
   firstFailingCheck,
   hashBytes,
@@ -596,7 +595,7 @@ function cmdNew(o: Options): number {
     const note = (s: string) => console.error(s);
     if (newDomain) note(`new domain ${domain}: wrote its overview.md stub; run npm run edukai:index to list it in the syllabus`);
     if (sources.length === 0) note('add at least one entry to `sources` (and a `check` when the claim is text in a file)');
-    if (confidence !== 'inferred') note(`then: g2g-edukai verify ${shown} --by ${by} --confidence ${confidence}`);
+    if (confidence !== 'inferred') note(`then: good2go edukai verify ${shown} --by ${by} --confidence ${confidence}`);
     return out.join('\n');
   });
   return 0;
@@ -813,14 +812,14 @@ function parseArgs(argv: string[]): Options {
   }
   const command = rest[0]!;
   if (!COMMANDS.includes(command)) {
-    const hint = ['brief', 'cites', 'debt', 'hook'].includes(command) ? ' (that one is in g2g-hook.mts)' : '';
+    const hint = ['brief', 'cites', 'debt', 'hook'].includes(command) ? ' (that one is `good2go hook`)' : '';
     throw new UsageError(`unknown command "${command}"${hint}: use ${COMMANDS.join(', ')}`);
   }
   const one = (n: string) => flags.get(n)?.at(-1) ?? null;
   const bundle = one('bundle') ?? 'edukai';
   const resolved = path.resolve(bundle);
   if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) {
-    throw new UsageError(`bundle directory not found: ${bundle} (pass --bundle <dir>, or scaffold one with g2g-init.mts --edukai)`);
+    throw new UsageError(`bundle directory not found: ${bundle} (pass --bundle <dir>, or scaffold one with "good2go init --edukai")`);
   }
   const bundleRoot = realOrResolved(resolved);
   const rootArg = one('root');

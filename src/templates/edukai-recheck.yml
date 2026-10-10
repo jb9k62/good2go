@@ -30,9 +30,9 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Design bundle (okf/)
-        run: node scripts/g2g-edukai.mts recheck --bundle okf $STRICT | tee -a "$GITHUB_STEP_SUMMARY"
+        run: npx good2go recheck --bundle okf $STRICT | tee -a "$GITHUB_STEP_SUMMARY"
         shell: bash -eo pipefail {0}
       - name: Memory bundle (edukai/)
         if: ${{ !cancelled() && hashFiles('edukai/index.md') != '' }}
-        run: node scripts/g2g-edukai.mts recheck $STRICT | tee -a "$GITHUB_STEP_SUMMARY"
+        run: npx good2go recheck $STRICT | tee -a "$GITHUB_STEP_SUMMARY"
         shell: bash -eo pipefail {0}

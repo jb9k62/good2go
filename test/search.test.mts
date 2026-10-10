@@ -445,7 +445,7 @@ describe('g2g-search cache, bad files and exit codes', () => {
     // Outside the repo there is no node_modules above the tools, as in a project before `npm install`.
     const away = fs.mkdtempSync(path.join(os.tmpdir(), 'g2g-search-test-'));
     try {
-      for (const f of ['g2g-search.mts', 'g2g-core.mts', 'g2g-rank.mts']) fs.copyFileSync(path.join(path.dirname(SEARCH), f), path.join(away, f));
+      for (const f of ['g2g-search.mts', 'g2g-core.mts', 'g2g-rank.mts', 'g2g-shared.mts']) fs.copyFileSync(path.join(path.dirname(SEARCH), f), path.join(away, f));
       fs.mkdirSync(path.join(away, 'node_modules'));
       fs.mkdirSync(path.join(away, 'okf'));
       fs.writeFileSync(path.join(away, 'okf', 'retry.md'), doc('title: Retry policy', '# Retry policy\n\nFive retries.'));

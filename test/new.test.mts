@@ -46,7 +46,7 @@ describe('g2g-new', () => {
     const p = project();
     for (const bad of ['../out', 'a/../../out', path.join(scratch, 'abs')]) {
       const r = make(p, bad);
-      assert.equal(r.code, 1, bad);
+      assert.equal(r.code, 2, bad);
       assert.ok(r.err.includes(bad), r.err);
     }
     assert.equal(fs.existsSync(path.join(scratch, 'out')), false);

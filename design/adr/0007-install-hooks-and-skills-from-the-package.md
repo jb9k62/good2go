@@ -5,8 +5,7 @@ description: Why `good2go hooks` writes the agent configuration, why the default
 tags: [adr, distribution, hooks, skills, security]
 generated: { by: claude-code/claude-sonnet-5-5, at: 2026-10-10T18:00:00Z }
 sources:
-  - resource: hooks/hooks.json
-  - resource: hooks/edukai-hook.mjs
+  - resource: src/g2g-install-hooks.mts
   - resource: extensions/edukai.ts
   - resource: skills/good2go/SKILL.md
   - resource: skills/edukai/SKILL.md
@@ -53,7 +52,7 @@ documents of judgement.
   `~/.claude/settings.json` and pi's user folder. The code that runs is code the person
   installed, not code in a repository they opened.
 - **`--project` is an explicit opt-in** that writes the project's `.claude/settings.json` and
-  runs the project's own `node_modules/.bin/good2go`. It prints the caveat that a repository
+  runs the project's own `node_modules/@jb9k62/good2go` (see the 2026-10-10 note). It prints the caveat that a repository
   can then run its own code at session start, which the harness's trust prompt only partly
   covers. A team that wants every clone covered can choose it.
 - **`good2go hook run` is in-process and silent.** It answers from the cache `edukai:index`
@@ -62,8 +61,8 @@ documents of judgement.
   rules, and points at `good2go --help` for commands. `good2go init` copies the skills into
   the project (`.claude/skills/`, `.agents/skills/`) so a clone has them with no plugin;
   `good2go skills` stays for a personal install.
-- **The plugin and the pi package stay**, now as an optional convenience for people who prefer
-  to install from a marketplace. They are no longer the documented first route.
+- **The plugin and the pi package are retired** (see the 2026-10-10 note): `good2go hooks` is
+  the one route.
 
 ## Consequences
 
@@ -83,15 +82,34 @@ documents of judgement.
   it; the hook then stays silent, and `good2go hooks --check` reports it.
 - The written configuration can go stale when the package moves. `--check` compares it to the
   installed version.
-- Two ways to get the same hooks (the command, and the plugin) must stay in step.
 - `--project` is a weaker trust position than the default, and it is on offer.
 
 ## Alternatives considered
 
 | Option | Why rejected |
 |---|---|
-| Keep the plugin and the pi package as the only route to hooks | It is the route that needs a marketplace, a clone or a pi install beside the package, and it splits one product across three channels |
+| Keep the plugin and the pi package as the only route to hooks (or as a second route) | It is the route that needs a marketplace, a clone or a pi install beside the package, and it splits one product across three channels |
 | `npx @jb9k62/good2go hook` as the hook command | Startup cost on every Read and Edit, with a 5-second timeout, and it needs the network when the cache is cold |
 | Project scope as the default | Convenient for teams, but a repository then chooses what runs at session start |
 | Drop the skills and put everything in `--help` | The authoring and review judgement has no home there, and an agent would not know to read it |
 | Print the instructions through a `good2go guide` command instead of a skill | The harness cannot trigger it from a user's request, so the agent would have to know to ask |
+
+## Note, 2026-10-10: one route, and how each scope calls good2go
+
+The review of the first implementation changed three things above.
+
+- **The Claude Code plugin and the pi package are retired.** `hooks/`, `.claude-plugin/`, and the
+  `pi` key and `pi-package` keyword in `package.json` are gone. Two routes would print every
+  brief twice for someone who used both, and kept the version in several files. `good2go hooks`
+  is the only route; the version lives in `package.json` alone. `extensions/edukai.ts` stays only
+  as the template the build copies to `dist/templates/pi-extension.ts`.
+- **Both harnesses call `good2go` the same way.** At user scope the Claude entries and the pi
+  extension run `good2go hook run` (pi: `good2go hook <command>`) by name, so they run the install
+  the person put on `PATH`, never the absolute path of whichever copy ran `good2go hooks` (which,
+  under `npx` in a cloned repository, would have been that repository's dependency). `good2go
+  hooks` refuses to write user scope when `good2go` is not on `PATH` (`--force` overrides).
+- **Project scope uses the project's file, not npx.** Claude runs
+  `f="${CLAUDE_PROJECT_DIR:-.}/node_modules/@jb9k62/good2go/dist/good2go.mjs"; [ -f "$f" ] && node "$f" hook run || true`;
+  the pi extension checks the same path exists before it runs `node` on it. That avoids npx's
+  start-up cost on every read and edit, which this ADR rejected above, and is silent when the
+  package is not installed. It is POSIX shell, so Windows needs Git Bash or WSL.

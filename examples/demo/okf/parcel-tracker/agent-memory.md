@@ -23,10 +23,10 @@ The idea behind a lesson, step by step and with a quiz, is the
 flowchart LR
     L["Lessons and overviews, edukai/"]
     S["Source files, src/ and others"]
-    T["okf-edukai, index and recheck"]
+    T["good2go edukai, index and recheck"]
     C[("Hook cache")]
-    H["okf-edukai-hook"]
-    Q["okf-search"]
+    H["good2go hook"]
+    Q["good2go search"]
     A["Agent"]
 
     L -->|"cite and pin"| S
@@ -191,8 +191,8 @@ Neither is committed, and deleting either only costs time.
 
 | Cache | Written by | Read by | Where |
 | --- | --- | --- | --- |
-| The hook cache | `okf-edukai index` | The hook, which cannot parse YAML, so it reads this instead of the lessons | `node_modules/.cache/edukai/` |
-| The search cache | `okf-search` | `okf-search` | `node_modules/.cache/okf-search/` |
+| The hook cache | `good2go edukai index` | The hook, which cannot parse YAML, so it reads this instead of the lessons | `node_modules/.cache/edukai/` |
+| The search cache | `good2go search` | `good2go search` | `node_modules/.cache/g2g-search/` |
 
 A project with no `node_modules` gets a private folder in the temp directory instead. A fresh
 clone has no hook cache, so `index` runs once first. In this repository

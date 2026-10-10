@@ -3,7 +3,8 @@
 This repo holds two **agent skills** (for pi and Claude Code) that scaffold
 [OKF](skills/good2go/references/okf-spec/SPEC.md) knowledge bundles into other projects:
 `design/`, design docs for the team, and `edukai/`, what agents have learned (the memory bundle).
-It is not an app. What ships is `skills/`, `hooks/` and `extensions/`; everything else (tests,
+It is not an app. What ships is the compiled `src/` tools, `src/templates/`, `skills/` and the pi extension
+(`extensions/edukai.ts`, copied by the build to `dist/templates/pi-extension.ts`); everything else (tests,
 scripts, demo, docs) supports them.
 
 ## Agent memory
@@ -31,12 +32,11 @@ learn with the edukai skill. Before finishing, run `npm run edukai:recheck`.
 | `src/g2g-rank.mts` | The ranking and its inverted index: pure, no imports. Run by `g2g-search` and inlined (types stripped) into `viz.html` for its search box |
 | `src/g2g-core.mts` | Parsing shared by the viewer and search: frontmatter, trust tier, staleness, links. Loads `yaml` on the first parse, so a search answered from its cache never loads it |
 | `src/g2g-edukai.mts` | The memory bundle's tool: `new`, `verify`, `supersede`, `index`, `recheck`. Writes the cache the hooks read |
-| `src/g2g-start.mjs` | Loaded first by this repository's own npm scripts: Node's compile cache, so the tools' TypeScript is stripped once. No longer copied into projects; they run the compiled package |
+| `scripts/g2g-start.mjs` | Loaded first by this repository's own npm scripts: Node's compile cache, so the tools' TypeScript is stripped once. No longer copied into projects; they run the compiled package |
 | `src/g2g-hook.mts` | What the harness adapters run (`brief`, `cites`, `debt`, `hook`) and the code that derives a lesson's state. No dependencies |
 | `skills/edukai/SKILL.md` | The memory skill: what is worth a lesson, how sure we are, what to do with one that failed its re-check |
-| `hooks/hooks.json`, `hooks/edukai-hook.mjs` | Claude Code adapter: on SessionStart, PostToolUse and Stop it runs the launcher, plain JavaScript that exits quietly on a Node too old for TypeScript and otherwise calls `g2g-hook.mts` |
-| `hooks/compile-cache.mjs` | Loaded first by both adapters: turns on Node's compile cache in a private per-user folder, so the hook's TypeScript is stripped once and not on every call |
-| `extensions/edukai.ts` | pi adapter: the same three moments. Declares the few pi types it uses |
+| `extensions/edukai.ts` | Template for the pi extension `good2go hooks` installs: the same three moments, calling `good2go hook …` (from `PATH`, or the project's own copy at project scope). Declares the few pi types it uses |
+| `src/g2g-shared.mts` | Helpers the tools share (templates, help text, skill copy, package version) |
 | `src/templates/` | Files copied into target projects (`okf/`, concept and explainer templates, `okf-widgets/` React workspace) |
 | `skills/good2go/references/` | `PLAYBOOK.md`, `EXPLAINERS.md`, and the vendored OKF spec |
 | `examples/demo/okf/` | "Parcel tracker" demo bundle; used by `npm run demo`, tests and screenshots |
@@ -77,7 +77,7 @@ do not prove it reads well.
 
 - **Erasable TypeScript only**: no enums, namespaces or parameter properties. Imports name
   the real `.mts` extension. `tsconfig.json` enforces this.
-- **npm scripts start through `g2g-start.mjs`** (`node --import ./src/g2g-start.mjs src/g2g-….mts`):
+- **npm scripts start through `scripts/g2g-start.mjs`** (`node --import ./scripts/g2g-start.mjs src/g2g-….mts`):
   plain JavaScript that turns on Node's compile cache in a private folder. Keep it free of
   TypeScript and of imports beyond `node:` built-ins; a tool must still run without it.
 - **Tools must stay dependency-light.** `g2g-init.mts`, `g2g-view.mts`, `g2g-mermaid.mts`,
@@ -105,8 +105,7 @@ do not prove it reads well.
 
 - **`g2g-hook.mts` must stay dependency-free**: it imports only `node:` built-ins and
   `./g2g-rank.mts`, never `g2g-core.mts` or `yaml`, and never runs code from the project. It
-  runs from an installed plugin where `node_modules` may not exist, and its output is put in
-  front of an agent. A test enforces the imports and runs it outside the repo.
+  runs from the installed package, and its output is put in front of an agent. A test enforces the imports and runs it outside the repo.
 - **The demo's memory bundle is pinned.** Lessons in `examples/demo/edukai/` hold digests of
   files under `examples/demo/` (source files, and `okf/adr/0002-…` and `okf/parcel-tracker/api.md` (the demo keeps the default `okf/` folder, as a project scaffolded with the defaults has)).
   Editing one of those changes a lesson's state and the report a test pins; the three changes
@@ -117,8 +116,8 @@ do not prove it reads well.
 - **Viewer features**: add to `test/views.e2e.mts` and show the demo bundle exercising it
   (add to `examples/demo/okf` if nothing there covers it).
 - **User-visible changes**: add a line under `## Unreleased` in `CHANGELOG.md`.
-- **Releases**: the version lives in four places and they must match: `package.json`,
-  `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, and `VERSION` in `g2g-init.mts`.
+- **Releases**: the version lives only in `package.json` (and the lockfile); the tools read it at
+  run time. See `docs/RELEASING.md`.
 - **Vendored OKF spec**: never hand-edit `references/okf-spec/` or `vendor/`. Use
   `npm run spec -- update` (copies `SPEC.md`, `LICENSE.md`, writes `UPSTREAM.json`). CI
   runs `spec status` weekly and fails when upstream moves.

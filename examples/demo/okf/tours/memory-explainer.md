@@ -119,7 +119,7 @@ extension). Both call one small program, which reads a cache and never runs proj
 sequenceDiagram
     participant A as Agent
     participant H as Harness, Claude Code hooks or the pi extension
-    participant T as okf-edukai-hook
+    participant T as good2go hook
     participant M as edukai and its cache
     H->>T: the session opens
     T->>M: read the cache

@@ -116,7 +116,7 @@ check:
 `npm run edukai:recheck` derives every lesson's state from the files: a check that no longer
 holds is `failed`, a cited file that is gone is `broken`, a changed file with no check is
 `suspect`. A lesson that stopped being true is superseded by a new one, never edited or
-deleted. Installed as a plugin (Claude Code) or a package (pi), the hooks do three things with
+deleted. Once `good2go hooks` has installed them (for Claude Code and pi), the hooks do three things with
 no one asking: brief the agent when a session opens, name the lessons that cite a file when it
 opens that file, and stop it from finishing with a lesson its own edit just broke. The `edukai`
 skill covers the judgement: what is worth a lesson, and how sure to say you are.
@@ -129,46 +129,36 @@ with transcripts from both harnesses.
 
 Node 24+ is required.
 
-**The tools** are an npm package, `@jb9k62/good2go`, with a `good2go` command. A project
-depends on it (`npm i -D @jb9k62/good2go`) and holds no copies of the tools; the scaffold adds the
-dependency and the npm scripts for you. With no `package.json`, use
-`npx @jb9k62/good2go@0.7.0 <command>`. The package has no install scripts and is published from CI
-with provenance ([SECURITY.md](SECURITY.md)).
-
-**The skills** (and the memory hooks) go into your agent:
-
-**pi**, as a package (pin a tag for reproducible installs):
-
 ```bash
-pi install git:github.com/jb9k62/good2go@v0.7.0
+npm i -g @jb9k62/good2go     # the `good2go` command
+good2go hooks                # the memory hooks, for Claude Code and pi (whichever you have)
+good2go init                 # in a project: scaffold the bundle, the npm scripts and the skills
 ```
 
-**Claude Code**, as a plugin from this repo's marketplace:
+`@jb9k62/good2go` is an npm package with no install scripts, published from CI with provenance
+([SECURITY.md](SECURITY.md)). Restart the agent after `good2go hooks`.
 
-```text
-/plugin marketplace add jb9k62/good2go
-/plugin install good2go@good2go
-```
+**Per project instead of global.** `npm i -D @jb9k62/good2go` (the scaffold adds the dependency
+and the npm scripts for you) holds no copies of the tools. To have the hooks come with the
+repository, run `good2go hooks --project` and commit the result: the hooks then run the
+project's own `node_modules/@jb9k62/good2go` (silent if it is not installed). That lets a
+repository run its own code at session start, so use it only for a team that wants it; the
+default, user scope, runs only the `good2go` you installed yourself. The project command is POSIX
+shell, so on Windows it needs Git Bash or WSL. With no `package.json`, use
+`npx @jb9k62/good2go@0.7.0 <command>`.
 
-or by cloning straight into your skills directory, where it loads as a local plugin:
+**The skills.** `good2go init` copies the two skills into the project (`.claude/skills/` and
+`.agents/skills/`), so a clone has them. For a personal install, `good2go skills` copies them to
+`~/.claude/skills` and `~/.pi/agent/skills` (whichever home exists; `--claude`, `--pi`, `--force`),
+and to `~/.agents/skills` only when you pass `--agents`. From a clone of this repository,
+`npm run install-skill` links them instead, so a `git pull` updates every agent at once.
 
-```bash
-git clone https://github.com/jb9k62/good2go ~/.claude/skills/good2go
-```
-
-**Anywhere else**, copy the skills from the package, with no clone:
-
-```bash
-npx @jb9k62/good2go skills     # ~/.claude/skills, ~/.pi/agent/skills, ~/.agents/skills; --claude, --pi, --agents, --force
-```
-
-or clone and link them (`npm run install-skill`), so a `git pull` updates every agent at once.
-
-Both ways install the two skills only. The memory hooks load when the repository is installed
-as a Claude Code plugin or a pi package (pi 1.0 or later); without them, the snippet `--edukai`
-writes into `AGENTS.md` is what points an agent at its memory. The hooks need Node 22.18 or
-later on the `PATH` they run with (on an older one they stay silent), and say nothing in a
-project with no `edukai/`.
+`good2go hooks` is idempotent and takes `--dry-run`, `--check` and `--remove`; it edits only its
+own entries in `~/.claude/settings.json` and writes one marked pi extension. Without the hooks, the snippet
+`--edukai` writes into `AGENTS.md` is what points an agent at its memory. User-scope hooks
+call `good2go` from `PATH` (`hooks` refuses to write them when it is not there; a harness started
+with another `PATH`, a Node version manager's usual effect, stays silent). The hooks need Node 24
+or later, say nothing in a project with no `edukai/`, and need pi 1.0 or later.
 
 ## Quick start
 
@@ -312,10 +302,9 @@ npm run spec -- update      # move the pin, re-vendor, print a migration checkli
 
 ## Releases
 
-Versions are git tags; see [CHANGELOG.md](CHANGELOG.md). To release, bump `version` in
-`package.json` (and `package-lock.json`), `.claude-plugin/plugin.json`,
-`.claude-plugin/marketplace.json` and `VERSION` in `src/g2g-init.mts` (the tests check they
-agree), and the tag in the pi install line above, add a changelog entry, then tag.
+Versions are git tags; see [CHANGELOG.md](CHANGELOG.md) and [docs/RELEASING.md](docs/RELEASING.md).
+To release, bump `version` in `package.json` (and `package-lock.json`), add a changelog entry,
+then tag. The tools read their version from `package.json`.
 
 ## Licence
 

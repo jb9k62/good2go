@@ -2,14 +2,16 @@
 /**
  * good2go new: scaffold a small OKF bundle (index, log, one starter page) into a new folder.
  *
- *   g2g-new.mts <dir> --name "<Name>" --intent "<what it is for and who reads it>"
+ *   good2go new <dir> --name "<Name>" --intent "<what it is for and who reads it>"
  *               [--project-dir <dir>] [--force]
  *
- * Exit codes: 0 ok, 1 refused for a content reason, 2 usage or could not run.
+ * Exit codes: 0 ok, 1 the folder is not empty or is not a folder, 2 usage (including a path that
+ * leaves the project) or could not run.
  * Existing files are never overwritten, even with --force.
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { renderTemplate } from './g2g-shared.mts';
 
 type Vars = Record<string, string>;
 
@@ -17,13 +19,8 @@ const USAGE = `Usage: good2go new <dir> --name "<Name>" --intent "<one sentence>
 
 const TEMPLATES = new URL('./templates/bundle/', import.meta.url);
 
-// Same rule as g2g-init.mts: {{VAR}} is replaced, an unknown one becomes <VAR>.
-function render(text: string, vars: Vars): string {
-  return text.replace(/\{\{(\w+)\}\}/g, (_, k: string) => vars[k] ?? `<${k}>`);
-}
-
 function usage(msg: string): number {
-  console.error(`g2g-new: ${msg}\n${USAGE}`);
+  console.error(`good2go new: ${msg}\n${USAGE}`);
   return 2;
 }
 
@@ -62,8 +59,8 @@ function main(argv: string[]): number {
   intent = intent.trim().replace(/\s+/g, ' ');
 
   if (path.isAbsolute(dir)) {
-    console.error(`g2g-new: ${dir}: refused, the folder must be relative to the project directory`);
-    return 1;
+    console.error(`good2go new: ${dir}: refused, the folder must be relative to the project directory`);
+    return 2;
   }
   if (!fs.existsSync(projectDir) || !fs.statSync(projectDir).isDirectory()) {
     return usage(`project directory ${projectDir} does not exist`);
@@ -72,25 +69,25 @@ function main(argv: string[]): number {
   const target = path.resolve(root, dir);
   const rel = path.relative(root, target);
   if (rel === '' || rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) {
-    console.error(`g2g-new: ${dir}: refused, it is not inside ${root}`);
-    return 1;
+    console.error(`good2go new: ${dir}: refused, it is not inside ${root}`);
+    return 2;
   }
   // A symlink on the way could still lead outside: check the nearest existing ancestor.
   let probe = target;
   while (!fs.existsSync(probe)) probe = path.dirname(probe);
   const real = path.relative(root, fs.realpathSync(probe));
   if (real === '..' || real.startsWith(`..${path.sep}`) || path.isAbsolute(real)) {
-    console.error(`g2g-new: ${dir}: refused, it resolves outside ${root}`);
-    return 1;
+    console.error(`good2go new: ${dir}: refused, it resolves outside ${root}`);
+    return 2;
   }
 
   if (fs.existsSync(target)) {
     if (!fs.statSync(target).isDirectory()) {
-      console.error(`g2g-new: ${rel}: refused, it exists and is not a folder`);
+      console.error(`good2go new: ${rel}: refused, it exists and is not a folder`);
       return 1;
     }
     if (fs.readdirSync(target).length > 0 && !force) {
-      console.error(`g2g-new: ${rel}: refused, the folder is not empty (use --force to add missing files only)`);
+      console.error(`good2go new: ${rel}: refused, the folder is not empty (use --force to add missing files only)`);
       return 1;
     }
   }
@@ -112,7 +109,7 @@ function main(argv: string[]): number {
   try {
     templates = files.map(([out, tpl]) => [out, fs.readFileSync(new URL(tpl, TEMPLATES), 'utf8')]);
   } catch (e) {
-    console.error(`g2g-new: could not read the bundle templates: ${(e as Error).message}`);
+    console.error(`good2go new: could not read the bundle templates: ${(e as Error).message}`);
     return 2;
   }
 
@@ -126,11 +123,11 @@ function main(argv: string[]): number {
         continue;
       }
       // 'wx' fails rather than overwrite, even if the file appears meanwhile.
-      fs.writeFileSync(file, render(text, vars), { flag: 'wx' });
+      fs.writeFileSync(file, renderTemplate(text, vars), { flag: 'wx' });
       console.log(`created  ${shown}`);
     }
   } catch (e) {
-    console.error(`g2g-new: could not write ${rel}: ${(e as Error).message}`);
+    console.error(`good2go new: could not write ${rel}: ${(e as Error).message}`);
     return 2;
   }
 

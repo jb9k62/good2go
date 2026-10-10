@@ -1,6 +1,6 @@
 /**
  * The ranking behind g2g-search, with no file system and no imports, so one copy of it
- * runs in Node (scripts/g2g-search.mts) and, with its types stripped, inlined into the
+ * runs in Node (g2g-search.mts) and, with its types stripped, inlined into the
  * viewer's page (g2g-view.mts). Keep it that way: nothing here may touch `fs`, `path`,
  * `process` or the DOM.
  *

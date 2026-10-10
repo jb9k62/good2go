@@ -15,7 +15,7 @@
  * micro-worlds from packages/okf-widgets) render in the reading pane too.
  *
  * Usage:
- *   node scripts/g2g-view.mts [bundle] [options]
+ *   good2go view [bundle] [options]     (good2go validate = --validate, good2go fix = --validate --fix)
  *     bundle        OKF bundle directory (default: ./okf)
  *     --out <f>     write the viewer here (default: <bundle>/viz.html)
  *     --validate    validate only; do not write the viewer
@@ -28,13 +28,14 @@
  *     --fix         first rewrite the bundle's .md files so every ER diagram has its
  *                   relationship key (what ||--o{ mean) inserted or refreshed
  *     --strict      exit 1 if any conformance issues are found
+ *     -h, --help    print this help and exit 0
  *     --widgets <f> the built widget bundle to inline (default:
- *                   packages/okf-widgets/dist/okf-widgets.js next to scripts/)
+ *                   ./packages/okf-widgets/dist/okf-widgets.js in the working directory)
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import { stripTypeScriptTypes } from 'node:module';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
 import {
   errorMessage,
   extractLinks,
@@ -47,6 +48,7 @@ import {
 } from './g2g-core.mts';
 import type { Evidence, Frontmatter } from './g2g-core.mts';
 import { checkProblem, CONFIDENCES } from './g2g-hook.mts';
+import { helpFromComment, siblingFile } from './g2g-shared.mts';
 
 interface Issue {
   file: string;
@@ -110,19 +112,16 @@ const OKF_VERSION = '0.2';
 
 // The interactive React widgets (packages/okf-widgets), inlined so the viewer stays one file.
 // Build them first with `npm run okf:widgets:build`; without the bundle the viewer still
-// works and each widget block shows how to build it.
-const DEFAULT_WIDGETS_BUNDLE = fileURLToPath(
-  new URL('../packages/okf-widgets/dist/okf-widgets.js', import.meta.url),
-);
-// Run from the npm package there is no ../packages next to the tool; the project's own is found from the working directory.
+// works and each widget block shows how to build it. The project's own is found from the working directory.
 const PROJECT_WIDGETS_BUNDLE = path.resolve('packages/okf-widgets/dist/okf-widgets.js');
 
 // The viewer's search box runs the same ranking as `g2g-search` (g2g-rank.mts). That file is pure
 // TypeScript with no imports, so Node strips its types and it goes into the page as plain script.
 function rankScript(): string {
   // From source this is g2g-rank.mts; from the published package it is the compiled g2g-rank.mjs.
-  const rankUrl = new URL('./g2g-rank.mts', import.meta.url);
-  const source = fs.readFileSync(fs.existsSync(rankUrl) ? rankUrl : new URL('./g2g-rank.mjs', import.meta.url), 'utf8');
+  const rankFile = siblingFile(import.meta.url, 'g2g-rank');
+  if (!rankFile) throw new Error('g2g-rank is not next to g2g-view');
+  const source = fs.readFileSync(rankFile, 'utf8');
   const js = stripTypeScriptTypes(source).replace(/^export /gm, '');
   const api = 'buildEntry, buildIndex, search, snippet, freshness, freshnessLabel, matchesFilters, NO_FILTERS, stripCode, HEADING_RE';
   // A "</script" inside the code would end the inline block early.
@@ -331,20 +330,20 @@ function lessonIssues(file: string, fm: Frontmatter, body: string): Issue[] {
     lesson('confidence: inferred, but it has a `verified` entry; a checked lesson is tested or observed');
   }
   if (confidence !== 'inferred' && confidence != null && verified.length === 0) {
-    lesson(`confidence: ${String(confidence)} needs a \`verified\` entry (run g2g-edukai verify), or it is inferred`);
+    lesson(`confidence: ${String(confidence)} needs a \`verified\` entry (run \`good2go edukai verify\`), or it is inferred`);
   }
-  if (verified.length && fm.stale_after == null) lesson('`verified` without `stale_after` (g2g-edukai verify sets both)');
+  if (verified.length && fm.stale_after == null) lesson('`verified` without `stale_after` (`good2go edukai verify` sets both)');
   const sources = Array.isArray(fm.sources) ? fm.sources : [];
   if (sources.length === 0) lesson('A Lesson needs at least one entry in `sources`');
   sources.forEach((s: unknown, i: number) => {
     const entry = s && typeof s === 'object' ? (s as Record<string, unknown>) : {};
     if (!text(entry.resource)) lesson(`sources[${i}] has no \`resource\``);
     if (entry.digest != null && !DIGEST_RE.test(String(entry.digest))) {
-      lesson(`sources[${i}].digest is not one g2g-edukai wrote; never write it by hand`);
+      lesson(`sources[${i}].digest is not one \`good2go edukai\` wrote; never write it by hand`);
     }
   });
   if (String(fm.status ?? '').toLowerCase() === 'deprecated' && fm.superseded_by == null) {
-    lesson('status: deprecated without `superseded_by`; a lesson is retired by superseding it (g2g-edukai supersede)');
+    lesson('status: deprecated without `superseded_by`; a lesson is retired by superseding it (`good2go edukai supersede`)');
   }
   if (fm.check != null && !Array.isArray(fm.check)) lesson('`check` must be a list');
   (Array.isArray(fm.check) ? fm.check : []).forEach((c: unknown, i: number) => {
@@ -614,7 +613,7 @@ function erdLegendIssues(file: string, text: string): Issue[] {
       kind: 'erd-legend',
       message:
         `erDiagram at line ${plan.line} has ${plan.state === 'missing' ? 'no' : 'an out-of-date'} ` +
-        'relationship key below it (run g2g-view with --fix to write it)',
+        'relationship key below it (run `good2go fix` to write it)',
     }));
 }
 
@@ -3952,8 +3951,11 @@ function parseArgs(argv: string[]): Options {
       opts.strict = true;
     } else if (a === '--widgets') {
       opts.widgets = argv[++i] ?? null;
+    } else if (a === '-h' || a === '--help') {
+      console.log(helpFromComment(import.meta.url));
+      process.exit(0);
     } else if (a.startsWith('-')) {
-      console.error('Unknown flag: ' + a);
+      console.error('Unknown flag: ' + a + ' (see --help)');
       process.exit(2);
     } else positional.push(a);
   }
@@ -4454,15 +4456,13 @@ async function main() {
   if (!opts.validateOnly) {
     const widgetsFile = opts.widgets
       ? path.resolve(opts.widgets)
-      : fs.existsSync(DEFAULT_WIDGETS_BUNDLE)
-        ? DEFAULT_WIDGETS_BUNDLE
-        : PROJECT_WIDGETS_BUNDLE;
+      : PROJECT_WIDGETS_BUNDLE;
     const widgetsJs = readWidgetsBundle(widgetsFile);
     const usesWidgets = concepts.some((c) => /^\s*(`{3,}|~{3,})\s*widget\s*$/m.test(c.body));
     if (widgetsJs === null && usesWidgets) {
       console.log(
         `\nNote: no widget bundle at ${widgetsFile}, so widget blocks show a build hint.` +
-          '\n  fix: npm run okf:widgets:build (or scaffold one: good2go --widgets)',
+          '\n  fix: npm run okf:widgets:build (or scaffold one: good2go init --widgets)',
       );
     }
     const html = buildHTML(readBundleTitle(bundleRoot), graph, widgetsJs);

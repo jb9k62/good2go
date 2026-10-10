@@ -34,7 +34,7 @@ repeating its content.
   date is reported by `okf:validate`.
 - `sources` should point at the code or document this concept describes, not at a summary
   document the text was copied from. A path from the project root also feeds
-  `npm run okf:recheck`: after `node scripts/g2g-edukai.mts verify <concept> --bundle okf
+  `npm run okf:recheck`: after `npx good2go edukai verify <concept> --bundle okf
   --by <actor>` pins it, the re-check reports when that file changes.
 - Leave `status` out. It defaults to `stable`. Set it to `draft` while still writing, or
   `deprecated` once the concept no longer applies.

@@ -3,7 +3,7 @@
  * good2go: one command for the OKF tools, so a project depends on the package and keeps no
  * copies of them.
  *
- *   good2go init [dir] [options]       scaffold the design bundle and the npm scripts 
+ *   good2go init [dir] [options]       scaffold the design bundle and the npm scripts
  *   good2go new <dir> --name N --intent I   scaffold any other bundle: ops, runbooks, notes
  *   good2go validate [bundle] [options]     validate a bundle (view --validate)
  *   good2go fix [bundle]                    validate and write the fixes that are safe
@@ -21,12 +21,11 @@
  * as TypeScript, and from the published package as compiled JavaScript.
  */
 import { spawnSync } from 'node:child_process';
-import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { helpFromComment, packageVersion, siblingFile } from './g2g-shared.mts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const VERSION = '0.7.0';
 
 // subcommand -> [tool file without extension, arguments put before the user's]
 const COMMANDS: Record<string, [string, string[]]> = {
@@ -44,21 +43,10 @@ const COMMANDS: Record<string, [string, string[]]> = {
   hooks: ['g2g-install-hooks', []],
 };
 
-const HELP = fs
-  .readFileSync(fileURLToPath(import.meta.url), 'utf8')
-  .split('*/')[0]!
-  .replace(/^#!.*\n\/\*\*\n/, '')
-  .replace(/^ \* ?/gm, '')
-  .trimEnd();
-
-/** The tool's file: .mts next to this one when run from source, .mjs when compiled. */
-function toolFile(name: string): string | null {
-  for (const ext of ['.mts', '.mjs']) {
-    const file = path.join(HERE, name + ext);
-    if (fs.existsSync(file)) return file;
-  }
-  return null;
-}
+// Read from this file's own comment, which tsc keeps first in the compiled file only when no
+// helper is put above it; the compiled --help is tested.
+const HELP = helpFromComment(import.meta.url);
+const toolFile = (name: string): string | null => siblingFile(import.meta.url, name);
 
 const [command, ...rest] = process.argv.slice(2);
 if (command === undefined || command === '-h' || command === '--help' || command === 'help') {
@@ -66,7 +54,7 @@ if (command === undefined || command === '-h' || command === '--help' || command
   process.exit(command === undefined ? 2 : 0);
 }
 if (command === '-v' || command === '--version' || command === 'version') {
-  console.log(VERSION);
+  console.log(packageVersion(import.meta.url));
   process.exit(0);
 }
 if (command === 'hook' && rest[0] === 'run') {
@@ -100,15 +88,10 @@ if (!file) {
   console.error(`good2go: "${command}" is not part of this install (no ${entry[0]} next to ${HERE}).`);
   process.exit(2);
 }
-// A bundle given first (`good2go validate okf --strict`) must come before the fixed flags, so
-// the viewer reads it as its positional argument.
-const first = rest[0];
-const args = first !== undefined && !first.startsWith('-') && entry[1].length && entry[0] === 'g2g-view'
-  ? [first, ...entry[1], ...rest.slice(1)]
-  : [...entry[1], ...rest];
-const result = spawnSync(process.execPath, [file, ...args], { stdio: 'inherit' });
+const result = spawnSync(process.execPath, [file, ...entry[1], ...rest], { stdio: 'inherit' });
 if (result.error) {
   console.error(`good2go: could not run ${path.basename(file)}: ${result.error.message}`);
   process.exit(2);
 }
-process.exit(result.status ?? (result.signal ? 1 : 2));
+// A child killed by a signal could not finish: 2, not "broken".
+process.exit(result.status ?? 2);

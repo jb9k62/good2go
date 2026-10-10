@@ -1,8 +1,7 @@
 /**
  * Shared OKF reading code: frontmatter parsing, trust tier (SPEC §5.3), staleness
  * (§5.5), link extraction (§6.1) and bundle walking. Used by g2g-view.mts and
- * g2g-search.mts (with g2g-rank.mts, the ranking), which are copied into projects beside this file as
- * scripts/okf-*.mts. Imports nothing from outside this directory.
+ * g2g-search.mts (with g2g-rank.mts, the ranking). Imports nothing from outside this directory.
  */
 import fs from 'node:fs';
 import { createRequire } from 'node:module';

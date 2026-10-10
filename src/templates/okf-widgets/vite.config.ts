@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
 
-// One IIFE file that scripts/g2g-view.mts inlines into viz.html. React is bundled in, so the
+// One IIFE file that good2go view inlines into viz.html. React is bundled in, so the
 // viewer needs no extra CDN script, and the CSS is inlined by the entry point (`?inline`).
 export default defineConfig(({ command }) => ({
   plugins: [react()],

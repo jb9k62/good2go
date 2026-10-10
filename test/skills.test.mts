@@ -29,8 +29,25 @@ test('installs both skills, without their tools, for the agents whose home exist
   assert.ok(fs.existsSync(path.join(home, '.claude', 'skills', 'good2go', 'references', 'PLAYBOOK.md')));
   assert.ok(!fs.existsSync(path.join(home, '.claude', 'src')));
   assert.ok(!fs.existsSync(path.join(home, '.pi')));
-  assert.match(r.stdout, /plugin marketplace add jb9k62\/good2go/);
-  assert.match(r.stdout, /pi install git:github\.com\/jb9k62\/good2go/);
+  assert.match(r.stdout, /good2go hooks/);
+  assert.doesNotMatch(r.stdout, /plugin|pi install/);
+});
+
+test('with no flags the targets are Claude Code and pi, never ~/.agents', () => {
+  const home = tmp();
+  fs.mkdirSync(path.join(home, '.claude'));
+  fs.mkdirSync(path.join(home, '.pi', 'agent'), { recursive: true });
+  const r = run(home);
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(fs.existsSync(path.join(home, '.claude', 'skills', 'good2go', 'SKILL.md')));
+  assert.ok(fs.existsSync(path.join(home, '.pi', 'agent', 'skills', 'good2go', 'SKILL.md')));
+  assert.ok(!fs.existsSync(path.join(home, '.agents')));
+});
+
+test('--help prints the usage and exits 0', () => {
+  const r = run(tmp(), '--help');
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /good2go skills/);
 });
 
 test('flags choose the targets, and an explicit flag creates the home', () => {

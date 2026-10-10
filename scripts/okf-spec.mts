@@ -207,7 +207,7 @@ function update(ref: string, dryRun: boolean): number {
     for (const hit of hits) console.log(`       ${hit}`);
     if (!hits.length) console.log('       (none found)');
     console.log('  4. npm run check, bump the package version, and note the change in CHANGELOG.md.');
-    console.log('  5. Projects then run the skill with --tools-only and follow the playbook\'s');
+    console.log('  5. Projects then upgrade the package and follow the playbook\'s');
     console.log('     "Moving a bundle to a new OKF version" section.');
   }
   return 0;

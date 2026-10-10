@@ -1,4 +1,4 @@
-// Loaded before a tool with `node --import ./scripts/g2g-start.mjs scripts/g2g-search.mts`.
+// Loaded before a tool with `node --import ./scripts/g2g-start.mjs src/g2g-search.mts`.
 // Node strips a tool's TypeScript on every start, which is most of what a cached search costs;
 // this turns on Node's compile cache so that is done once. The cache holds code Node will
 // run, so it lives under the project's own node_modules, or else in a temp folder that is ours

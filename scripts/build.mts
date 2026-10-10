@@ -28,7 +28,7 @@ fs.cpSync(path.join(ROOT, 'skills'), path.join(DIST, 'skills'), {
   recursive: true,
   filter: (from) => !/(^|[\\/])(node_modules|dist)([\\/]|$)/.test(path.relative(path.join(ROOT, 'skills'), from)),
 });
-// The pi extension that `good2go hooks` installs, with its hook path resolved at install time.
+// The pi extension that `good2go hooks` installs (it sets how the extension calls good2go at install time).
 fs.copyFileSync(path.join(ROOT, 'extensions', 'edukai.ts'), path.join(DIST, 'templates', 'pi-extension.ts'));
 // The command's entry: a plain .js file so `bin` needs no extension rewriting.
 const cli = path.join(DIST, 'good2go.mjs');

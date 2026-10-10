@@ -1,7 +1,7 @@
 {
   "name": "@jb9k62/good2go",
   "version": "0.7.0",
-  "description": "Node tooling for OKF (Open Knowledge Format) bundles and agent memory: validator, graph viewer, Mermaid gates, ranked search, and the edukai memory bundle, plus skills for Claude Code and pi.",
+  "description": "Node tooling for OKF (Open Knowledge Format) bundles and agent memory: validator, graph viewer, Mermaid gates, ranked search, and the edukai memory bundle, plus skills and hooks for Claude Code and pi.",
   "license": "MIT",
   "type": "module",
   "author": "jb9k62",
@@ -14,7 +14,6 @@
     "url": "https://github.com/jb9k62/good2go/issues"
   },
   "keywords": [
-    "pi-package",
     "claude-code",
     "agent-skill",
     "okf",
@@ -42,20 +41,11 @@
     "node": ">=24"
   },
   "publishConfig": {
-    "access": "public",
-    "provenance": true
+    "access": "public"
   },
   "workspaces": [
     "src/templates/okf-widgets"
   ],
-  "pi": {
-    "skills": [
-      "./skills"
-    ],
-    "extensions": [
-      "./extensions"
-    ]
-  },
   "scripts": {
     "build": "node scripts/build.mts",
     "prepack": "npm run build",
@@ -64,19 +54,19 @@
     "test:render": "node --test test/render.e2e.mts",
     "test:views": "node --test test/views.e2e.mts",
     "check": "npm run typecheck && npm test && npm run build && npm run test:views && npm run okf:validate && npm run edukai:validate",
-    "okf:validate": "node --import ./src/g2g-start.mjs src/g2g-view.mts design --validate --strict",
-    "okf:fix": "node --import ./src/g2g-start.mjs src/g2g-view.mts design --validate --fix",
-    "okf:view": "npm run build -w okf-widgets && node --import ./src/g2g-start.mjs src/g2g-view.mts design --widgets src/templates/okf-widgets/dist/okf-widgets.js",
-    "okf:mermaid": "node --import ./src/g2g-start.mjs src/g2g-mermaid.mts design",
-    "okf:mermaid:render": "npm run build -w okf-widgets && node --import ./src/g2g-start.mjs src/g2g-view.mts design --check-render --widgets src/templates/okf-widgets/dist/okf-widgets.js",
-    "okf:search": "node --import ./src/g2g-start.mjs src/g2g-search.mts",
-    "okf:recheck": "node --import ./src/g2g-start.mjs src/g2g-edukai.mts recheck --bundle design",
-    "edukai:validate": "node --import ./src/g2g-start.mjs src/g2g-view.mts edukai --validate --strict && node --import ./src/g2g-start.mjs src/g2g-edukai.mts index --check",
-    "edukai:index": "node --import ./src/g2g-start.mjs src/g2g-edukai.mts index",
-    "edukai:recheck": "node --import ./src/g2g-start.mjs src/g2g-edukai.mts recheck",
-    "edukai:brief": "node --import ./src/g2g-start.mjs src/g2g-edukai.mts index && node --import ./src/g2g-start.mjs src/g2g-hook.mts brief",
-    "edukai:search": "node --import ./src/g2g-start.mjs src/g2g-search.mts --bundle edukai",
-    "edukai:view": "node --import ./src/g2g-start.mjs src/g2g-view.mts edukai",
+    "okf:validate": "node --import ./scripts/g2g-start.mjs src/g2g-view.mts design --validate --strict",
+    "okf:fix": "node --import ./scripts/g2g-start.mjs src/g2g-view.mts design --validate --fix",
+    "okf:view": "npm run build -w okf-widgets && node --import ./scripts/g2g-start.mjs src/g2g-view.mts design --widgets src/templates/okf-widgets/dist/okf-widgets.js",
+    "okf:mermaid": "node --import ./scripts/g2g-start.mjs src/g2g-mermaid.mts design",
+    "okf:mermaid:render": "npm run build -w okf-widgets && node --import ./scripts/g2g-start.mjs src/g2g-view.mts design --check-render --widgets src/templates/okf-widgets/dist/okf-widgets.js",
+    "okf:search": "node --import ./scripts/g2g-start.mjs src/g2g-search.mts",
+    "okf:recheck": "node --import ./scripts/g2g-start.mjs src/g2g-edukai.mts recheck --bundle design",
+    "edukai:validate": "node --import ./scripts/g2g-start.mjs src/g2g-view.mts edukai --validate --strict && node --import ./scripts/g2g-start.mjs src/g2g-edukai.mts index --check",
+    "edukai:index": "node --import ./scripts/g2g-start.mjs src/g2g-edukai.mts index",
+    "edukai:recheck": "node --import ./scripts/g2g-start.mjs src/g2g-edukai.mts recheck",
+    "edukai:brief": "node --import ./scripts/g2g-start.mjs src/g2g-edukai.mts index && node --import ./scripts/g2g-start.mjs src/g2g-hook.mts brief",
+    "edukai:search": "node --import ./scripts/g2g-start.mjs src/g2g-search.mts --bundle edukai",
+    "edukai:view": "node --import ./scripts/g2g-start.mjs src/g2g-view.mts edukai",
     "demo": "npm run build -w okf-widgets && node src/g2g-view.mts examples/demo/okf --widgets src/templates/okf-widgets/dist/okf-widgets.js",
     "demo:edukai": "npm run demo:edukai:brief && npm run demo:edukai:recheck",
     "demo:edukai:brief": "node src/g2g-edukai.mts index --bundle examples/demo/edukai --now 2026-10-15T00:00:00Z && node src/g2g-hook.mts brief --bundle examples/demo/edukai --now 2026-10-15T00:00:00Z",

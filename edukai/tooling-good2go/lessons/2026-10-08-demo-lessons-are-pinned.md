@@ -8,13 +8,13 @@ generated: { by: pi/deepseek-ai/DeepSeek-V4.1-Flash, at: 2026-10-08T20:03:17Z }
 verified:
   - { by: pi/deepseek-ai/DeepSeek-V4.1-Flash, at: 2026-10-08T20:07:51Z }
   - { by: process:edukai-recheck, at: 2026-10-08T20:16:39Z }
-  - { by: claude-code/claude-sonnet-5-5, at: 2026-10-10T17:42:20Z }
-stale_after: 2026-11-09T17:42:20Z
+  - { by: claude-code/claude-sonnet-5-5, at: 2026-10-10T18:14:17Z }
+stale_after: 2026-11-09T18:14:17Z
 sources:
   - resource: examples/demo/README.md
-    digest: sha256:85737fae41bc7d9d
+    digest: sha256:a9a0e8364bf50a83
   - resource: test/edukai.test.mts
-    digest: sha256:f3ef7df55904f305
+    digest: sha256:d45254cb46d7da7f
 check:
   - { file: examples/demo/README.md, contains: "changed on purpose" }
 ---

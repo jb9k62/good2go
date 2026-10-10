@@ -39,7 +39,7 @@ such a machine says nothing about the views.
 
 | File | Covers |
 | --- | --- |
-| `test/init.test.mts` | The scaffold: what it creates and keeps, the root manifest, the devDependency, `--design-dir`, `--tools-only`, `--edukai`, the version stamped into templates, and migration from an old `scripts/` install |
+| `test/init.test.mts` | The scaffold: what it creates and keeps, the root manifest, the devDependency, `--design-dir`, `--edukai`, and the version stamped into templates |
 | `test/cli.test.mts` | The `good2go` dispatcher: each subcommand reaches its tool and keeps its exit code |
 | `test/package.test.mts` | The built package: `dist/` holds compiled JavaScript beside the templates and skills, and `init`, `validate`, `search`, `edukai` and `view` work from it |
 | `test/new.test.mts`, `test/skills.test.mts` | `good2go new` and `good2go skills` |

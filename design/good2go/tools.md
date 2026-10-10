@@ -13,7 +13,7 @@ sources:
   - resource: src/g2g-rank.mts
   - resource: src/g2g-edukai.mts
   - resource: src/g2g-hook.mts
-  - resource: src/g2g-start.mjs
+  - resource: scripts/g2g-start.mjs
   - resource: src/good2go.mts
   - resource: src/g2g-new.mts
   - resource: src/g2g-skills.mts
@@ -33,7 +33,7 @@ runs them with the `good2go` command; this repository runs the sources.
 | File | What it does |
 | --- | --- |
 | `good2go.mts` | The command's dispatcher. Runs each tool below as a child process, so each keeps its own flags and exit codes. Subcommands `init`, `new`, `validate`, `fix`, `view`, `mermaid`, `search`, `recheck`, `edukai`, `hook`, `skills` |
-| `g2g-init.mts` | `good2go init`: writes the bundle skeleton, adds the `@jb9k62/good2go` devDependency and the npm scripts, writes `.good2go.json` at the project root. Copies no tools. `--design-dir`, `--widgets`, `--edukai`, `--tools-only`, `--no-scripts`, `--force` |
+| `g2g-init.mts` | `good2go init`: writes the bundle skeleton, adds the `@jb9k62/good2go` devDependency and the npm scripts, writes `.good2go.json` at the project root. Copies no tools. `--design-dir`, `--widgets`, `--edukai`, `--no-scripts`, `--force` |
 | `g2g-new.mts` | `good2go new`: starts a further small bundle (index, log, one starter page) in a new folder. `--name`, `--intent`, `--project-dir`, `--force`; never overwrites a file |
 | `g2g-skills.mts` | `good2go skills`: copies the skills (instructions and references only) into an agent's skills folder. `--claude`, `--pi`, `--agents`, `--force`, `--dir` |
 | `g2g-view.mts` | The validator and the viewer, and the render gate under `--check-render`. `--validate`, `--fix`, `--strict`, `--out`, `--widgets` |

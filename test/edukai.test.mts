@@ -115,7 +115,7 @@ describe('g2g-view: lessons, supersede pointers and budgets', () => {
       'check-two-tests [lesson] check[0] needs exactly one of contains, lacks, matches, exists (it has contains and lacks)',
       'cycle-a [supersede] The superseded_by chain from here returns to /d/lessons/cycle-a.md: a cycle',
       'cycle-b [supersede] The superseded_by chain from here returns to /d/lessons/cycle-b.md: a cycle',
-      'hand-digest [lesson] sources[0].digest is not one g2g-edukai wrote; never write it by hand',
+      'hand-digest [lesson] sources[0].digest is not one `good2go edukai` wrote; never write it by hand',
       'inferred-verified [lesson] confidence: inferred, but it has a `verified` entry; a checked lesson is tested or observed',
       'missing-target [supersede] supersedes: /d/lessons/nope.md is not a concept in the bundle',
       'no-confidence [lesson] A Lesson needs `confidence`: tested, observed, inferred',
@@ -125,9 +125,9 @@ describe('g2g-view: lessons, supersede pointers and budgets', () => {
       'old-not-deprecated [supersede] superseded_by names /d/lessons/new-one-way.md, which does not name this file in `supersedes`',
       'overview [budget] An Overview body is at most 60 lines; this one has 61',
       'relative-pointer [supersede] supersedes: valid.md is not a bundle-root path ending .md, such as /adr/0002-short-title.md',
-      'tested-unverified [lesson] confidence: tested needs a `verified` entry (run g2g-edukai verify), or it is inferred',
+      'tested-unverified [lesson] confidence: tested needs a `verified` entry (run `good2go edukai verify`), or it is inferred',
       'too-long [budget] A Lesson body is at most 30 lines; this one has 31. One lesson, one claim: split it',
-      'verified-no-stale [lesson] `verified` without `stale_after` (g2g-edukai verify sets both)',
+      'verified-no-stale [lesson] `verified` without `stale_after` (`good2go edukai verify` sets both)',
     ]);
     assert.doesNotMatch(r.out, /valid\.md {2}\[/, 'the valid lesson is not reported');
   });
@@ -181,7 +181,7 @@ describe('g2g-edukai: arguments and exit codes', () => {
     assert.equal(edukai(cwd, ['new', '--domain', 'codebase-x', '--title', 'T', '--by', ME, '--confidence', 'sure']).code, 2);
     assert.equal(hook(cwd, ['brief', '--bogus']).code, 2);
     assert.equal(hook(cwd, ['brief', '--bundle', 'missing']).code, 2);
-    assert.match(edukai(cwd, ['brief']).err, /g2g-hook\.mts/, 'points at the file that has the hook commands');
+    assert.match(edukai(cwd, ['brief']).err, /good2go hook/, 'points at the command that has the hook commands');
   });
 });
 
@@ -1027,76 +1027,6 @@ describe('the Claude Code adapter: hook', () => {
   });
 });
 
-describe('hooks/hooks.json', () => {
-  const config = JSON.parse(read(path.join(ROOT, 'hooks', 'hooks.json')));
-
-  it('runs the hook file, which exists, on the four moments', () => {
-    assert.deepEqual(Object.keys(config.hooks).sort(), ['PostToolUse', 'SessionStart', 'Stop']);
-    assert.deepEqual(config.hooks.PostToolUse.map((g: { matcher: string }) => g.matcher), ['Read', 'Edit|Write|NotebookEdit']);
-    assert.equal(config.hooks.SessionStart[0].matcher, undefined, 'every session source, compaction included');
-    let commands = 0;
-    for (const groups of Object.values(config.hooks) as Array<Array<{ hooks: Array<{ type: string; command: string; timeout: number }> }>>) {
-      for (const group of groups) {
-        for (const h of group.hooks) {
-          commands++;
-          assert.equal(h.type, 'command');
-          assert.equal(h.timeout, 5);
-          const m = h.command.match(/^node "\$\{CLAUDE_PLUGIN_ROOT\}\/([^"]+)"$/);
-          assert.ok(m, h.command);
-          assert.ok(fs.existsSync(path.join(ROOT, m![1]!)), `${m![1]} does not exist`);
-          assert.equal(m![1], 'hooks/edukai-hook.mjs');
-        }
-      }
-    }
-    assert.equal(commands, 4);
-  });
-
-  it('starts through a plain .mjs launcher, which answers like the hook file and never fails', () => {
-    const launcher = path.join(ROOT, 'hooks', 'edukai-hook.mjs');
-    const source = read(launcher);
-    // It must parse on a Node too old to run TypeScript, so that it can exit quietly there.
-    assert.doesNotMatch(source, /^import .* from|\bawait\b|: (string|number)\b|\?\?|\?\./m, 'only syntax an old Node parses');
-    assert.match(source, /major < 22 \|\| \(major === 22 && minor < 18\)/);
-    const imported = [...source.matchAll(/import\('([^']+)'\)/g)].map((m) => m[1]!);
-    assert.deepEqual(imported, ['./compile-cache.mjs', '../src/g2g-hook.mts']);
-    for (const file of imported) assert.ok(fs.existsSync(path.resolve(path.dirname(launcher), file)), file);
-    const cwd = fs.realpathSync(project('launcher', { 'src/a.ts': 'a\n' }));
-    lesson(cwd, { slug: 'one', title: 'Through the launcher', sources: ['src/a.ts'] });
-    const r = run(launcher, [], cwd, { input: JSON.stringify({ hook_event_name: 'PostToolUse', tool_name: 'Read', session_id: 's', cwd, tool_input: { file_path: path.join(cwd, 'src/a.ts') } }), env: { CLAUDE_PROJECT_DIR: cwd } });
-    assert.equal(r.code, 0, r.all);
-    assert.match(JSON.parse(r.out).hookSpecificOutput.additionalContext, /Through the launcher/);
-    const bad = run(launcher, [], cwd, { input: '{ not json', env: { CLAUDE_PROJECT_DIR: cwd } });
-    assert.deepEqual([bad.code, bad.all], [0, '']);
-  });
-
-  it('keeps the stripped hook in a compile cache that is private, or not at all', { skip: process.platform === 'win32' }, () => {
-    const launcher = path.join(ROOT, 'hooks', 'edukai-hook.mjs');
-    const cwd = fs.realpathSync(project('compile-cache', { 'src/a.ts': 'a\n' }));
-    lesson(cwd, { slug: 'one', title: 'Cached start', sources: ['src/a.ts'] });
-    const input = JSON.stringify({ hook_event_name: 'PostToolUse', tool_name: 'Read', cwd, tool_input: { file_path: path.join(cwd, 'src/a.ts') } });
-    const ours = `edukai-${process.getuid!()}`;
-    const at = (tmp: string) => run(launcher, [], cwd, { input, env: { CLAUDE_PROJECT_DIR: cwd, TMPDIR: tmp, EDUKAI_DEBUG: '1' } });
-
-    const tmp = fs.mkdtempSync(path.join(outside, 'tmp-'));
-    for (let i = 0; i < 2; i++) {
-      const r = at(tmp);
-      assert.equal(r.err, '', 'the second run reads the cache the first one wrote');
-      assert.match(JSON.parse(r.out).hookSpecificOutput.additionalContext, /Cached start/);
-    }
-    assert.equal(fs.statSync(path.join(tmp, ours)).mode & 0o777, 0o700);
-    const cached = fs.readdirSync(path.join(tmp, ours, 'compile'), { recursive: true });
-    assert.ok(cached.length > 1, 'Node wrote its compile cache there');
-
-    // A folder of that name that others can write to could hold planted code: it is not used.
-    const shared = fs.mkdtempSync(path.join(outside, 'tmp-'));
-    fs.mkdirSync(path.join(shared, ours), { mode: 0o777 });
-    fs.chmodSync(path.join(shared, ours), 0o777);
-    const r = at(shared);
-    assert.match(JSON.parse(r.out).hookSpecificOutput.additionalContext, /Cached start/, 'the hook still answers');
-    assert.equal(fs.existsSync(path.join(shared, ours, 'compile')), false);
-  });
-});
-
 describe('the pi adapter: extensions/edukai.ts', () => {
   const pkg = JSON.parse(read(path.join(ROOT, 'package.json')));
 
@@ -1114,9 +1044,10 @@ describe('the pi adapter: extensions/edukai.ts', () => {
       on: (event: string, handler: (event: unknown, ctx: unknown) => Promise<unknown>) => void handlers.set(event, handler),
       exec: async (command: string, args: string[], options?: { timeout?: number; cwd?: string }) => {
         calls.push(args);
-        assert.equal(command, 'node');
+        // User scope: `good2go` by name, from PATH. Here it is the repository's own command.
+        assert.equal(command, 'good2go');
         assert.equal(options?.timeout, 5000);
-        const r = spawnSync(process.execPath, args, { cwd: options?.cwd ?? cwd, encoding: 'utf8' });
+        const r = spawnSync(process.execPath, [GOOD2GO, ...args], { cwd: options?.cwd ?? cwd, encoding: 'utf8' });
         return { stdout: r.stdout, stderr: r.stderr, code: r.status ?? 1, killed: false };
       },
       sendMessage: (message: Sent['message'], options: Record<string, unknown>) => void sent.push({ message, options }),
@@ -1128,22 +1059,21 @@ describe('the pi adapter: extensions/edukai.ts', () => {
     return { fire, sent, calls, handlers };
   }
 
-  it('is declared in package.json and resolves the hook file beside the skill', () => {
-    assert.deepEqual(pkg.pi.extensions, ['./extensions']);
-    assert.deepEqual(pkg.pi.skills, ['./skills']);
+  it('is a template for `good2go hooks`: no pi key in package.json, good2go from PATH, no dependency on pi', () => {
+    assert.equal(pkg.pi, undefined, 'the pi package route is retired');
+    assert.ok(!pkg.keywords.includes('pi-package'));
     assert.ok(fs.existsSync(path.join(ROOT, 'extensions', 'edukai.ts')));
     const source = read(path.join(ROOT, 'extensions', 'edukai.ts'));
-    const rel = source.match(/new URL\('([^']+g2g-hook\.mts)', import\.meta\.url\)/)?.[1];
-    assert.ok(rel, 'the extension resolves the hook file relative to itself');
-    assert.equal(path.resolve(ROOT, 'extensions', rel!), HOOK);
+    assert.match(source, /^const BIN: string \| null = null;/m);
+    assert.doesNotMatch(source, /g2g-hook|compile-cache/);
     assert.doesNotMatch(source, /from ['"]@|from ['"]pi/, 'no dependency on pi: it declares the types it uses');
   });
 
-  it('starts the hook file behind the compile cache', async () => {
+  it('asks `good2go hook brief` with the bundle and the session', async () => {
     const cwd = project('pi-compile-cache', { 'src/a.ts': 'a\n' });
     const pi = await load(cwd);
     await pi.fire('session_start');
-    assert.deepEqual(pi.calls[0]!.slice(0, 4), ['--import', pathToFileURL(path.join(ROOT, 'hooks', 'compile-cache.mjs')).href, HOOK, 'brief']);
+    assert.deepEqual(pi.calls[0]!.slice(0, 2), ['hook', 'brief']);
     assert.match(pi.sent[0]!.message.content, /^edukai: /);
   });
 
@@ -1316,9 +1246,9 @@ describe('the edukai skill', () => {
 
   it('names commands and flags the tools really have', () => {
     for (const command of ['new', 'verify', 'supersede', 'recheck']) assert.match(text, new RegExp(`good2go edukai ${command}\\b`));
-    const help = run(EDUKAI, ['--help'], ROOT).out + run(SEARCH, ['--help'], ROOT).out;
+    const help = run(EDUKAI, ['--help'], ROOT).out + run(SEARCH, ['--help'], ROOT).out + run(path.join(ROOT, 'src', 'g2g-install-hooks.mts'), ['--help'], ROOT).out;
     for (const flag of new Set(text.match(/--[a-z][a-z-]+/g))) {
-      if (['--edukai', '--tools-only', '--help'].includes(flag)) continue; // bootstrap's own
+      if (['--edukai', '--help'].includes(flag)) continue; // bootstrap's own
       assert.ok(help.includes(flag), `the skill mentions ${flag}, which no tool documents`);
     }
   });
@@ -1437,7 +1367,7 @@ describe('bootstrap --edukai', () => {
     const pkg = JSON.parse(read(path.join(dir, 'package.json')));
     delete pkg.scripts['edukai:index'];
     fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify(pkg));
-    assert.equal(run(BOOTSTRAP, [dir, '--tools-only'], ROOT).code, 0);
+    assert.equal(run(BOOTSTRAP, [dir], ROOT).code, 0);
     assert.equal(scripts(dir)['edukai:index'], EDUKAI_SCRIPTS['edukai:index']);
 
     run(BOOTSTRAP, [dir, '--edukai', '--force'], ROOT);
@@ -1451,17 +1381,16 @@ describe('bootstrap --edukai', () => {
     assert.match(read(path.join(dir, 'AGENTS.md')), /^# AGENTS\.md\n\n<!-- edukai -->\n/);
   });
 
-  it('adds the memory bundle to a project that already has okf/, with --tools-only --edukai', () => {
+  it('adds the memory bundle to a project that already has okf/, with --edukai on a re-run', () => {
     const dir = target('later');
     run(BOOTSTRAP, [dir], ROOT);
     const log = path.join(dir, 'okf', 'log.md');
     fs.writeFileSync(log, '# Update log\n\n- mine\n');
-    const r = run(BOOTSTRAP, [dir, '--tools-only', '--edukai'], ROOT);
+    const r = run(BOOTSTRAP, [dir, '--edukai'], ROOT);
     assert.equal(r.code, 0, r.all);
     assert.ok(fs.existsSync(path.join(dir, 'edukai', 'index.md')));
     assert.equal(read(log), '# Update log\n\n- mine\n', 'okf/ is left alone');
     assert.equal(scripts(dir)['edukai:recheck'], EDUKAI_SCRIPTS['edukai:recheck']);
-    assert.equal(run(BOOTSTRAP, [target('nothing'), '--tools-only', '--edukai'], ROOT).code, 2, '--tools-only still needs okf/');
   });
 
   it('ships a workflow template that never writes to the repository', () => {
@@ -1579,15 +1508,13 @@ describe('the demo: Parcel tracker\'s memory', () => {
 });
 
 describe('release metadata for 0.7.0', () => {
-  it('keeps the version the same in all the places it lives', () => {
+  it('keeps the version in package.json and the lockfile only; the tools read it', () => {
     const pkg = JSON.parse(read(path.join(ROOT, 'package.json')));
-    const market = JSON.parse(read(path.join(ROOT, '.claude-plugin', 'marketplace.json')));
     assert.equal(pkg.version, '0.7.0');
-    assert.equal(JSON.parse(read(path.join(ROOT, '.claude-plugin', 'plugin.json'))).version, pkg.version);
-    assert.equal(market.plugins[0].version, pkg.version);
-    assert.match(read(BOOTSTRAP), new RegExp(`const VERSION = '${pkg.version}'`));
-    assert.match(read(GOOD2GO), new RegExp(`const VERSION = '${pkg.version}'`));
     assert.equal(JSON.parse(read(path.join(ROOT, 'package-lock.json'))).version, pkg.version);
+    assert.ok(!fs.existsSync(path.join(ROOT, '.claude-plugin')), 'the plugin route is retired');
+    assert.doesNotMatch(read(GOOD2GO), /const VERSION = '/);
+    assert.doesNotMatch(read(BOOTSTRAP), /const VERSION = '/);
   });
 
   it('ships both edukai tools in the package, and typechecks the pi extension', () => {
