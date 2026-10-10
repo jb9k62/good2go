@@ -198,7 +198,7 @@ describe('g2g-edukai: new, verify, supersede', () => {
     assert.match(text, /^generated: \{ by: test-harness\/model-1, at: 2026-10-15T00:00:00Z \}$/m);
     assert.match(text, /^ {2}- resource: src\/a\.ts$/m);
     assert.match(read(path.join(cwd, 'edukai/tooling-x/overview.md')), /^type: Overview$/m);
-    assert.equal(edukai(cwd, ['new', '--domain', 'tooling-x', '--title', 'Tests: run "btest", not make', '--by', ME, '--now', NOW]).code, 1, 'never overwrites a lesson');
+    assert.equal(edukai(cwd, ['new', '--domain', 'tooling-x', '--title', 'Tests: run "btest", not make', '--by', ME, '--now', NOW]).code, 2, 'never overwrites a lesson');
     assert.equal(run(VIEW, ['edukai', '--validate', '--strict'], cwd).code, 0);
   });
 
@@ -266,7 +266,7 @@ describe('g2g-edukai: new, verify, supersede', () => {
     const cwd = project('escape', { 'src/a.ts': 'a\n' });
     fs.writeFileSync(path.join(scratch, 'secret.txt'), 'secret\n');
     fs.symlinkSync(path.join(scratch, 'secret.txt'), path.join(cwd, 'src', 'link.ts'));
-    assert.equal(edukai(cwd, ['new', '--domain', 'codebase-x', '--title', 'Out', '--by', ME, '--source', '../secret.txt']).code, 1);
+    assert.equal(edukai(cwd, ['new', '--domain', 'codebase-x', '--title', 'Out', '--by', ME, '--source', '../secret.txt']).code, 2);
     // An absolute path is not a project file. As a source it reads as a bundle-root path, which the
     // validator reports as missing; it is never opened.
     const abs = edukai(cwd, ['new', '--domain', 'codebase-x', '--slug', 'abs', '--title', 'abs', '--by', ME, '--source', path.join(scratch, 'secret.txt'), '--now', NOW]);
@@ -279,7 +279,7 @@ describe('g2g-edukai: new, verify, supersede', () => {
       const file = path.join(cwd, r.out.trim());
       fs.writeFileSync(file, read(file).replace('resource: src/a.ts', `resource: ${source}`));
       const v = edukai(cwd, ['verify', r.out.trim(), '--by', ME, '--confidence', 'observed']);
-      assert.equal(v.code, 1, `${slug}: ${v.all}`);
+      assert.equal(v.code, 2, `${slug}: ${v.all}`);
       assert.match(v.err, /outside the project root/, slug);
       fs.writeFileSync(file, read(file).replace(`resource: ${source}`, 'resource: src/a.ts').replace('\n---\n\n', `\ncheck:\n  - { file: "${source}", contains: secret }\n---\n\n`));
       const c = edukai(cwd, ['verify', r.out.trim(), '--by', ME, '--confidence', 'observed']);
@@ -344,9 +344,9 @@ describe('g2g-edukai: new, verify, supersede', () => {
     assert.match(read(path.join(cwd, fresh)), /^supersedes: \/codebase-x\/lessons\/2026-10-02-old\.md$/m);
     assert.equal(run(VIEW, ['edukai', '--validate', '--strict'], cwd).code, 0);
     assert.match(edukai(cwd, ['supersede', old, fresh]).out, /nothing changed/);
-    assert.equal(edukai(cwd, ['supersede', fresh, old]).code, 1, 'a cycle');
-    assert.equal(edukai(cwd, ['supersede', old, old]).code, 1);
-    assert.equal(edukai(cwd, ['verify', old, '--by', ME]).code, 1, 'a superseded lesson is not re-verified');
+    assert.equal(edukai(cwd, ['supersede', fresh, old]).code, 2, 'a cycle');
+    assert.equal(edukai(cwd, ['supersede', old, old]).code, 2);
+    assert.equal(edukai(cwd, ['verify', old, '--by', ME]).code, 2, 'a superseded lesson is not re-verified');
     assert.equal(edukai(cwd, ['supersede', old, 'nope.md']).code, 2);
   });
 
@@ -1398,7 +1398,7 @@ describe('bootstrap --edukai', () => {
     assert.match(yml, /pull_request:/);
     assert.match(yml, /schedule:/);
     assert.match(yml, /contents: read/);
-    assert.match(yml, /recheck --bundle okf \$STRICT/);
+    assert.match(yml, /okf:recheck -- \$STRICT/);
     assert.doesNotMatch(yml, /--write|git (commit|push)|contents: write/);
   });
 });

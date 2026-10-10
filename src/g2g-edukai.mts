@@ -444,7 +444,7 @@ function pinAndSign(o: Options, d: Doc, by: string, days: number, confidence: st
   const digests = new Map<number, string>();
   for (const s of sources) {
     const f = reader.read(s.path);
-    if (f.status === 'outside') throw new BrokenError(`${rootLabel(o, d)}: source ${s.path} is outside the project root`);
+    if (f.status === 'outside') throw new UsageError(`${rootLabel(o, d)}: source ${s.path} is outside the project root`);
     if (f.status !== 'ok') throw new BrokenError(`${rootLabel(o, d)}: source ${s.path} is ${f.status === 'missing' ? 'missing' : 'too large to pin'}`);
     digests.set(s.index, f.digest);
   }
@@ -509,7 +509,7 @@ function cmdNew(o: Options): number {
   const at = iso(o.now);
   const rel = `${domain}/lessons/${at.slice(0, 10)}-${slug}.md`;
   const full = path.join(o.bundleRoot, rel);
-  if (fs.existsSync(full)) throw new BrokenError(`${toPosix(path.relative(process.cwd(), full))} already exists; pick another --slug, or supersede it`);
+  if (fs.existsSync(full)) throw new UsageError(`${toPosix(path.relative(process.cwd(), full))} already exists; pick another --slug, or supersede it`);
 
   // A project file given as an absolute path is named from the project root, like any other.
   const sources = (o.flags.get('source') ?? []).map((s) => s.trim()).filter(Boolean).map((s) => {
@@ -520,7 +520,7 @@ function cmdNew(o: Options): number {
   for (const s of sources) {
     if (/[\r\n]/.test(s)) throw new UsageError('--source must be one line');
     if (isUrl(s) || s.startsWith('/')) continue;
-    if (makeReader(o.root).read(normalizeRel(s)).status === 'outside') throw new BrokenError(`source ${s} is outside the project root`);
+    if (makeReader(o.root).read(normalizeRel(s)).status === 'outside') throw new UsageError(`source ${s} is outside the project root`);
   }
   const tags = (o.flags.get('tags') ?? []).flatMap((t) => t.split(',')).map((t) => t.trim()).filter(Boolean);
   const badTag = tags.find((t) => !/^[\p{L}\p{N}][\p{L}\p{N}._-]*$/u.test(t));
@@ -552,7 +552,7 @@ function cmdNew(o: Options): number {
   } catch (e) {
     // Another `new` took the name between the check above and this write.
     if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
-    throw new BrokenError(`${toPosix(path.relative(process.cwd(), full))} already exists; pick another --slug, or supersede it`);
+    throw new UsageError(`${toPosix(path.relative(process.cwd(), full))} already exists; pick another --slug, or supersede it`);
   }
   const written = [rel];
   const overview = path.join(o.bundleRoot, domain, 'overview.md');
@@ -612,7 +612,7 @@ function cmdVerify(o: Options): number {
   const { docs } = syncCache(o);
   const d = resolveConcept(o, docs, o.args[0]!);
   if (String(d.fm.status ?? '').toLowerCase() === 'deprecated') {
-    throw new BrokenError(`${rootLabel(o, d)} is superseded; verify the lesson that replaced it`);
+    throw new UsageError(`${rootLabel(o, d)} is superseded; verify the lesson that replaced it`);
   }
   // A check by someone is what `inferred` lacks, so a verified lesson cannot stay inferred.
   let confidence = confidenceOf(o);
@@ -633,20 +633,20 @@ function cmdSupersede(o: Options): number {
   const { docs } = syncCache(o);
   const old = resolveConcept(o, docs, o.args[0]!);
   const fresh = resolveConcept(o, docs, o.args[1]!);
-  if (old === fresh) throw new BrokenError(`${rootLabel(o, old)} cannot supersede itself`);
+  if (old === fresh) throw new UsageError(`${rootLabel(o, old)} cannot supersede itself`);
   const oldPath = `/${old.rel}`;
   const newPath = `/${fresh.rel}`;
   if (old.fm.superseded_by != null && old.fm.superseded_by !== newPath) {
-    throw new BrokenError(`${rootLabel(o, old)} is already superseded by ${String(old.fm.superseded_by)}`);
+    throw new UsageError(`${rootLabel(o, old)} is already superseded by ${String(old.fm.superseded_by)}`);
   }
   if (fresh.fm.supersedes != null && fresh.fm.supersedes !== oldPath) {
-    throw new BrokenError(`${rootLabel(o, fresh)} already supersedes ${String(fresh.fm.supersedes)}; one lesson replaces one lesson`);
+    throw new UsageError(`${rootLabel(o, fresh)} already supersedes ${String(fresh.fm.supersedes)}; one lesson replaces one lesson`);
   }
   // Following the new lesson's own replacements must never lead back to the old one.
   const byRel = new Map(docs.map((d) => [`/${d.rel}`, d]));
   const seen = new Set<string>();
   for (let at: Doc | undefined = fresh; at; at = byRel.get(String(at.fm.superseded_by ?? ''))) {
-    if (at === old || seen.has(at.rel)) throw new BrokenError(`${rootLabel(o, fresh)} is itself replaced by ${rootLabel(o, old)}: that would be a cycle`);
+    if (at === old || seen.has(at.rel)) throw new UsageError(`${rootLabel(o, fresh)} is itself replaced by ${rootLabel(o, old)}: that would be a cycle`);
     seen.add(at.rel);
   }
   const nextOld = rewrite(o, old, () => editFrontmatter(

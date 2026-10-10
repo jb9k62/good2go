@@ -234,7 +234,7 @@ describe('templates', () => {
       if (file.endsWith('package.json')) continue;
       assert.doesNotMatch(read(file), /scripts\/(g2g|okf)-|\b(g2g|okf)-[a-z]+\.m[tj]s\b/, file);
     }
-    assert.match(read(path.join(ROOT, 'src', 'templates', 'edukai-recheck.yml')), /npx good2go recheck/);
+    assert.match(read(path.join(ROOT, 'src', 'templates', 'edukai-recheck.yml')), /npm run --silent okf:recheck/);
   });
 
   it('stores the widgets .gitignore as gitignore (npm drops dotfiles of that name) and restores it', () => {

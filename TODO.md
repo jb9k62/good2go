@@ -21,3 +21,11 @@ This can be baked into the toolchain:
 6. **Bundle validation in CI**: Add a test in `test/init.test.mts` that checks the demo bundle's cast is consistent across all concepts—no typos in names, no referenced-but-undefined personas.
 
 **Why**: Keeps persona definitions centralized and stable. Names stay fixed; roles can evolve. Tooling catches copy-paste errors ("Samm", "SAM") early. Tours stay readable; validation is data-driven.
+
+## Read the design folder from `.good2go.json`
+
+`search`, `recheck`, `view` and `mermaid` each default their bundle to `okf`, and the generated
+npm scripts work around that by passing the folder every time. Have the tools walk up from the
+working directory to `.good2go.json` and use its `designDir` as the default bundle, so
+`good2go validate` and `good2go recheck` work in any layout and the CI template names no folder.
+The same file is the place for ADR-0005's role-to-folder map (`ops`, and so on).

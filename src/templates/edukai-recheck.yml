@@ -29,10 +29,10 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Design bundle (okf/)
-        run: npx good2go recheck --bundle okf $STRICT | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Design bundle
+        run: npm run --silent okf:recheck -- $STRICT | tee -a "$GITHUB_STEP_SUMMARY"
         shell: bash -eo pipefail {0}
       - name: Memory bundle (edukai/)
         if: ${{ !cancelled() && hashFiles('edukai/index.md') != '' }}
-        run: npx good2go recheck $STRICT | tee -a "$GITHUB_STEP_SUMMARY"
+        run: npm run --silent edukai:recheck -- $STRICT | tee -a "$GITHUB_STEP_SUMMARY"
         shell: bash -eo pipefail {0}
