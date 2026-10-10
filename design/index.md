@@ -2,9 +2,9 @@
 okf_version: "0.2"
 ---
 
-# okf-bootstrap
+# good2go
 
-These are the design notes for **okf-bootstrap** itself: two agent skills that scaffold an OKF
+These are the design notes for **good2go** itself: two agent skills that scaffold an OKF
 bundle into another project, and the tools, gates and harness adapters that keep a bundle
 honest. The notes are kept in the same format the skill asks other projects to use
 ([ADR-0001](/adr/0001-keep-this-repos-design-in-okf.md)).
@@ -14,13 +14,13 @@ explains an idea you would otherwise have to piece together from the code.
 
 ## The skill
 
-* [Overview](/okf-bootstrap/overview.md) - what ships, who it is for, and what it leaves out
-* [Architecture](/okf-bootstrap/architecture.md) - the two skills, the tools, the adapters and the demo
-* [The tools](/okf-bootstrap/tools.md) - the scripts, what each does, and the rule each must keep
-* [Quality gates](/okf-bootstrap/gates.md) - the exit-code contract, and what each gate can and cannot prove
-* [The viewer](/okf-bootstrap/viewer.md) - one self-contained `viz.html`, and how the ranking reaches the page
-* [Agent memory](/okf-bootstrap/agent-memory.md) - the `edukai/` bundle, its checks, and the hooks that hand it back
-* [Testing and CI](/okf-bootstrap/testing.md) - how the tools, the demo and this bundle are checked
+* [Overview](/good2go/overview.md) - what ships, who it is for, and what it leaves out
+* [Architecture](/good2go/architecture.md) - the two skills, the tools, the adapters and the demo
+* [The tools](/good2go/tools.md) - the scripts, what each does, and the rule each must keep
+* [Quality gates](/good2go/gates.md) - the exit-code contract, and what each gate can and cannot prove
+* [The viewer](/good2go/viewer.md) - one self-contained `viz.html`, and how the ranking reaches the page
+* [Agent memory](/good2go/agent-memory.md) - the `edukai/` bundle, its checks, and the hooks that hand it back
+* [Testing and CI](/good2go/testing.md) - how the tools, the demo and this bundle are checked
 
 ## Guided tours
 

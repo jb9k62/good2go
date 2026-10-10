@@ -33,14 +33,14 @@ describe('the built package', () => {
   });
 
   it('compiles every tool to JavaScript beside the templates and the skills', () => {
-    for (const tool of ['good2go', 'bootstrap', 'okf-view', 'okf-search', 'okf-rank', 'okf-core', 'okf-edukai', 'okf-edukai-hook', 'okf-new', 'okf-update', 'okf-mermaid']) {
+    for (const tool of ['good2go', 'g2g-init', 'g2g-view', 'g2g-search', 'g2g-rank', 'g2g-core', 'g2g-edukai', 'g2g-hook', 'g2g-new', 'g2g-mermaid']) {
       assert.ok(fs.existsSync(path.join(DIST, `${tool}.mjs`)), `${tool}.mjs`);
       assert.ok(!fs.existsSync(path.join(DIST, `${tool}.mts`)), `no TypeScript source for ${tool}`);
     }
     assert.ok(fs.existsSync(path.join(DIST, 'templates', 'okf', 'index.md')));
     assert.ok(!fs.existsSync(path.join(DIST, 'templates', 'okf-widgets', 'node_modules')));
-    assert.ok(fs.existsSync(path.join(DIST, 'skills', 'okf-bootstrap', 'SKILL.md')));
-    assert.ok(!fs.existsSync(path.join(DIST, 'skills', 'okf-bootstrap', 'assets')), 'skills ship without the tools');
+    assert.ok(fs.existsSync(path.join(DIST, 'skills', 'good2go', 'SKILL.md')));
+    assert.ok(!fs.existsSync(path.join(DIST, 'src')), 'skills ship without the tools');
     assert.match(read(CLI), /^#!\/usr\/bin\/env node/, 'a shebang, so bin works');
     assert.ok(fs.statSync(CLI).mode & 0o100, 'executable');
   });
@@ -60,13 +60,13 @@ describe('the built package', () => {
     assert.ok(fs.existsSync(path.join(project, 'okf', 'index.md')));
     assert.ok(fs.existsSync(path.join(project, 'edukai', 'index.md')));
     assert.ok(!fs.existsSync(path.join(project, 'scripts')), 'no tools copied');
-    assert.equal(JSON.parse(read(path.join(project, '.okf-bootstrap.json'))).name, 'Consumer');
+    assert.equal(JSON.parse(read(path.join(project, '.good2go.json'))).name, 'Consumer');
     const pkg = JSON.parse(read(path.join(project, 'package.json')));
     assert.equal(pkg.scripts['okf:validate'], 'good2go validate okf');
     assert.ok(pkg.devDependencies['@jb9k62/good2go']);
   });
 
-  it('validate, search, edukai and update work from the compiled JavaScript', () => {
+  it('validate, search and edukai work from the compiled JavaScript', () => {
     const v = cli(['validate', 'okf', '--strict'], project);
     assert.equal(v.code, 0, v.out);
     assert.match(v.out, /issues\s+: 0/);
@@ -77,8 +77,6 @@ describe('the built package', () => {
     const rc = cli(['recheck', '--strict'], project);
     assert.equal(rc.code, 0, rc.out);
     assert.equal(cli(['hook', 'brief'], project).code, 0);
-    const u = cli(['update'], project);
-    assert.equal(u.code, 0, u.out);
   });
 
   it('exits 1 for a broken bundle and 2 for an unknown command, from the compiled code', () => {

@@ -1,4 +1,4 @@
-# okf-bootstrap
+# good2go
 
 [![ci](https://github.com/jb9k62/good2go/actions/workflows/ci.yml/badge.svg)](https://github.com/jb9k62/good2go/actions/workflows/ci.yml)
 [![licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
@@ -94,7 +94,7 @@ would cascade into. Switching off the foreign keys, or editing the SQL, shows th
 
 The three example widgets come with their models and tests, a small kit for building your own,
 and a render gate that clicks every widget to prove it responds. See
-[EXPLAINERS.md](skills/okf-bootstrap/references/EXPLAINERS.md) for how to write tours,
+[EXPLAINERS.md](skills/good2go/references/EXPLAINERS.md) for how to write tours,
 quizzes and widgets that teach.
 
 ## Agent memory
@@ -147,13 +147,13 @@ pi install git:github.com/jb9k62/good2go@v0.7.0
 
 ```text
 /plugin marketplace add jb9k62/good2go
-/plugin install okf-bootstrap@okf-bootstrap
+/plugin install good2go@good2go
 ```
 
 or by cloning straight into your skills directory, where it loads as a local plugin:
 
 ```bash
-git clone https://github.com/jb9k62/good2go ~/.claude/skills/okf-bootstrap
+git clone https://github.com/jb9k62/good2go ~/.claude/skills/good2go
 ```
 
 **Anywhere else**, copy the skills from the package, with no clone:
@@ -179,7 +179,7 @@ In the project you want documented, ask your agent:
 > Write a guided tour of this change with a quiz, and a widget that shows how the cache
 > expires.
 
-Or invoke it directly (`/skill:okf-bootstrap` in pi, `/okf-bootstrap` in Claude Code), or run
+Or invoke it directly (`/skill:good2go` in pi, `/good2go` in Claude Code), or run
 the scaffold yourself:
 
 ```bash
@@ -211,16 +211,11 @@ Re-running the scaffold is safe: it keeps everything you wrote.
 
 ```bash
 npm update @jb9k62/good2go          # the tools: the lockfile pins them, Dependabot and Renovate can propose it
-npm run okf:update                  # which scaffolded templates the new release changed
-npm run okf:update -- --write       # write the release's copies under .okf-update/ to diff by hand
 ```
 
-Nothing checks in the background. Your authored files are never overwritten.
-
-**Scaffolded before 0.7?** Your `scripts/okf-*` files are copies of the tools. Run
-`npx @jb9k62/good2go init --tools-only` once: it removes each copy that is unchanged from what the
-old release wrote, keeps and names any you edited, rewrites the npm scripts and adds the
-dependency. Commit first so `git diff` is the undo.
+Nothing checks in the background, and your authored files are never overwritten. There is no
+updater: the tools are the package, so upgrading them is `npm update`. If you have copies of the
+tools from before 0.7.0 (`scripts/okf-*`), delete them by hand.
 
 ## How it works
 
@@ -236,7 +231,7 @@ your-project/
 │   ├── index.md              # the syllabus; one generated block
 │   ├── log.md
 │   └── <domain>/             # overview.md, and lessons/YYYY-MM-DD-short-claim.md
-├── .okf-bootstrap.json       # the install manifest: version, name, design folder, template hashes
+├── .good2go.json       # the install manifest: version, name, design folder, template hashes
 ├── packages/okf-widgets/     # with --widgets: your React widgets (an npm workspace)
 ├── okf-concept-template.md   # authoring aids, outside the bundle
 └── okf-explainer-template.md
@@ -256,13 +251,13 @@ generated: { by: my-agent/1.0, at: 2026-10-01T09:00:00Z }
 Every gate exits **0** when everything checked is fine, **1** when something is broken (the
 file and line are named), and **2** when it could not run at all (no browser, CDN
 unreachable). A 2 is never a pass. The
-[playbook](skills/okf-bootstrap/references/PLAYBOOK.md) has the full conventions and the
-review checklist; [SKILL.md](skills/okf-bootstrap/SKILL.md) is what the agents read.
+[playbook](skills/good2go/references/PLAYBOOK.md) has the full conventions and the
+review checklist; [SKILL.md](skills/good2go/SKILL.md) is what the agents read.
 
 ## Try the demo
 
 ```bash
-git clone https://github.com/jb9k62/good2go && cd okf-bootstrap
+git clone https://github.com/jb9k62/good2go && cd good2go
 npm install
 npm run demo                # builds the widgets, writes examples/demo/okf/viz.html
 npm run demo:edukai         # the memory bundle: the session brief, then the re-check report
@@ -285,7 +280,7 @@ npm run screenshots         # regenerate docs/images from the demo bundle
 
 This repository documents itself with the tooling it ships: [`design/`](design/index.md) is its own
 design bundle and [`edukai/`](edukai/index.md) is its own agent memory. The tools run from
-`skills/okf-bootstrap/assets/` rather than generated copies under `scripts/`
+`src/` rather than generated copies under `scripts/`
 ([ADR-0003](design/adr/0003-run-the-tools-from-the-skill-assets.md)).
 
 ```bash
@@ -306,7 +301,7 @@ request; `main` itself is never pushed to. Run it by hand from the Actions tab a
 add a shot, add an entry to `SHOTS` in [`scripts/screenshots.mts`](scripts/screenshots.mts).
 
 **The OKF spec** is tracked two ways: `vendor/knowledge-catalog` is a shallow submodule
-pinned to an upstream commit, and `skills/okf-bootstrap/references/okf-spec/` holds a copy of
+pinned to an upstream commit, and `skills/good2go/references/okf-spec/` holds a copy of
 `SPEC.md` from it (installs do not fetch submodules, and the skill must always be able to read
 the spec). CI checks weekly whether upstream moved.
 
@@ -319,7 +314,7 @@ npm run spec -- update      # move the pin, re-vendor, print a migration checkli
 
 Versions are git tags; see [CHANGELOG.md](CHANGELOG.md). To release, bump `version` in
 `package.json` (and `package-lock.json`), `.claude-plugin/plugin.json`,
-`.claude-plugin/marketplace.json` and `VERSION` in `assets/bootstrap.mts` (the tests check they
+`.claude-plugin/marketplace.json` and `VERSION` in `src/g2g-init.mts` (the tests check they
 agree), and the tag in the pi install line above, add a changelog entry, then tag.
 
 ## Licence

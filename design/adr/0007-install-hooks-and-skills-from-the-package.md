@@ -8,7 +8,7 @@ sources:
   - resource: hooks/hooks.json
   - resource: hooks/edukai-hook.mjs
   - resource: extensions/edukai.ts
-  - resource: skills/okf-bootstrap/SKILL.md
+  - resource: skills/good2go/SKILL.md
   - resource: skills/edukai/SKILL.md
 ---
 

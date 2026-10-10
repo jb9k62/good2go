@@ -1,0 +1,4487 @@
+#!/usr/bin/env node
+/**
+ * OKF bundle validator and viewer (targets OKF_VERSION below).
+ *
+ * Walks a bundle, checks conformance (SPEC §11: every non-reserved .md needs
+ * frontmatter with a non-empty `type`), derives trust tier (§5.3) and
+ * staleness (§5.5), then writes one self-contained HTML page: a concept graph
+ * (Cytoscape) beside a reading pane (marked for markdown, Mermaid for
+ * diagrams, which get their own pan/zoom canvas and toolbar). The libraries
+ * load from a CDN. Based on the viewer in
+ * GoogleCloudPlatform/knowledge-catalog.
+ *
+ * TypeScript that Node runs directly (type stripping, Node 24+), so no build step.
+ * Callouts ([!note] blockquotes), ```quiz blocks and ```widget blocks (React
+ * micro-worlds from packages/okf-widgets) render in the reading pane too.
+ *
+ * Usage:
+ *   node scripts/g2g-view.mts [bundle] [options]
+ *     bundle        OKF bundle directory (default: ./okf)
+ *     --out <f>     write the viewer here (default: <bundle>/viz.html)
+ *     --validate    validate only; do not write the viewer
+ *     --check-render  write the viewer, then open it in headless Chromium
+ *                     (via playwright) and verify every Mermaid diagram
+ *                     actually renders client-side and carries working
+ *                     pan/zoom controls. Exit 1 if a diagram fails, 2 if the
+ *                     check could not run at all (no playwright, no Chromium,
+ *                     CDN unreachable).
+ *     --fix         first rewrite the bundle's .md files so every ER diagram has its
+ *                   relationship key (what ||--o{ mean) inserted or refreshed
+ *     --strict      exit 1 if any conformance issues are found
+ *     --widgets <f> the built widget bundle to inline (default:
+ *                   packages/okf-widgets/dist/okf-widgets.js next to scripts/)
+ */
+import fs from 'node:fs';
+import path from 'node:path';
+import { stripTypeScriptTypes } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import {
+  errorMessage,
+  extractLinks,
+  isStale,
+  listMarkdown,
+  normalizeVerified,
+  parseDocument,
+  RESERVED,
+  trustTier,
+} from './g2g-core.mts';
+import type { Evidence, Frontmatter } from './g2g-core.mts';
+import { checkProblem, CONFIDENCES } from './g2g-hook.mts';
+
+interface Issue {
+  file: string;
+  kind: string;
+  message: string;
+}
+
+interface Concept {
+  id: string;
+  type: string;
+  title: string;
+  description: string;
+  resource: string;
+  tags: string[];
+  status: string;
+  confidence: string;
+  generated: object;
+  verified: Evidence[];
+  stale_after: string;
+  render_expect: Record<string, number> | null;
+  sources: object[];
+  trust_tier: string;
+  stale: boolean;
+  body: string;
+  links_to: string[];
+}
+
+interface Graph {
+  nodes: Array<{ data: Record<string, unknown> }>;
+  edges: Array<{ data: { id: string; source: string; target: string } }>;
+  bodies: Record<string, string>;
+  expects: Record<string, Record<string, number>>;
+  types: string[];
+  palette: Record<string, string>;
+  defaultColor: string;
+}
+
+interface Options {
+  bundle: string;
+  out: string | null;
+  validateOnly: boolean;
+  strict: boolean;
+  checkRender: boolean;
+  fix: boolean;
+  widgets: string | null;
+}
+
+// The hooks the generated page exposes, which the render gate drives from inside Chromium.
+declare global {
+  interface Window {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- page-side API, untyped
+    __OKF_VIEW__: any;
+    BUNDLE: { expects?: Record<string, Record<string, number>> };
+  }
+}
+
+// The OKF spec version this tool implements. A bundle's index.md may declare
+// `okf_version`; a different value is reported (not an error), because the spec
+// asks consumers for best-effort reading of other versions (SPEC §12).
+const OKF_VERSION = '0.2';
+
+// The interactive React widgets (packages/okf-widgets), inlined so the viewer stays one file.
+// Build them first with `npm run okf:widgets:build`; without the bundle the viewer still
+// works and each widget block shows how to build it.
+const DEFAULT_WIDGETS_BUNDLE = fileURLToPath(
+  new URL('../packages/okf-widgets/dist/okf-widgets.js', import.meta.url),
+);
+// Run from the npm package there is no ../packages next to the tool; the project's own is found from the working directory.
+const PROJECT_WIDGETS_BUNDLE = path.resolve('packages/okf-widgets/dist/okf-widgets.js');
+
+// The viewer's search box runs the same ranking as `g2g-search` (g2g-rank.mts). That file is pure
+// TypeScript with no imports, so Node strips its types and it goes into the page as plain script.
+function rankScript(): string {
+  // From source this is g2g-rank.mts; from the published package it is the compiled g2g-rank.mjs.
+  const rankUrl = new URL('./g2g-rank.mts', import.meta.url);
+  const source = fs.readFileSync(fs.existsSync(rankUrl) ? rankUrl : new URL('./g2g-rank.mjs', import.meta.url), 'utf8');
+  const js = stripTypeScriptTypes(source).replace(/^export /gm, '');
+  const api = 'buildEntry, buildIndex, search, snippet, freshness, freshnessLabel, matchesFilters, NO_FILTERS, stripCode, HEADING_RE';
+  // A "</script" inside the code would end the inline block early.
+  return `window.OKF_RANK = (() => {\n${js}\nreturn { ${api} };\n})();`.replace(/<\/script/gi, '<\\/script');
+}
+
+function readWidgetsBundle(file: string): string | null {
+  try {
+    // A "</script" inside the bundle would end the inline block early.
+    return fs
+      .readFileSync(file, 'utf8')
+      .replace(/<\/script/gi, '<\\/script');
+  } catch {
+    return null;
+  }
+}
+
+
+// SPEC §5: every timestamp is an ISO 8601 datetime with an explicit UTC offset.
+const TIMESTAMP_RE =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/;
+
+/** Timestamp-valued keys that are not a datetime with an offset, as "key: value". */
+function badTimestamps(fm: Frontmatter): string[] {
+  const found: Array<[string, unknown]> = [['stale_after', fm.stale_after]];
+  if (fm.generated && typeof fm.generated === 'object') {
+    found.push(['generated.at', (fm.generated as Evidence).at]);
+  }
+  normalizeVerified(fm).forEach((v, i) => found.push([`verified[${i}].at`, v.at]));
+  return found
+    .filter(([, value]) => value != null && !TIMESTAMP_RE.test(String(value)))
+    .map(([key, value]) => `${key}: ${String(value)}`);
+}
+
+
+
+// --- walk + validate the bundle ---------------------------------------------
+
+
+function walkBundle(
+  bundleRoot: string,
+  today: Date,
+): { concepts: Concept[]; issues: Issue[]; reserved: string[] } {
+  const concepts: Concept[] = [];
+  const issues: Issue[] = [];
+  const reserved: string[] = [];
+  const reservedLinks: Array<{ file: string; links_to: string[] }> = [];
+  const pointers: Pointers[] = [];
+  const files = listMarkdown(bundleRoot);
+  for (const rel of files) {
+    const full = path.join(bundleRoot, rel);
+    let text;
+    try {
+      text = fs.readFileSync(full, 'utf8');
+    } catch (e) {
+      issues.push({ file: rel, kind: 'read', message: errorMessage(e) });
+      continue;
+    }
+    issues.push(...erdLegendIssues(rel, text));
+    if (RESERVED.has(rel)) {
+      reserved.push(rel);
+      // No `type` needed, but index.md is where most bundle links live, so its
+      // links are still checked.
+      try {
+        const { body } = parseDocument(text);
+        reservedLinks.push({
+          file: rel,
+          links_to: extractLinks(body, path.dirname(full), bundleRoot),
+        });
+      } catch (e) {
+        issues.push({ file: rel, kind: 'parse', message: errorMessage(e) });
+      }
+      continue;
+    }
+
+    let doc;
+    try {
+      doc = parseDocument(text);
+    } catch (e) {
+      issues.push({ file: rel, kind: 'parse', message: errorMessage(e) });
+      continue;
+    }
+    const fm = doc.frontmatter;
+    if (fm.type == null || String(fm.type).trim() === '') {
+      issues.push({
+        file: rel,
+        kind: 'missing-type',
+        message: 'No non-empty `type` in frontmatter (OKF v0.2 §11)',
+      });
+      continue;
+    }
+
+    for (const bad of badTimestamps(fm)) {
+      issues.push({
+        file: rel,
+        kind: 'timestamp',
+        message: `${bad} is not an ISO 8601 datetime with an offset (SPEC §5), for example 2026-06-30T14:00:00Z`,
+      });
+    }
+
+    issues.push(...lessonIssues(rel, fm, doc.body));
+    pointers.push({
+      file: rel,
+      status: String(fm.status ?? 'stable').toLowerCase(),
+      supersedes: fm.supersedes,
+      superseded_by: fm.superseded_by,
+    });
+
+    const tags = Array.isArray(fm.tags)
+      ? fm.tags.map(String)
+      : fm.tags
+        ? [String(fm.tags)]
+        : [];
+    const sources = Array.isArray(fm.sources)
+      ? fm.sources.filter((s: unknown) => s && typeof s === 'object')
+      : fm.sources && typeof fm.sources === 'object'
+        ? [fm.sources]
+        : [];
+    concepts.push({
+      id: rel.replace(/\.md$/, ''),
+      type: String(fm.type),
+      title: String(fm.title ?? rel.replace(/\.md$/, '')),
+      description: String(fm.description ?? ''),
+      resource: String(fm.resource ?? ''),
+      tags,
+      status: String(fm.status ?? 'stable'),
+      confidence: String(fm.type) === 'Lesson' ? String(fm.confidence ?? '') : '',
+      generated:
+        fm.generated && typeof fm.generated === 'object' ? fm.generated : {},
+      verified: normalizeVerified(fm),
+      stale_after: String(fm.stale_after ?? ''),
+      // Test fixtures only: the counts the render gate must find, declared by hand so the
+      // check does not depend on the viewer's own parsers.
+      render_expect:
+        fm.render_expect && typeof fm.render_expect === 'object'
+          ? (fm.render_expect as Record<string, number>)
+          : null,
+      sources,
+      trust_tier: trustTier(fm),
+      stale: isStale(fm, today),
+      body: doc.body,
+      links_to: extractLinks(doc.body, path.dirname(full), bundleRoot),
+    });
+  }
+  issues.push(...danglingLinkIssues(files, concepts, reservedLinks));
+  issues.push(...supersedeIssues(pointers));
+  // A lesson source that starts with "/" is read from the bundle root, so it must be there.
+  const present = new Set(files);
+  for (const c of concepts) {
+    if (c.type !== 'Lesson') continue;
+    c.sources.forEach((s, i) => {
+      const resource = (s as Record<string, unknown>).resource;
+      if (typeof resource !== 'string' || !resource.startsWith('/') || present.has(resource.replace(/^\/+/, ''))) return;
+      issues.push({
+        file: c.id + '.md',
+        kind: 'lesson',
+        message: `sources[${i}].resource: ${resource} is not a file in the bundle (a path that starts with / is read from the bundle root; name a project file from the project root)`,
+      });
+    });
+  }
+  return { concepts, issues, reserved };
+}
+
+// --- lessons, overviews and supersede pointers ------------------------------------
+// The memory bundle (edukai/) is an OKF bundle of lessons: one claim each, with the files it
+// rests on. These rules apply to any bundle, so a design bundle can use the supersede
+// pointers on its decision records too.
+
+const LESSON_BODY_LINES = 30;
+const OVERVIEW_BODY_LINES = 60;
+const DIGEST_RE = /^sha256:[0-9a-f]{16}$/;
+
+/** Body lines, not counting blank lines at either end. */
+function bodyLines(body: string): number {
+  const lines = body.split(/\r?\n/);
+  let start = 0;
+  let end = lines.length;
+  while (start < end && lines[start]!.trim() === '') start++;
+  while (end > start && lines[end - 1]!.trim() === '') end--;
+  return end - start;
+}
+
+function lessonIssues(file: string, fm: Frontmatter, body: string): Issue[] {
+  const type = String(fm.type);
+  const out: Issue[] = [];
+  if (type === 'Overview' && bodyLines(body) > OVERVIEW_BODY_LINES) {
+    out.push({ file, kind: 'budget', message: `An Overview body is at most ${OVERVIEW_BODY_LINES} lines; this one has ${bodyLines(body)}` });
+  }
+  if (type !== 'Lesson') return out;
+  const lesson = (message: string) => out.push({ file, kind: 'lesson', message });
+  const text = (v: unknown) => typeof v === 'string' && v.trim() !== '';
+
+  if (bodyLines(body) > LESSON_BODY_LINES) {
+    out.push({ file, kind: 'budget', message: `A Lesson body is at most ${LESSON_BODY_LINES} lines; this one has ${bodyLines(body)}. One lesson, one claim: split it` });
+  }
+  for (const key of ['title', 'description']) if (!text(fm[key])) lesson(`A Lesson needs a \`${key}\``);
+  const confidence = fm.confidence;
+  if (confidence == null) lesson('A Lesson needs `confidence`: ' + CONFIDENCES.join(', '));
+  else if (!CONFIDENCES.includes(String(confidence))) lesson(`confidence: ${String(confidence)} is not ${CONFIDENCES.join(', ')}`);
+  const generated = fm.generated as Evidence | undefined;
+  if (!generated || typeof generated !== 'object' || !text(generated.by) || generated.at == null) {
+    lesson('A Lesson needs `generated: { by, at }`');
+  }
+  const verified = normalizeVerified(fm);
+  if (confidence === 'inferred' && verified.length) {
+    lesson('confidence: inferred, but it has a `verified` entry; a checked lesson is tested or observed');
+  }
+  if (confidence !== 'inferred' && confidence != null && verified.length === 0) {
+    lesson(`confidence: ${String(confidence)} needs a \`verified\` entry (run g2g-edukai verify), or it is inferred`);
+  }
+  if (verified.length && fm.stale_after == null) lesson('`verified` without `stale_after` (g2g-edukai verify sets both)');
+  const sources = Array.isArray(fm.sources) ? fm.sources : [];
+  if (sources.length === 0) lesson('A Lesson needs at least one entry in `sources`');
+  sources.forEach((s: unknown, i: number) => {
+    const entry = s && typeof s === 'object' ? (s as Record<string, unknown>) : {};
+    if (!text(entry.resource)) lesson(`sources[${i}] has no \`resource\``);
+    if (entry.digest != null && !DIGEST_RE.test(String(entry.digest))) {
+      lesson(`sources[${i}].digest is not one g2g-edukai wrote; never write it by hand`);
+    }
+  });
+  if (String(fm.status ?? '').toLowerCase() === 'deprecated' && fm.superseded_by == null) {
+    lesson('status: deprecated without `superseded_by`; a lesson is retired by superseding it (g2g-edukai supersede)');
+  }
+  if (fm.check != null && !Array.isArray(fm.check)) lesson('`check` must be a list');
+  (Array.isArray(fm.check) ? fm.check : []).forEach((c: unknown, i: number) => {
+    const problem = checkProblem(c);
+    if (problem) lesson(`check[${i}] ${problem}`);
+  });
+  return out;
+}
+
+interface Pointers {
+  file: string;
+  status: string;
+  supersedes: unknown;
+  superseded_by: unknown;
+}
+
+/** Supersede, never delete: the old and the new concept must name each other. */
+function supersedeIssues(all: Pointers[]): Issue[] {
+  const out: Issue[] = [];
+  const byFile = new Map(all.map((p) => [p.file, p]));
+  const issue = (file: string, message: string) => out.push({ file, kind: 'supersede', message });
+  /** The pointer as a bundle-relative file, or null (after reporting it) when it is not one. */
+  const target = (p: Pointers, key: 'supersedes' | 'superseded_by'): Pointers | null => {
+    const raw = p[key];
+    if (raw == null) return null;
+    if (typeof raw !== 'string' || !raw.startsWith('/') || !raw.endsWith('.md')) {
+      issue(p.file, `${key}: ${String(raw)} is not a bundle-root path ending .md, such as /adr/0002-short-title.md`);
+      return null;
+    }
+    const hit = byFile.get(raw.replace(/^\/+/, ''));
+    if (!hit) issue(p.file, `${key}: ${raw} is not a concept in the bundle`);
+    return hit ?? null;
+  };
+  for (const p of all) {
+    const newer = target(p, 'superseded_by');
+    if (p.superseded_by != null && p.status !== 'deprecated') {
+      issue(p.file, 'It has `superseded_by`, so it needs `status: deprecated`');
+    }
+    if (newer && newer.supersedes !== `/${p.file}`) {
+      issue(p.file, `superseded_by names /${newer.file}, which does not name this file in \`supersedes\``);
+    }
+    const older = target(p, 'supersedes');
+    if (older && older.superseded_by !== `/${p.file}`) {
+      issue(p.file, `supersedes names /${older.file}, which does not name this file in \`superseded_by\``);
+    }
+    // A chain of replacements that returns to where it started has no current lesson.
+    const seen = new Set([p.file]);
+    for (let at = newer; at; at = byFile.get(String(at.superseded_by ?? '').replace(/^\/+/, '')) ?? null) {
+      if (seen.has(at.file)) {
+        issue(p.file, `The superseded_by chain from here returns to /${at.file}: a cycle`);
+        break;
+      }
+      seen.add(at.file);
+    }
+  }
+  return out;
+}
+
+/**
+ * Report internal links whose target file is not in the bundle. `extractLinks`
+ * has already dropped external URLs and paths that leave the bundle, so what
+ * is left should name a real file: a link that does not is a typo or a
+ * rename that was missed, and it silently disappears from the graph otherwise.
+ * A link to a file that exists but has no `type` is not reported here - the
+ * missing type is already its own issue.
+ */
+function danglingLinkIssues(
+  files: string[],
+  concepts: Concept[],
+  reservedLinks: Array<{ file: string; links_to: string[] }>,
+): Issue[] {
+  const present = new Set(files.map((rel) => rel.replace(/\.md$/, '')));
+  const sources = [
+    ...concepts.map((c) => ({ file: c.id + '.md', links_to: c.links_to })),
+    ...reservedLinks,
+  ];
+  const out: Issue[] = [];
+  for (const src of sources) {
+    for (const target of src.links_to) {
+      if (present.has(target)) continue;
+      out.push({
+        file: src.file,
+        kind: 'dangling-link',
+        message: `Link to /${target}.md, which is not a file in the bundle`,
+      });
+    }
+  }
+  return out;
+}
+
+// --- ER diagram legends ----------------------------------------------------------
+// Mermaid's crow's-foot symbols (||--o{) are easy to forget, so every erDiagram is followed
+// by a small key, generated from the diagram itself. It sits in
+// the markdown (not the viewer), so GitHub and editors show it too. The validator flags a
+// missing or out-of-date key and --fix writes it, so no agent has to remember to.
+
+const ERD_LEGEND_OPEN = '<!-- okf:erd-legend -->';
+const ERD_LEGEND_CLOSE = '<!-- /okf:erd-legend -->';
+
+// Each cardinality, with the glyph as it is written on the left and on the right of a line.
+const ERD_CARDINALITIES = [
+  { left: '||', right: '||', means: 'exactly one' },
+  { left: '|o', right: 'o|', means: 'zero or one' },
+  { left: '}o', right: 'o{', means: 'zero or more' },
+  { left: '}|', right: '|{', means: 'one or more' },
+] as const;
+
+// Relationships written out in the key; a bigger diagram gets the first few and a count.
+const ERD_SENTENCES = 6;
+
+const ERD_RELATIONSHIP_RE = /(\|o|\|\||\}o|\}\|)(--|\.\.)(o\||\|\||o\{|\|\{)/g;
+const ERD_ENTITY = String.raw`("[^"]+"|[\w-]+)(?:\[[^\]]*\])?`;
+const ERD_LINE_RE = new RegExp(
+  String.raw`^\s*${ERD_ENTITY}\s+(\|o|\|\||\}o|\}\|)(--|\.\.)(o\||\|\||o\{|\|\{)\s+${ERD_ENTITY}`,
+);
+
+interface Fence {
+  info: string;
+  open: number; // 0-based index of the opening fence line
+  close: number | null; // index of the closing fence line; null when never closed
+}
+
+/**
+ * Every top-level code fence. A fence only closes on a matching run of its own character
+ * (CommonMark), so a ```mermaid example inside a ````markdown block is part of that block
+ * and is not returned, which matches what the viewer renders and what g2g-mermaid checks.
+ */
+function scanFences(lines: string[]): Fence[] {
+  const fences: Fence[] = [];
+  let open: { info: string; index: number; char: string; len: number } | null = null;
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i]!.match(/^(\s*)(`{3,}|~{3,})(.*)$/);
+    if (!m) continue;
+    if (!open) {
+      open = { info: m[3]!.trim().toLowerCase(), index: i, char: m[2]![0]!, len: m[2]!.length };
+    } else if (m[2]![0] === open.char && m[2]!.length >= open.len && m[3]!.trim() === '') {
+      fences.push({ info: open.info, open: open.index, close: i });
+      open = null;
+    }
+  }
+  if (open) fences.push({ info: open.info, open: open.index, close: null });
+  return fences;
+}
+
+const erdName = (raw: string): string => raw.replace(/^"|"$/g, '');
+
+/**
+ * The key for one erDiagram's source: each relationship in words, then the symbols and line
+ * styles it uses. A diagram with no relationship in symbol form (entities only, or written in
+ * words) gets the full reference.
+ */
+function erdLegend(source: string): string[] {
+  const used = new Set<string>();
+  let dashed = false;
+  let solid = false;
+  for (const m of source.matchAll(ERD_RELATIONSHIP_RE)) {
+    used.add(m[1]!).add(m[3]!);
+    if (m[2] === '..') dashed = true;
+    else solid = true;
+  }
+  const reference = used.size === 0;
+  if (reference) {
+    for (const c of ERD_CARDINALITIES) used.add(c.left).add(c.right);
+    solid = dashed = true;
+  }
+
+  const out = ['> [!note] Reading the diagram'];
+
+  // Each relationship in words, from both sides: this is what the line ends stand for, so a
+  // reader gets the answer first and the symbols after. The widget's `describe` says the same.
+  const meaning = (glyph: string) =>
+    ERD_CARDINALITIES.find((c) => c.left === glyph || c.right === glyph)!.means;
+  const found: string[] = [];
+  for (const line of source.split(/\r?\n/)) {
+    const m = line.match(ERD_LINE_RE);
+    if (!m) continue;
+    const [left, right] = [erdName(m[1]!), erdName(m[5]!)];
+    found.push(
+      `> - \`${left} ${m[2]}${m[3]}${m[4]} ${right}\`: each ${left} is linked to ${meaning(m[4]!)} ${right}; ` +
+        `each ${right} is linked to ${meaning(m[2]!)} ${left}.`,
+    );
+  }
+  out.push(...found.slice(0, ERD_SENTENCES));
+  if (found.length > ERD_SENTENCES) {
+    out.push(`> - ...and ${found.length - ERD_SENTENCES} more, read the same way.`);
+  }
+
+  for (const c of ERD_CARDINALITIES) {
+    if (used.has(c.left) || used.has(c.right)) {
+      const glyphs = c.left === c.right ? `\`${c.left}\`` : `\`${c.left}\` and \`${c.right}\``;
+      out.push(`> - ${glyphs}: ${c.means}`);
+    }
+  }
+  // Solid is the default, so it only needs saying when a dashed line sits beside it.
+  if (dashed) {
+    out.push(
+      solid
+        ? '> - `--` solid, identifying (the child cannot exist without its parent); `..` dashed, non-identifying'
+        : '> - `..` dashed, non-identifying',
+    );
+  }
+  const keys = ['PK', 'FK', 'UK'].filter(
+    (k) => reference || new RegExp(String.raw`\b${k}\b`).test(source),
+  );
+  const names = { PK: 'primary key', FK: 'foreign key', UK: 'unique key' } as const;
+  if (keys.length) {
+    out.push(`> - Columns: ${keys.map((k) => `\`${k}\` ${names[k as keyof typeof names]}`).join(', ')}`);
+  }
+  return [ERD_LEGEND_OPEN, ...out, ERD_LEGEND_CLOSE];
+}
+
+interface ErdLegendPlan {
+  line: number; // 1-based line of the ```mermaid fence
+  state: 'ok' | 'missing' | 'stale';
+  from: number; // where the existing key starts (or where a new one goes), as a line index
+  to: number; // one past the existing key's last line; equal to `from` when there is none
+  expected: string[];
+}
+
+/** One entry per erDiagram: whether its key is present and current. */
+function planErdLegends(text: string): ErdLegendPlan[] {
+  const lines = text.split(/\r?\n/);
+  const plans: ErdLegendPlan[] = [];
+  for (const fence of scanFences(lines)) {
+    if (fence.info !== 'mermaid' || fence.close === null) continue;
+    const source = lines.slice(fence.open + 1, fence.close).join('\n');
+    if (!/^\s*erDiagram\b/.test(source.replace(/^(\s*(%%.*)?\n)+/, ''))) continue;
+    const expected = erdLegend(source);
+    let at = fence.close + 1;
+    while (at < lines.length && lines[at]!.trim() === '') at++;
+    const after = lines.slice(at);
+    const end = lines[at]?.trim() === ERD_LEGEND_OPEN ? at + 1 + after.findIndex((l) => l.trim() === ERD_LEGEND_CLOSE) : -1;
+    if (end > at) {
+      const current = lines.slice(at, end).map((l) => l.trimEnd());
+      plans.push({
+        line: fence.open + 1,
+        state: current.join('\n') === expected.join('\n') ? 'ok' : 'stale',
+        from: at,
+        to: end,
+        expected,
+      });
+    } else {
+      plans.push({ line: fence.open + 1, state: 'missing', from: fence.close + 1, to: fence.close + 1, expected });
+    }
+  }
+  return plans;
+}
+
+/** The text with every erDiagram key inserted or refreshed. Unchanged when all are current. */
+function applyErdLegends(text: string): string {
+  const eol = text.includes('\r\n') ? '\r\n' : '\n';
+  const lines = text.split(/\r?\n/);
+  // Bottom to top, so an edit never moves the lines a pending one refers to.
+  for (const plan of planErdLegends(text).reverse()) {
+    if (plan.state === 'ok') continue;
+    if (plan.state === 'stale') lines.splice(plan.from, plan.to - plan.from, ...plan.expected);
+    else lines.splice(plan.from, 0, '', ...plan.expected, ...(lines[plan.from]?.trim() ? [''] : []));
+  }
+  return lines.join(eol);
+}
+
+function erdLegendIssues(file: string, text: string): Issue[] {
+  return planErdLegends(text)
+    .filter((plan) => plan.state !== 'ok')
+    .map((plan) => ({
+      file,
+      kind: 'erd-legend',
+      message:
+        `erDiagram at line ${plan.line} has ${plan.state === 'missing' ? 'no' : 'an out-of-date'} ` +
+        'relationship key below it (run g2g-view with --fix to write it)',
+    }));
+}
+
+/** Rewrite every .md file in the bundle whose ER diagram keys are missing or stale. */
+function fixErdLegends(bundleRoot: string): string[] {
+  const changed: string[] = [];
+  for (const rel of listMarkdown(bundleRoot)) {
+    const full = path.join(bundleRoot, rel);
+    const before = fs.readFileSync(full, 'utf8');
+    const after = applyErdLegends(before);
+    if (after === before) continue;
+    fs.writeFileSync(full, after, 'utf8');
+    changed.push(rel);
+  }
+  return changed;
+}
+
+// --- graph construction ------------------------------------------------------
+
+const TYPE_PALETTE: Record<string, string> = {
+  Application: '#2563eb',
+  // Not an OKF-spec type. The spec allows any type string and renders unknown
+  // ones grey; a guided tour is distinct enough from the reference concepts to
+  // earn its own colour in the graph.
+  Explainer: '#0d9488',
+  // The memory bundle's two types (edukai/): one claim an agent learned, and a domain's summary.
+  Lesson: '#4f46e5',
+  Overview: '#be185d',
+  Architecture: '#0891b2',
+  'API Reference': '#7c3aed',
+  'Data Model': '#d97706',
+  Process: '#059669',
+  'Architectural Decision': '#e11d48',
+  Reference: '#64748b',
+  Metric: '#ca8a04',
+  Playbook: '#ea580c',
+  'BigQuery Dataset': '#8b5cf6',
+  'BigQuery Table': '#3b82f6',
+};
+const DEFAULT_NODE_COLOR = '#94a3b8';
+
+function buildGraph(concepts: Concept[]): Graph {
+  const ids = new Set(concepts.map((c) => c.id));
+  const edges: Graph['edges'] = [];
+  const seen = new Set<string>();
+  const inDegree = new Map<string, number>();
+  for (const c of concepts) {
+    for (const target of c.links_to) {
+      if (target === c.id || !ids.has(target)) continue;
+      const key = `${c.id}\u0000${target}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      inDegree.set(target, (inDegree.get(target) ?? 0) + 1);
+      edges.push({ data: { id: `${c.id}__${target}`, source: c.id, target } });
+    }
+  }
+  const nodes = concepts.map((c) => ({
+    data: {
+      id: c.id,
+      label: c.title,
+      type: c.type,
+      description: c.description,
+      resource: c.resource,
+      tags: c.tags,
+      status: c.status,
+      generated: c.generated,
+      verified: c.verified,
+      stale_after: c.stale_after,
+      sources: c.sources,
+      trust_tier: c.trust_tier,
+      stale: c.stale,
+      color: TYPE_PALETTE[c.type] ?? DEFAULT_NODE_COLOR,
+      // Sized by how many concepts link here, so hubs stand out.
+      size: Math.min(56, 24 + 6 * (inDegree.get(c.id) ?? 0)),
+    },
+  }));
+  const bodies = Object.fromEntries(concepts.map((c) => [c.id, c.body]));
+  const expects = Object.fromEntries(
+    concepts.flatMap((c) => (c.render_expect ? [[c.id, c.render_expect] as const] : [])),
+  );
+  const types = [...new Set(concepts.map((c) => c.type))].sort();
+  return {
+    nodes,
+    edges,
+    bodies,
+    expects,
+    types,
+    palette: TYPE_PALETTE,
+    defaultColor: DEFAULT_NODE_COLOR,
+  };
+}
+
+// The okf_version the root index.md declares, or null if it declares none.
+function readBundleVersion(bundleRoot: string): string | null {
+  try {
+    const { frontmatter } = parseDocument(
+      fs.readFileSync(path.join(bundleRoot, 'index.md'), 'utf8'),
+    );
+    const v = frontmatter.okf_version;
+    return v === undefined || v === null ? null : String(v);
+  } catch {
+    return null;
+  }
+}
+
+// The page title comes from the root index.md's H1, falling back to the folder name.
+function readBundleTitle(bundleRoot: string): string {
+  try {
+    const { body } = parseDocument(
+      fs.readFileSync(path.join(bundleRoot, 'index.md'), 'utf8'),
+    );
+    const h1 = body.match(/^# (.+)$/m);
+    if (h1) return h1[1]!.trim();
+  } catch {
+    // no readable index.md
+  }
+  return path.basename(bundleRoot) || 'okf';
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// JSON inside <script>: escaping "<" stops a body containing "</script>" ending the block early.
+function scriptJson(value: unknown): string {
+  return JSON.stringify(value).replace(/</g, '\\u003c');
+}
+
+// --- HTML template ----------------------------------------------------------
+
+function buildHTML(title: string, graph: Graph, widgetsJs: string | null): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(title)}</title>
+<script>
+  // Set the theme before first paint, so a dark-theme reader never sees a light flash.
+  let okfTheme = null;
+  try { okfTheme = localStorage.getItem("okf-theme"); } catch {}
+  document.documentElement.dataset.theme = okfTheme === "dark" || okfTheme === "light"
+    ? okfTheme
+    : matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  // The graph and reading split, restored before first paint so a stored width does not flash at 40%.
+  try { const s = Number(sessionStorage.getItem("okf-split")); if (s >= 20 && s <= 70) document.documentElement.style.setProperty("--split", String(s)); } catch {}
+</script>
+<!-- Pinned with subresource integrity: a pinned version on a CDN is immutable,
+     so a changed file means something is wrong and the script should not run.
+     Mermaid is on 11.x to match the mmdc the parse gate uses, so both gates
+     accept one dialect. -->
+<script src="https://cdn.jsdelivr.net/npm/cytoscape@3.28.1/dist/cytoscape.min.js" integrity="sha384-J7Q85oZE4GJ/e7+n2aOQsLXfDwwfnA8S2nZAL5BpFsfpCF84zQD7LroZ/dMnLgex" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js" integrity="sha384-/TQbtLCAerC3jgaim+N78RZSDYV7ryeoBCVqTuzRrFec2akfBkHS7ACQ3PQhvMVi" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.min.js" integrity="sha384-EOXBFmc3gx5mb+vn0vPvvGqACToJD24hhacX5Yx+8NUUQrHIle/Qi5Bg9o3zKwW2" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.2/highlight.min.js" integrity="sha384-pZ4gLQJIEk/VKnGk59xUSQK8Ne/erZQR9cpnPXPLB9iN1tXsVkRVfHYGdFYrSkv1" crossorigin="anonymous"></script>
+<style>
+${CSS}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <strong id="bundle-name"></strong>
+    <span>OKF bundle</span>
+  </div>
+  <div class="controls">
+    <input id="search" type="search" placeholder="Search concepts" aria-label="Search concepts" role="combobox" aria-expanded="false" aria-haspopup="dialog" aria-controls="sm-list" autocomplete="off" title="Search (/ or Ctrl+K). Press ? for shortcuts">
+    <div id="view-switch" class="segmented" role="group" aria-label="View">
+      <button type="button" data-view="graph" aria-pressed="true">Graph</button>
+      <button type="button" data-view="tree" aria-pressed="false">Tree</button>
+      <button type="button" data-view="table" aria-pressed="false">Table</button>
+    </div>
+    <div class="popover-wrap">
+      <button id="filters-toggle" type="button" aria-expanded="false" aria-controls="filters-panel" title="Search mode, and filters by type, trust and freshness (f)">Filters <span id="filters-count" class="count-badge" hidden>0</span></button>
+      <div id="filters-panel" class="popover" role="group" aria-label="Filters" hidden>
+        <label class="field"><span>Search mode</span>
+          <select id="search-mode" title="Ranked: relevance, with stale and unverified concepts ranked lower. Contains: a plain match on title, path or tag.">
+            <option value="ranked">Ranked</option>
+            <option value="contains">Contains</option>
+          </select>
+        </label>
+        <label class="field"><span>Type</span>
+          <select id="filter-type"><option value="">All types</option></select>
+        </label>
+        <label class="field"><span>Trust</span>
+          <select id="filter-trust">
+            <option value="">Any trust</option>
+            <option value="human-reviewed">Human reviewed</option>
+            <option value="machine-confirmed">Machine confirmed</option>
+            <option value="unverified">Unverified</option>
+          </select>
+        </label>
+        <label class="field"><span>Freshness</span>
+          <select id="filter-fresh">
+            <option value="">Any freshness</option>
+            <option value="fresh">Not stale</option>
+            <option value="soon">Stale within 30 days</option>
+            <option value="stale">Stale</option>
+          </select>
+        </label>
+        <button id="clear-filters" type="button" disabled>Clear filters</button>
+      </div>
+    </div>
+    <div id="filter-chips" class="filter-chips" hidden></div>
+    <button id="reset" type="button" hidden>Reset</button>
+    <div class="popover-wrap popover-end">
+      <button id="display-toggle" type="button" aria-expanded="false" aria-controls="display-panel">Display</button>
+      <div id="display-panel" class="popover" role="group" aria-label="Display" hidden>
+        <label class="field"><span>Colour</span>
+          <select id="color-by">
+            <option value="type">By type</option>
+            <option value="trust">By trust</option>
+            <option value="freshness">By freshness</option>
+          </select>
+        </label>
+        <button id="hood-toggle" class="graph-only" type="button" aria-pressed="false" title="Show only the open concept and the concepts it links to or is linked from (n)">Neighbourhood</button>
+        <label class="field graph-only"><span>Graph layout</span>
+          <select id="layout">
+            <option value="cose">Force (cose)</option>
+            <option value="concentric">Concentric (hubs in centre)</option>
+            <option value="breadthfirst">Breadth-first (hierarchy)</option>
+            <option value="circle">Circle</option>
+            <option value="grid">Grid</option>
+          </select>
+        </label>
+      </div>
+    </div>
+    <button id="reading-toggle" type="button" aria-pressed="false" title="Reading view: hide the graph and widen the concept (r)">Reading</button>
+    <button id="theme-toggle" type="button" title="Switch to dark theme (t)">Dark</button>
+    <div class="popover-wrap popover-end">
+      <button id="help-toggle" type="button" aria-expanded="false" aria-controls="help-panel" aria-label="Keyboard shortcuts">?</button>
+      <div id="help-panel" class="popover help-popover" role="group" aria-label="Keyboard shortcuts" hidden>
+        <p class="help-lead">Navigate with the keyboard</p>
+        <ul id="help-list" class="help-list"></ul>
+        <p class="help-note">Press <kbd class="keycap">?</kbd> to show these keys on the buttons.</p>
+      </div>
+    </div>
+  </div>
+</header>
+<div id="search-modal" class="sm-backdrop" hidden>
+  <div class="sm-dialog" role="dialog" aria-modal="true" aria-labelledby="sm-title">
+    <header class="sm-head">
+      <h2 id="sm-title" class="sm-visually-hidden">Search concepts</h2>
+      <input id="sm-input" type="search" placeholder="Search concepts" aria-label="Search concepts" role="combobox" aria-expanded="true" aria-controls="sm-list" aria-autocomplete="list" autocomplete="off">
+      <span id="sm-status" aria-live="polite"></span>
+      <button id="sm-close" type="button" aria-label="Close search">&times;</button>
+    </header>
+    <div class="sm-body">
+      <div id="sm-list" role="listbox" aria-label="Results"></div>
+      <section id="sm-preview" aria-label="Preview">
+        <div class="sm-preview-head">
+          <h3 id="sm-preview-title"></h3>
+          <button id="sm-open" type="button">Open concept</button>
+        </div>
+        <nav id="sm-toc" aria-label="Contents of the previewed concept" hidden></nav>
+        <div id="sm-text" class="prose"></div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<main>
+  <section id="graph-pane" aria-label="Concept graph">
+    <div id="graph"></div>
+    <ul id="legend" aria-label="Colour key"></ul>
+    <nav id="tree" aria-label="Concept tree" hidden></nav>
+    <div id="table-wrap" hidden>
+      <table id="concept-table">
+        <thead><tr></tr></thead>
+        <tbody></tbody>
+      </table>
+      <p id="table-empty" hidden>No concepts match the filters.</p>
+    </div>
+  </section>
+  <div id="divider" role="separator" aria-orientation="vertical" aria-label="Resize graph and reading panes" aria-controls="graph-pane" aria-valuemin="20" aria-valuemax="70" aria-valuenow="40" aria-valuetext="40% graph" tabindex="0"></div>
+  <section id="detail">
+    <p id="detail-empty">Select a concept in the graph.</p>
+    <article id="detail-content" hidden>
+      <header class="concept-header">
+        <span id="detail-type" class="type-chip"></span>
+        <h1 id="detail-title"></h1>
+        <p id="detail-description" class="lead"></p>
+        <div id="detail-badges" class="badges"></div>
+        <details class="provenance">
+          <summary>Sources and review</summary>
+          <dl id="detail-meta"></dl>
+        </details>
+      </header>
+      <div id="detail-body" class="prose"></div>
+      <nav id="detail-backlinks" hidden>
+        <h2>Linked from</h2>
+        <ul id="backlinks-list"></ul>
+      </nav>
+    </article>
+    <!-- IDE-style status bar: appears when the concept header scrolls out of view. -->
+    <div id="statusbar">
+      <span id="status-type" class="type-chip"></span>
+      <span id="status-title"></span>
+      <span id="status-section"></span>
+      <span id="status-progress"></span>
+      <button id="status-top" type="button" title="Scroll back to the top of this concept">&#8593; Top</button>
+    </div>
+  </section>
+</main>
+
+<script>
+${widgetsJs ?? '/* The widget bundle is not built: npm run okf:widgets:build */'}
+</script>
+<script>
+${rankScript()}
+</script>
+<script>
+window.BUNDLE_NAME = ${scriptJson(title)};
+window.BUNDLE = ${scriptJson(graph)};
+</script>
+<script>
+${JS}
+</script>
+</body>
+</html>
+`;
+}
+
+const CSS = `
+:root {
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --surface-2: #f1f5f9;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --text: #334155;
+  --text-muted: #64748b;
+  --heading: #0f172a;
+  --accent: #2563eb;
+  --code-bg: #eef2f7;
+  --pre-bg: #f8fafc;
+  --code-keyword: #be185d;
+  --code-string: #15803d;
+  --code-number: #b45309;
+  --code-title: #1d4ed8;
+  --code-attr: #b45309;
+  --code-builtin: #0e7490;
+  --code-comment: #64748b;
+  --code-meta: #7c3aed;
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --bg: #0b1120;
+  --surface: #0f172a;
+  --surface-2: #1e293b;
+  --border: #1e293b;
+  --border-strong: #334155;
+  --text: #cbd5e1;
+  --text-muted: #94a3b8;
+  --heading: #f1f5f9;
+  --accent: #60a5fa;
+  --code-bg: #1e293b;
+  --pre-bg: #111827;
+  --code-keyword: #f472b6;
+  --code-string: #4ade80;
+  --code-number: #fbbf24;
+  --code-title: #60a5fa;
+  --code-attr: #fbbf24;
+  --code-builtin: #22d3ee;
+  --code-comment: #94a3b8;
+  --code-meta: #c4b5fd;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.7 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+button, input, select {
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 5px 10px;
+}
+button, select { cursor: pointer; }
+button:hover { background: var(--surface-2); }
+button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Top bar */
+.topbar {
+  position: relative; /* the Filters and Display panels are positioned against the bar */
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.brand { display: flex; align-items: baseline; gap: 10px; }
+.brand strong { font-size: 15px; color: var(--heading); }
+.brand span { font-size: 12px; color: var(--text-muted); }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.controls input { width: 210px; }
+/* Popovers: Filters and Display open under their button; one at a time, see openPanel() */
+.popover-wrap { position: relative; }
+.popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  min-width: 240px;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.22);
+}
+.popover-end .popover { left: auto; right: 0; }
+.popover .field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-muted); }
+.popover .field select { font-size: 13px; color: var(--text); }
+.popover button:disabled { opacity: 0.5; cursor: not-allowed; }
+.count-badge {
+  display: inline-block;
+  min-width: 18px;
+  margin-left: 4px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--surface);
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+/* One removable chip per active filter, next to the Filters button */
+.filter-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px 2px 10px;
+  border-radius: 999px;
+  border-color: var(--accent);
+  color: var(--accent);
+  font-size: 12px;
+}
+.filter-chip:hover { background: var(--surface-2); }
+.filter-chip span[aria-hidden] { font-size: 14px; line-height: 1; }
+/* Search is a wide modal: results on the left, a preview (contents, then the start of the concept) on the right */
+.sm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 8vh 16px 16px;
+  background: rgba(15, 23, 42, 0.45);
+}
+.sm-backdrop[hidden] { display: none; }
+.sm-dialog {
+  width: min(1100px, 100%);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.3);
+  overflow: hidden;
+}
+.sm-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+.sm-head { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+#sm-input { flex: 1 1 auto; min-width: 0; font-size: 16px; }
+#sm-status { flex: 0 0 auto; font-size: 12px; color: var(--text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+#sm-close { flex: 0 0 auto; font-size: 20px; line-height: 1; padding: 4px 10px; }
+.sm-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(280px, 2fr) 3fr;
+  grid-template-rows: minmax(0, 1fr);
+}
+#sm-list { min-height: 0; overflow-y: auto; border-right: 1px solid var(--border); }
+#sm-preview { min-height: 0; overflow-y: auto; padding: 14px 22px 24px; }
+.sm-preview-head { display: flex; align-items: center; gap: 12px; }
+#sm-preview-title { flex: 1 1 auto; min-width: 0; margin: 0; font-size: 18px; color: var(--heading); overflow-wrap: anywhere; }
+#sm-open { flex: 0 0 auto; }
+#sm-open[hidden] { display: none; }
+#sm-toc {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 12px 0 14px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+#sm-toc[hidden] { display: none; }
+.sm-toc-link {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 3px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+}
+.sm-toc-link:hover, .sm-toc-link:focus-visible { background: var(--surface-2); color: var(--accent); }
+.sm-more {
+  margin-top: 18px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border-strong);
+  font-size: 13px;
+  font-style: italic;
+  color: var(--text-muted);
+}
+#sm-list .sr-item { padding: 10px 14px; }
+#sm-list .sr-snippet { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.sr-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.sr-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+}
+.sr-item:last-child { border-bottom: 0; }
+.sr-item:hover, .sr-item[aria-selected="true"] { background: var(--surface-2); }
+.sr-title { font-weight: 600; color: var(--heading); }
+.sr-score { float: right; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--text-muted); }
+.sr-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.sr-pill { font-size: 11px; line-height: 1; padding: 3px 6px; border: 1px solid currentColor; border-radius: 999px; }
+.sr-snippet { margin-top: 4px; font-size: 13px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sr-empty { padding: 12px; color: var(--text-muted); font-size: 14px; }
+/* On a phone the modal fills the window, with the results above the preview */
+@media (max-width: 820px) {
+  .sm-backdrop { padding: 0; }
+  .sm-dialog { width: 100%; height: 100%; max-height: none; border: 0; border-radius: 0; }
+  .sm-head { flex-wrap: wrap; }
+  #sm-status { order: 3; flex: 1 1 100%; white-space: normal; }
+  .sm-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 1.3fr); }
+  #sm-list { border-right: 0; border-bottom: 1px solid var(--border); }
+  #sm-preview { padding: 12px 16px 24px; }
+}
+
+/* Layout: graph on the left, reading pane on the right */
+main { flex: 1; min-height: 0; display: flex; }
+#graph-pane {
+  position: relative;
+  flex: 0 0 calc(var(--split, 40) * 1%);
+  min-width: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+}
+#graph { position: absolute; inset: 0; }
+#legend {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  margin: 0;
+  padding: 8px 12px;
+  list-style: none;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+#legend li { display: flex; align-items: center; gap: 8px; }
+#legend .dot { width: 9px; height: 9px; border-radius: 50%; }
+#detail { flex: 1; min-width: 0; overflow-y: auto; }
+#detail-content, #detail-empty { max-width: 46rem; margin: 0 auto; padding: 36px 36px 72px; }
+#detail-empty { color: var(--text-muted); text-align: center; }
+body.reading #graph-pane { display: none; }
+
+/* A: divider */
+/* The divider is a 1px line with a 9px hit area; its negative margins keep the layout at 1px. */
+body:not(.reading) #graph-pane { border-right: 0; }
+#divider {
+  position: relative;
+  flex: 0 0 9px;
+  margin: 0 -4px;
+  z-index: 1;
+  cursor: col-resize;
+  touch-action: none;
+}
+#divider::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  width: 1px;
+  background: var(--border);
+}
+#divider:hover::before, #divider:focus-visible::before, body.dragging-split #divider::before {
+  left: 3px;
+  width: 3px;
+  background: var(--accent);
+}
+#divider:focus-visible { outline: none; }
+body.dragging-split { cursor: col-resize; user-select: none; }
+body.dragging-split #graph { pointer-events: none; }
+body.reading #divider, body[data-view="table"]:not(.reading) #divider { display: none; }
+@media (max-width: 820px) {
+  #divider { display: none; }
+}
+
+/* View switcher */
+.segmented { display: inline-flex; }
+.segmented button { border-radius: 0; margin-left: -1px; }
+.segmented button:first-child { border-radius: 6px 0 0 6px; margin-left: 0; }
+.segmented button:last-child { border-radius: 0 6px 6px 0; }
+.segmented button[aria-pressed="true"] { position: relative; background: var(--surface-2); }
+body:not([data-view="graph"]) .graph-only { display: none; }
+select:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Tree and table views share the left pane; the table takes the whole window */
+body[data-view="table"]:not(.reading) #graph-pane { flex: 1; border-right: 0; }
+body[data-view="table"]:not(.reading) #detail { display: none; }
+body:not([data-view="graph"]) #graph, body[data-view="table"] #legend { display: none; }
+/* In the tree the colour key sits under the list instead of floating over it */
+body[data-view="tree"]:not(.reading) #graph-pane { display: flex; flex-direction: column; }
+body[data-view="tree"] #tree { position: static; flex: 1; min-height: 0; }
+body[data-view="tree"] #legend {
+  position: static;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 16px;
+  border-width: 1px 0 0;
+  border-radius: 0;
+}
+#tree, #table-wrap { position: absolute; inset: 0; overflow: auto; }
+#tree { padding: 12px 8px 40px; font-size: 14px; }
+#tree details { margin-left: 14px; }
+#tree > details, #tree > .tree-item { margin-left: 0; }
+#tree summary {
+  padding: 3px 6px;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+#tree summary .count { font-weight: 400; margin-left: 6px; }
+.tree-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 1px 0 1px 14px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  color: var(--text);
+  text-decoration: none;
+  line-height: 1.4;
+}
+#tree > .tree-item { margin-left: 0; }
+.tree-item:hover { background: var(--surface-2); }
+.tree-item[aria-current="true"] { background: var(--surface-2); color: var(--accent); font-weight: 600; }
+.tree-item .dot { flex: 0 0 auto; width: 9px; height: 9px; border-radius: 50%; }
+.tree-item .kind { margin-left: auto; padding-left: 8px; font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+#concept-table { width: 100%; border-collapse: collapse; font-size: 14px; line-height: 1.5; }
+#concept-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 0;
+  text-align: left;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-strong);
+}
+#concept-table th button {
+  width: 100%;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+#concept-table th[aria-sort="ascending"] button::after { content: " ↑"; }
+#concept-table th[aria-sort="descending"] button::after { content: " ↓"; }
+#concept-table th[aria-sort] button { color: var(--accent); }
+#concept-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+#concept-table tbody tr { cursor: pointer; }
+#concept-table tbody tr:hover, #concept-table tbody tr[aria-selected="true"] { background: var(--surface-2); }
+#concept-table td:nth-child(5) { white-space: nowrap; }
+#concept-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+#concept-table td a { color: var(--heading); font-weight: 600; text-decoration: none; }
+#concept-table .dot { display: inline-block; width: 9px; height: 9px; margin-right: 8px; border-radius: 50%; }
+#concept-table .muted { color: var(--text-muted); }
+#table-empty { padding: 32px; text-align: center; color: var(--text-muted); }
+
+/* Concept header */
+.concept-header { margin-bottom: 32px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
+.type-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.type-chip::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--chip); }
+.concept-header h1 {
+  margin: 6px 0 8px;
+  font-size: 30px;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+  color: var(--heading);
+}
+.lead { margin: 0 0 14px; font-size: 17px; line-height: 1.6; color: var(--text-muted); }
+.badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.badge {
+  font-size: 12px;
+  line-height: 1;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+.badge.tag::before { content: "#"; opacity: 0.6; }
+.badge.trust-human-reviewed { background: #ede9fe; color: #5b21b6; }
+.badge.trust-machine-confirmed { background: #dbeafe; color: #1e40af; }
+.badge.trust-unverified { background: #fef3c7; color: #92400e; }
+.badge.status-draft { background: #fef3c7; color: #92400e; }
+.badge.status-deprecated, .badge.stale { background: #fee2e2; color: #991b1b; }
+:root[data-theme="dark"] .badge.trust-human-reviewed { background: #2e1065; color: #c4b5fd; }
+:root[data-theme="dark"] .badge.trust-machine-confirmed { background: #172554; color: #93c5fd; }
+:root[data-theme="dark"] .badge.trust-unverified,
+:root[data-theme="dark"] .badge.status-draft { background: #422006; color: #fcd34d; }
+:root[data-theme="dark"] .badge.status-deprecated,
+:root[data-theme="dark"] .badge.stale { background: #450a0a; color: #fca5a5; }
+.provenance { margin-top: 14px; font-size: 13px; }
+.provenance summary { cursor: pointer; color: var(--text-muted); }
+#detail-meta { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 10px 0 0; }
+#detail-meta dt { color: var(--text-muted); }
+#detail-meta dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+#detail-meta ul { margin: 0; padding-left: 18px; }
+#detail-meta code { font-size: 12px; }
+
+/* Rendered markdown */
+.prose > :first-child { margin-top: 0; }
+.prose h2 { margin: 2.2em 0 0.6em; font-size: 22px; line-height: 1.3; color: var(--heading); }
+.prose h3 { margin: 1.8em 0 0.5em; font-size: 17px; color: var(--heading); }
+.prose p, .prose ul, .prose ol { margin: 0 0 1em; }
+.prose ul, .prose ol { padding-left: 1.4em; }
+.prose li + li { margin-top: 0.35em; }
+.prose strong { color: var(--heading); }
+.prose a { color: var(--accent); text-decoration: none; }
+.prose a:hover { text-decoration: underline; }
+code { font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace; }
+.prose code { font-size: 0.85em; padding: 0.15em 0.4em; border-radius: 4px; background: var(--code-bg); }
+.prose pre {
+  margin: 0 0 1.3em;
+  padding: 14px 18px;
+  overflow-x: auto;
+  background: var(--pre-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.prose pre code { padding: 0; background: none; font-size: 13px; line-height: 1.6; }
+.hljs { background: none; color: var(--text); }
+.hljs-comment, .hljs-quote { color: var(--code-comment); font-style: italic; }
+.hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-type, .hljs-tag, .hljs-operator { color: var(--code-keyword); }
+.hljs-string, .hljs-doctag, .hljs-regexp, .hljs-addition { color: var(--code-string); }
+.hljs-number { color: var(--code-number); }
+.hljs-title, .hljs-title.function_, .hljs-title.class_, .hljs-section, .hljs-selector-id { color: var(--code-title); font-weight: 600; }
+.hljs-attr, .hljs-attribute, .hljs-variable, .hljs-template-variable, .hljs-property, .hljs-params { color: var(--code-attr); }
+.hljs-built_in, .hljs-builtin-name, .hljs-name, .hljs-class { color: var(--code-builtin); }
+.hljs-symbol, .hljs-bullet, .hljs-link, .hljs-meta { color: var(--code-meta); }
+.hljs-deletion { color: #b91c1c; }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: 700; }
+.table-wrap { margin: 0 0 1.3em; overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
+.prose table { width: 100%; border-collapse: collapse; font-size: 14px; line-height: 1.55; }
+.prose th, .prose td { padding: 9px 14px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); }
+.prose th { background: var(--surface-2); font-weight: 600; color: var(--heading); white-space: nowrap; }
+.prose tr:last-child td { border-bottom: 0; }
+.prose blockquote { margin: 0 0 1em; padding: 2px 16px; border-left: 3px solid var(--border-strong); color: var(--text-muted); }
+
+/* Callouts: a blockquote whose first line is [!type]. The accent drives the
+   border, the title and the tint, so a new type needs one line here. The plain
+   background is the fallback where color-mix is unavailable. */
+.prose .callout {
+  margin: 0 0 1.3em;
+  padding: 12px 16px 12px 18px;
+  border-left: 4px solid var(--callout-accent, var(--border-strong));
+  border-radius: 0 8px 8px 0;
+  background: var(--surface-2);
+  background: color-mix(in srgb, var(--callout-accent) 9%, var(--surface));
+}
+.prose .callout > :last-child { margin-bottom: 0; }
+.prose .callout .callout-title {
+  margin: 0 0 7px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--callout-accent, var(--text-muted));
+}
+.prose .erd-glyph { display: inline-block; vertical-align: middle; line-height: 0; color: var(--text); }
+.prose .erd-glyph svg { overflow: visible; }
+.prose .erd-glyph path { fill: none; stroke: currentColor; stroke-width: 1.5; }
+.prose .erd-glyph circle { fill: var(--surface); stroke: currentColor; stroke-width: 1.5; }
+.prose .callout-note { --callout-accent: #2563eb; }
+.prose .callout-tip { --callout-accent: #0d9488; }
+.prose .callout-important { --callout-accent: #7c3aed; }
+.prose .callout-warning { --callout-accent: #b45309; }
+.prose .callout-caution { --callout-accent: #dc2626; }
+.prose .callout-definition { --callout-accent: #0891b2; }
+.prose .callout-example { --callout-accent: #047857; }
+.prose .callout-edge-case { --callout-accent: #c2410c; }
+:root[data-theme="dark"] .prose .callout-note { --callout-accent: #60a5fa; }
+:root[data-theme="dark"] .prose .callout-tip { --callout-accent: #2dd4bf; }
+:root[data-theme="dark"] .prose .callout-important { --callout-accent: #a78bfa; }
+:root[data-theme="dark"] .prose .callout-warning { --callout-accent: #fbbf24; }
+:root[data-theme="dark"] .prose .callout-caution { --callout-accent: #f87171; }
+:root[data-theme="dark"] .prose .callout-definition { --callout-accent: #22d3ee; }
+:root[data-theme="dark"] .prose .callout-example { --callout-accent: #34d399; }
+:root[data-theme="dark"] .prose .callout-edge-case { --callout-accent: #fb923c; }
+
+/* Quiz: a "quiz" fenced block, rendered as click-to-check questions. */
+.prose .quiz { margin: 0 0 1.3em; }
+.prose .quiz-score {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.prose .quiz-card {
+  margin: 0 0 14px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.prose .quiz-q {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--heading);
+}
+.prose .quiz-num {
+  flex: none;
+  height: 21px;
+  padding: 0 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 21px;
+  color: var(--accent);
+  background: var(--surface-2);
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  border-radius: 999px;
+}
+.prose .quiz-options { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.prose .quiz-options button { width: 100%; text-align: left; line-height: 1.5; }
+.prose .quiz-card[data-answered="true"] .quiz-options button { cursor: default; }
+.prose .quiz-options button.is-correct { border-color: #16a34a; }
+.prose .quiz-options button.is-picked.is-correct {
+  background: var(--surface-2);
+  background: color-mix(in srgb, #16a34a 16%, var(--surface));
+}
+.prose .quiz-options button.is-picked.is-wrong {
+  border-color: #dc2626;
+  background: var(--surface-2);
+  background: color-mix(in srgb, #dc2626 16%, var(--surface));
+}
+.prose .quiz-options button.is-muted { opacity: 0.5; }
+.prose .quiz-feedback {
+  margin-top: 11px;
+  padding: 10px 13px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  border-left: 3px solid var(--border-strong);
+  border-radius: 0 6px 6px 0;
+  background: var(--surface-2);
+}
+.prose .quiz-feedback.is-correct {
+  border-left-color: #16a34a;
+  background: color-mix(in srgb, #16a34a 11%, var(--surface));
+}
+.prose .quiz-feedback.is-wrong {
+  border-left-color: #dc2626;
+  background: color-mix(in srgb, #dc2626 11%, var(--surface));
+}
+.prose .quiz-feedback p { margin: 0; }
+.prose .quiz-verdict { color: var(--heading); }
+.prose .quiz-error { margin: 0; font-size: 13.5px; color: #b91c1c; }
+.prose .widget-error {
+  margin: 0 0 1.3em;
+  padding: 10px 14px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  font-size: 13.5px;
+  color: #b91c1c;
+}
+:root[data-theme="dark"] .prose .widget-error { color: #fca5a5; }
+:root[data-theme="dark"] .prose .quiz-error { color: #fca5a5; }
+.prose hr { border: 0; border-top: 1px solid var(--border); margin: 2em 0; }
+/* Mermaid diagrams: a clipped canvas with its own pan/zoom toolbar */
+.prose .mermaid {
+  margin: 0 0 1.3em;
+  padding: 0;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.mermaid-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+.mermaid-tools button { min-width: 26px; padding: 2px 7px; font-size: 13px; line-height: 1.5; background: var(--surface); }
+.mermaid-zoom-level {
+  min-width: 42px;
+  text-align: center;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+.mermaid-canvas {
+  position: relative;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.mermaid-canvas.dragging { cursor: grabbing; }
+.mermaid-canvas svg { display: block; max-width: none; }
+/* Edge labels sit on the canvas colour in both themes, so a line passes behind the text
+   (Mermaid's dark theme otherwise paints every label a fixed grey box). */
+.mermaid-canvas .edgeLabel,
+.mermaid-canvas .edgeLabel p,
+.mermaid-canvas .labelBkg { background-color: var(--surface) !important; }
+.mermaid-canvas .edgeLabel rect { fill: var(--surface) !important; }
+.prose .mermaid[data-state="error"] { padding: 20px; text-align: left; border-color: #fca5a5; }
+.prose .mermaid[data-state="error"] p { color: #b91c1c; font-size: 14px; }
+.prose .mermaid[data-state="error"] pre { margin-bottom: 0; }
+/* Expanded: the diagram covers the window until Esc or the close button. */
+.prose .mermaid.expanded {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--bg);
+}
+.prose .mermaid.expanded .mermaid-canvas { background: var(--surface); }
+/* The ER diagram key (see drawErdKeys) sits under its diagram, and becomes a panel in the corner
+   while the diagram is expanded. */
+.prose .callout.erd-key { margin-top: -0.6em; font-size: 14px; }
+.prose .callout.erd-key ul { margin: 0; padding-left: 1.2em; }
+.prose .callout.erd-key li { margin: 0 0 5px; }
+.prose .mermaid.expanded + .callout.erd-key {
+  display: block;
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 61;
+  max-width: min(440px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  margin: 0;
+  font-size: 13px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25);
+  background: var(--surface);
+}
+
+/* Backlinks */
+#detail-backlinks { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 15px; }
+#detail-backlinks h2 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+#detail-backlinks ul { margin: 0; padding-left: 1.2em; }
+#detail-backlinks a { color: var(--accent); text-decoration: none; }
+#detail-backlinks a:hover { text-decoration: underline; }
+
+/* IDE-style status bar, pinned to the bottom of the reading pane and only lifted
+   into view once the concept header has scrolled away. */
+#statusbar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  padding: 6px 18px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--text-muted);
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  opacity: 0;
+  transform: translateY(100%);
+  transition: opacity 120ms ease, transform 120ms ease;
+  pointer-events: none;
+}
+#statusbar.shown { opacity: 1; transform: none; pointer-events: auto; }
+#statusbar .type-chip { font-size: 10px; letter-spacing: 0.08em; }
+#status-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--heading);
+}
+#status-section {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#status-section::before { content: "› "; }
+#status-progress { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+#status-top { flex: 0 0 auto; padding: 3px 9px; font-size: 12px; }
+
+/* B: shortcuts */
+/* Key hints (shown while ? is on): a badge pinned to the top-right corner of each target, so no layout shifts */
+.segmented button, #filters-toggle, #display-toggle, #reading-toggle, #theme-toggle, #help-toggle, #hood-toggle, #reset { position: relative; }
+.kbd-hint {
+  position: absolute;
+  top: -8px;
+  right: -6px;
+  z-index: 2;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  font: 600 10px/16px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18);
+}
+body:not(.kbd-hints) .kbd-hint, .kbd-hint[hidden] { display: none; }
+/* Phones and tablets have no Ctrl key to hold, so the hints stay off there (the keys still work) */
+@media (pointer: coarse) { .kbd-hint { display: none !important; } }
+/* Help: the ? in the bar. Its panel lists every key, so the shortcut that shows the badges is discoverable. */
+#help-toggle { width: 32px; padding: 0; font-weight: 700; }
+.help-popover { gap: 8px; min-width: 260px; max-height: calc(100vh - 90px); overflow-y: auto; }
+.help-lead, .help-note { margin: 0; font-size: 12px; color: var(--text-muted); }
+.help-list { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.help-list li { display: flex; align-items: baseline; gap: 10px; font-size: 13px; }
+.help-list .keycap { min-width: 34px; text-align: center; }
+.keycap {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: 600 11px/16px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: nowrap;
+}
+
+@media (max-width: 820px) {
+  main { flex-direction: column; }
+  #graph-pane { flex: 0 0 40vh; border-right: 0; border-bottom: 1px solid var(--border); }
+  body[data-view="table"]:not(.reading) #graph-pane { flex: 1; }
+  #detail-content, #detail-empty { padding: 24px 18px 56px; }
+  /* A compact bar: the search box on its own line, the other controls wrap beneath it */
+  .topbar { padding: 8px 12px; gap: 4px 12px; }
+  .controls { flex: 1 1 100%; gap: 6px; min-width: 0; }
+  .controls input { flex: 1 1 100%; width: 100%; }
+  /* The panels become full-width sheets under the bar */
+  .popover-wrap { position: static; }
+  .popover, .popover-end .popover { left: 0; right: 0; top: 100%; min-width: 0; max-height: 70vh; overflow-y: auto; border-width: 1px 0; border-radius: 0; box-shadow: 0 10px 20px rgba(15, 23, 42, 0.18); }
+  .controls input, .controls select, .controls button { min-height: 36px; font-size: 14px; }
+  #graph-pane { flex-basis: 30vh; overflow: hidden; }
+  /* The colour key becomes one swipeable line so it does not cover the graph */
+  #legend { left: 8px; right: 8px; bottom: 8px; display: flex; gap: 14px; overflow-x: auto; white-space: nowrap; padding: 5px 10px; scrollbar-width: none; }
+  #legend::-webkit-scrollbar { display: none; }
+  #legend li { flex: 0 0 auto; }
+  #statusbar { padding: 6px 12px; gap: 8px; }
+}
+`;
+
+// Client script. It sits inside a template literal, so it avoids backticks,
+// "\${", and backslashes.
+const JS = `
+(() => {
+  const bundle = window.BUNDLE;
+  const $ = (id) => document.getElementById(id);
+  const byId = Object.fromEntries(bundle.nodes.map((node) => [node.data.id, node.data]));
+  const THEME_KEY = "okf-theme";
+  let theme = document.documentElement.dataset.theme;
+  let current = null;
+  let renderToken = 0;
+  let diagramCount = 0;
+
+  $("bundle-name").textContent = window.BUNDLE_NAME;
+
+  const backlinks = {};
+  for (const edge of bundle.edges) (backlinks[edge.data.target] ||= []).push(edge.data.source);
+
+  const outLinks = {};
+  for (const edge of bundle.edges) (outLinks[edge.data.source] ||= []).push(edge.data.target);
+
+  for (const type of bundle.types) $("filter-type").append(new Option(type, type));
+
+  // The server colours nodes by type; keep that colour, since colour modes overwrite data.color.
+  for (const node of bundle.nodes) node.data.typeColor = node.data.color;
+
+  // Colour modes. "type" is the OKF type; "trust" is who has checked the concept;
+  // "freshness" is how close it is to its stale_after date.
+  const TRUST_ENTRIES = [
+    ["human-reviewed", "Human reviewed", "#16a34a"],
+    ["machine-confirmed", "Machine confirmed", "#2563eb"],
+    ["unverified", "Unverified", "#d97706"],
+  ];
+  const FRESHNESS_ENTRIES = [
+    ["fresh", "Fresh", "#16a34a"],
+    ["soon", "Stale within 30 days", "#d97706"],
+    ["stale", "Stale", "#dc2626"],
+    ["none", "No expiry set", "#94a3b8"],
+  ];
+  const SOON_MS = 30 * 24 * 3600 * 1000;
+  function freshness(d) {
+    if (d.stale) return "stale";
+    const at = Date.parse(d.stale_after);
+    if (Number.isNaN(at)) return "none";
+    const left = at - Date.now();
+    return left <= 0 ? "stale" : left <= SOON_MS ? "soon" : "fresh";
+  }
+  const MODES = {
+    type: {
+      entries: bundle.types.map((type) => [type, type, bundle.palette[type] || bundle.defaultColor]),
+      key: (d) => d.type,
+      fallback: bundle.defaultColor,
+    },
+    trust: { entries: TRUST_ENTRIES, key: (d) => d.trust_tier, fallback: bundle.defaultColor },
+    freshness: { entries: FRESHNESS_ENTRIES, key: freshness, fallback: bundle.defaultColor },
+  };
+  let colorMode = "type";
+  function colorOf(d) {
+    const mode = MODES[colorMode];
+    const hit = mode.entries.find((entry) => entry[0] === mode.key(d));
+    return hit ? hit[2] : mode.fallback;
+  }
+  function renderLegend() {
+    $("legend").replaceChildren(...MODES[colorMode].entries.map(([, label, color]) => {
+      const item = document.createElement("li");
+      const dot = document.createElement("span");
+      dot.className = "dot";
+      dot.style.background = color;
+      item.append(dot, label);
+      return item;
+    }));
+  }
+  renderLegend();
+
+  // Cytoscape styles can't read CSS variables, so each theme's graph colours live here.
+  function graphStyle() {
+    const dark = theme === "dark";
+    const label = dark ? "#e2e8f0" : "#1e293b";
+    const labelBg = dark ? "#0f172a" : "#ffffff";
+    const edge = dark ? "#475569" : "#cbd5e1";
+    return [
+      {
+        selector: "node",
+        style: {
+          "background-color": "data(color)",
+          "width": "data(size)",
+          "height": "data(size)",
+          "border-width": 2,
+          "border-color": labelBg,
+          "label": "data(label)",
+          "color": label,
+          "font-size": 13,
+          "font-weight": 500,
+          "text-valign": "bottom",
+          "text-margin-y": 5,
+          "text-wrap": "wrap",
+          "text-max-width": 150,
+          "text-background-color": labelBg,
+          "text-background-opacity": 0.85,
+          "text-background-padding": 2,
+          "text-background-shape": "roundrectangle",
+        },
+      },
+      { selector: "node[?stale]", style: { "border-color": "#dc2626", "border-style": "dashed" } },
+      { selector: 'node[status = "deprecated"]', style: { "opacity": 0.5 } },
+      { selector: "node:selected", style: { "border-width": 4, "border-color": "#f59e0b" } },
+      {
+        selector: "edge",
+        style: {
+          "width": 1.2,
+          "curve-style": "bezier",
+          "line-color": edge,
+          "target-arrow-color": edge,
+          "target-arrow-shape": "triangle",
+          "arrow-scale": 0.8,
+        },
+      },
+      { selector: "edge.focus", style: { "width": 2, "line-color": "#f59e0b", "target-arrow-color": "#f59e0b" } },
+      { selector: ".faded", style: { "opacity": 0.25 } },
+      { selector: ".dim", style: { "opacity": 0.1 } },
+      { selector: ".hood-hidden", style: { "display": "none" } },
+    ];
+  }
+
+  function layoutOptions(name) {
+    const base = { name, animate: false, padding: 40, nodeDimensionsIncludeLabels: true };
+    if (name === "cose") return { ...base, nodeRepulsion: () => 60000, idealEdgeLength: () => 70, nodeOverlap: 20, randomize: false };
+    // Most linked-to concepts go first, so hubs sit at the centre or the top.
+    if (name === "concentric") return { ...base, minNodeSpacing: 30, concentric: (n) => n.indegree(), levelWidth: () => 1 };
+    if (name === "breadthfirst") return { ...base, directed: true, spacingFactor: 1.1, roots: cy.nodes().filter((n) => n.indegree() === 0) };
+    return base;
+  }
+
+  const cy = cytoscape({
+    container: $("graph"),
+    elements: [...bundle.nodes, ...bundle.edges],
+    style: graphStyle(),
+    layout: layoutOptions("cose"),
+    minZoom: 0.3,
+    maxZoom: 2.5,
+  });
+
+  cy.on("tap", "node", (event) => navigate(event.target.id()));
+  cy.on("tap", (event) => { if (event.target === cy) clearFocus(); });
+
+  function clearFocus() {
+    cy.elements().removeClass("faded focus").unselect();
+  }
+
+  // Selecting a concept fades everything outside its immediate neighbourhood.
+  function focusNode(id) {
+    clearFocus();
+    const node = cy.getElementById(id);
+    if (node.empty()) return;
+    node.select();
+    cy.elements().not(node.closedNeighborhood()).addClass("faded");
+    node.connectedEdges().addClass("focus");
+    const box = node.renderedBoundingBox();
+    const offscreen = box.x1 < 0 || box.y1 < 0 || box.x2 > cy.width() || box.y2 > cy.height();
+    if (offscreen && cy.width() > 0 && !hood) cy.animate({ center: { eles: node } }, { duration: 250 });
+  }
+
+  // The URL hash names the open concept, so links, Back/Forward, and reloads all work.
+  function navigate(id) {
+    if (location.hash.slice(1) === id) show(id);
+    else location.hash = id;
+  }
+  window.addEventListener("hashchange", () => show(decodeURIComponent(location.hash.slice(1))));
+
+  function show(id) {
+    const data = byId[id];
+    if (!data) return;
+    current = id;
+    focusNode(id);
+    if (hood) applyHood();
+    refreshLists();
+    document.title = data.label + " | " + window.BUNDLE_NAME;
+
+    $("detail-empty").hidden = true;
+    $("detail-content").hidden = false;
+    $("detail-type").textContent = data.type;
+    $("detail-type").style.setProperty("--chip", data.typeColor);
+    $("detail-title").textContent = data.label;
+    $("detail-description").textContent = data.description;
+    $("detail-description").hidden = !data.description;
+
+    const badges = [];
+    if (data.status !== "stable") badges.push(badge(data.status, "status-" + data.status));
+    badges.push(badge(data.trust_tier.replaceAll("-", " "), "trust-" + data.trust_tier));
+    if (data.stale) badges.push(badge("stale since " + data.stale_after.slice(0, 10), "stale"));
+    for (const tag of data.tags) badges.push(badge(tag, "tag"));
+    $("detail-badges").replaceChildren(...badges);
+
+    renderProvenance(data, id);
+    renderBody(id);
+    renderBacklinks(id);
+    renderStatusbar(data);
+    $("detail").scrollTop = 0;
+  }
+
+  function renderProvenance(data, id) {
+    const rows = [["File", code(id + ".md")]];
+    if (data.generated && data.generated.by) rows.push(["Generated", actor(data.generated)]);
+    rows.push(["Verified", data.verified.length ? data.verified.map(actor).join("; ") : "Not yet"]);
+    if (data.resource) rows.push(["Resource", code(data.resource)]);
+    if (data.sources.length) {
+      const list = document.createElement("ul");
+      for (const source of data.sources) {
+        const item = document.createElement("li");
+        if (source.title) item.append(source.title, " ");
+        item.append(code(source.resource || source.id || ""));
+        list.append(item);
+      }
+      rows.push(["Sources", list]);
+    }
+    $("detail-meta").replaceChildren(...rows.flatMap(([label, value]) => {
+      const dt = document.createElement("dt");
+      dt.textContent = label;
+      const dd = document.createElement("dd");
+      dd.append(value);
+      return [dt, dd];
+    }));
+  }
+
+  function renderBody(id) {
+    const body = $("detail-body");
+    // React roots from the last concept are unmounted before their DOM is replaced.
+    if (window.OkfWidgets) window.OkfWidgets.unmountAll();
+    body.innerHTML = marked.parse(bundle.bodies[id] || "", { gfm: true });
+
+    // The header already shows the title, so drop the body's own H1.
+    const first = body.firstElementChild;
+    if (first && first.tagName === "H1") first.remove();
+
+    renderCallouts(body);
+    drawErdKeys(body);
+    renderQuizzes(body);
+    renderWidgets(body);
+    addHeadingIds(body);
+
+    for (const table of body.querySelectorAll("table")) {
+      const wrap = document.createElement("div");
+      wrap.className = "table-wrap";
+      table.replaceWith(wrap);
+      wrap.append(table);
+    }
+
+    for (const link of body.querySelectorAll("a[href]")) {
+      const href = link.getAttribute("href");
+      if (href.startsWith("#")) {
+        // A link to a section of this concept. The URL hash names the open
+        // concept, so the fragment must not be written to the URL: scroll to
+        // the heading instead, and leave a fragment with no target alone.
+        const section = document.getElementById(href.slice(1));
+        if (section) {
+          link.addEventListener("click", (event) => {
+            event.preventDefault();
+            section.scrollIntoView({ behavior: "smooth", block: "start" });
+          });
+          continue;
+        }
+      }
+      const target = href.startsWith("/") ? href.slice(1).split("#")[0].replace(/[.]md$/, "") : null;
+      if (target && byId[target]) {
+        if (link.textContent === href) link.textContent = byId[target].label;
+        link.setAttribute("href", "#" + target);
+      } else {
+        link.target = "_blank";
+        link.rel = "noopener";
+      }
+    }
+
+    highlightCode(body);
+    renderMermaid(body, ++renderToken);
+  }
+
+  // --- Status bar -----------------------------------------------------------
+  // An IDE-style bar at the bottom of the reading pane. The concept header is
+  // watched directly, so the bar appears exactly when the title scrolls out of
+  // view, and it tracks the section you are in plus how far through you are.
+  let headerWatcher = null;
+  let statusFrame = 0;
+
+  function renderStatusbar(data) {
+    $("status-type").textContent = data.type;
+    $("status-type").style.setProperty("--chip", data.typeColor);
+    $("status-title").textContent = data.label;
+    $("statusbar").classList.remove("shown");
+    updateStatusbar();
+
+    const header = $("detail-content").querySelector(".concept-header");
+    if (!header) return;
+    if (!("IntersectionObserver" in window)) {
+      // No observer, no way to know when the header leaves: keep the bar up.
+      $("statusbar").classList.add("shown");
+      return;
+    }
+    headerWatcher ||= new IntersectionObserver((entries) => {
+      for (const entry of entries) $("statusbar").classList.toggle("shown", !entry.isIntersecting);
+    }, { root: $("detail"), threshold: 0 });
+    headerWatcher.disconnect();
+    headerWatcher.observe(header);
+  }
+
+  function updateStatusbar() {
+    const detail = $("detail");
+    const paneTop = detail.getBoundingClientRect().top;
+    let section = "";
+    for (const heading of $("detail-body").querySelectorAll("h2, h3")) {
+      if (heading.getBoundingClientRect().top - paneTop > 28) break;
+      section = heading.textContent.trim();
+    }
+    $("status-section").textContent = section;
+    const scrollable = detail.scrollHeight - detail.clientHeight;
+    $("status-progress").textContent = scrollable > 8 ? Math.round((detail.scrollTop / scrollable) * 100) + "%" : "";
+  }
+
+  $("detail").addEventListener("scroll", () => {
+    if (statusFrame) return;
+    statusFrame = requestAnimationFrame(() => { statusFrame = 0; updateStatusbar(); });
+  }, { passive: true });
+
+  $("status-top").addEventListener("click", () => $("detail").scrollTo({ top: 0, behavior: "smooth" }));
+
+  // --- Callouts -------------------------------------------------------------
+  // A blockquote whose first line is [!type] becomes a styled callout. The set
+  // is the GitHub alert types plus the two this bundle uses. An unknown type is
+  // left as an ordinary blockquote rather than swallowed.
+  const CALLOUT_TYPES = {
+    note: "Note",
+    tip: "Tip",
+    important: "Important",
+    warning: "Warning",
+    caution: "Caution",
+    definition: "Definition",
+    example: "Example",
+    "edge-case": "Edge case",
+  };
+
+  // The client script avoids backslashes (see the note above JS), so the two
+  // parsers below use string operations rather than escaped regexes.
+  const NEWLINE = String.fromCharCode(10);
+
+  // The [!type] marker on a blockquote's first line, lower-cased, or null.
+  function calloutMarker(quote) {
+    const paragraph = quote.firstElementChild;
+    if (!paragraph || paragraph.tagName !== "P") return null;
+    const marker = paragraph.firstChild;
+    if (!marker || marker.nodeType !== 3) return null;
+    const firstLine = marker.nodeValue.split(NEWLINE)[0];
+    if (firstLine.slice(0, 2) !== "[!") return null;
+    const close = firstLine.indexOf("]");
+    if (close < 0) return null;
+    return firstLine.slice(2, close).trim().toLowerCase();
+  }
+
+  function renderCallouts(root) {
+    for (const quote of [...root.querySelectorAll("blockquote")]) {
+      const type = calloutMarker(quote);
+      const label = type === null ? undefined : CALLOUT_TYPES[type];
+      if (!label) continue;
+      const paragraph = quote.firstElementChild;
+      const marker = paragraph.firstChild;
+      // Only the first line can carry the marker; the rest is the callout body.
+      const firstLine = marker.nodeValue.split(NEWLINE)[0];
+      const close = firstLine.indexOf("]");
+
+      const rest = marker.nodeValue.slice(firstLine.length);
+      marker.nodeValue = rest.charAt(0) === NEWLINE ? rest.slice(1) : rest;
+      // A marker with nothing after it leaves an empty paragraph behind.
+      if (paragraph.childNodes.length === 1 && marker.nodeValue.trim() === "") paragraph.remove();
+
+      const box = document.createElement("div");
+      box.className = "callout callout-" + type;
+      const title = document.createElement("p");
+      title.className = "callout-title";
+      title.textContent = firstLine.slice(close + 1).trim() || label;
+      // Snapshot the children first: append() would move them out of the live list.
+      box.append(title, ...[...quote.childNodes]);
+      quote.replaceWith(box);
+    }
+  }
+
+  // --- ER diagram look --------------------------------------------------------
+  // Mermaid draws an erDiagram in its own greys. This restyles it with the viewer's colours, so
+  // it reads like the sql-erd widget's diagram: a tinted header, the primary key in the accent
+  // colour, and lines and line ends heavy enough to read at the default zoom. Line ends are
+  // markers sized by the line's width, so a wider line also makes them larger. The page's
+  // custom properties reach into the inline svg, so this follows the light and dark themes.
+  const ER_THEME_CSS = [
+    ".relationshipLine { stroke: var(--text-muted) !important; stroke-width: 1.6px; }",
+    ".marker { stroke: var(--text-muted) !important; stroke-width: 1.1 !important; }",
+    ".marker circle { fill: var(--surface) !important; }",
+    ".node .outer-path path:first-child { fill: color-mix(in srgb, var(--accent) 14%, var(--surface)) !important; }",
+    ".node .row-rect-odd path:first-child, .node .row-rect-even path:first-child { fill: var(--surface) !important; }",
+    ".node .outer-path path:last-child, .node [class^=row-rect] path:last-child { stroke: var(--border-strong) !important; stroke-width: 1px !important; }",
+    ".node .label.name { font-weight: 700; }",
+    ".node .label.name .nodeLabel, .node .label.name p { color: var(--heading) !important; }",
+    ".node .nodeLabel, .node .label { color: var(--text); fill: var(--text); }",
+    ".node .attribute-type .nodeLabel, .node .attribute-type p { color: var(--text-muted) !important; }",
+    ".node .attribute-keys .nodeLabel, .node .attribute-keys p { color: var(--accent) !important; font-weight: 700; }",
+    ".edgeLabel, .edgeLabel p, .labelBkg { background: var(--surface) !important; color: var(--text-muted) !important; }",
+  ].join("\\n");
+
+  // --- ER diagram keys --------------------------------------------------------
+  // The generated key under an erDiagram names Mermaid's symbols as text (||--o{). Here each
+  // one is drawn the way the diagram draws it, with the text kept beside it for authoring.
+  // Left-hand symbols are drawn with their entity on the left; right-hand ones are mirrored.
+  const ERD_LEFT = { "||": "one", "|o": "zeroOne", "}o": "zeroMany", "}|": "oneMany" };
+  const ERD_RIGHT = { "||": "one", "o|": "zeroOne", "o{": "zeroMany", "|{": "oneMany" };
+
+  function erdEnd(kind, width, mirrored) {
+    const foot = "M12 8L0.5 2M12 8H0.5M12 8L0.5 14";
+    const shapes = {
+      one: '<path d="M9 3V13M14 3V13"/>',
+      zeroOne: '<path d="M9 3V13"/><circle cx="18" cy="8" r="3.5"/>',
+      zeroMany: '<path d="' + foot + '"/><circle cx="18" cy="8" r="3.5"/>',
+      oneMany: '<path d="' + foot + 'M17 3V13"/>',
+    };
+    const place = mirrored ? ' transform="translate(' + width + ',0) scale(-1,1)"' : "";
+    return "<g" + place + ">" + shapes[kind] + "</g>";
+  }
+
+  // One svg: an optional end on each side of a solid or dashed line.
+  function erdSvg(left, right, dashed, width, label) {
+    const svg = document.createElement("span");
+    svg.className = "erd-glyph";
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", label);
+    svg.innerHTML =
+      '<svg width="' + width + '" height="16" viewBox="0 0 ' + width + ' 16" aria-hidden="true">' +
+      '<path d="M0 8H' + width + '"' + (dashed ? ' stroke-dasharray="4 3"' : "") + "/>" +
+      (left ? erdEnd(left, width, false) : "") +
+      (right ? erdEnd(right, width, true) : "") +
+      "</svg>";
+    return svg;
+  }
+
+  function drawErdKeys(root) {
+    for (const title of root.querySelectorAll(".callout .callout-title")) {
+      if (title.textContent.trim() !== "Reading the diagram") continue;
+      // The key belongs to the diagram right above it, and shows only while that diagram is
+      // expanded (see .erd-key in the styles). Without such a diagram it stays in the page.
+      const callout = title.closest(".callout");
+      const above = callout.previousElementSibling;
+      if (above && above.matches("pre") && above.querySelector("code.language-mermaid")) callout.classList.add("erd-key");
+      for (const code of [...title.parentElement.querySelectorAll("code")]) {
+        const text = code.textContent;
+        const parts = text.split(" ");
+        if (parts.length === 3 && parts[1].length === 6 && ERD_LEFT[parts[1].slice(0, 2)] && ERD_RIGHT[parts[1].slice(4)]) {
+          // A whole relationship: entity, line with both ends, entity.
+          const glyph = erdSvg(ERD_LEFT[parts[1].slice(0, 2)], ERD_RIGHT[parts[1].slice(4)], parts[1].slice(2, 4) === "..", 76, parts[1]);
+          const first = document.createElement("code");
+          first.textContent = parts[0];
+          const last = document.createElement("code");
+          last.textContent = parts[2];
+          code.replaceWith(first, " ", glyph, " ", last);
+        } else if (text === "--" || text === "..") {
+          code.replaceWith(erdSvg(null, null, text === "..", 36, text));
+        } else if (ERD_LEFT[text] || ERD_RIGHT[text]) {
+          // Right-hand spellings are the mirror image of the left-hand ones.
+          const right = ERD_RIGHT[text] && text !== "||" && !ERD_LEFT[text];
+          code.replaceWith(erdSvg(right ? null : ERD_LEFT[text], right ? ERD_RIGHT[text] : null, false, 36, text));
+        }
+      }
+    }
+  }
+
+  // --- Widgets --------------------------------------------------------------
+  // A widget fenced block holds the name of one React widget from
+  // packages/okf-widgets on its first line, and optionally data for it below. The
+  // block becomes a mount point; a missing bundle or an unknown name is shown,
+  // never hidden.
+  function renderWidgets(root) {
+    for (const block of [...root.querySelectorAll("pre > code.language-widget")]) {
+      // The first line is the widget's name; anything after it is data for that widget (the SQL
+      // of a sql-erd, say).
+      const text = block.textContent;
+      const newline = text.indexOf("\\n");
+      const name = (newline < 0 ? text : text.slice(0, newline)).trim();
+      const source = newline < 0 ? "" : text.slice(newline + 1).trim();
+      const mountPoint = document.createElement("div");
+      mountPoint.className = "widget-mount";
+      mountPoint.dataset.widget = name;
+      block.parentElement.replaceWith(mountPoint);
+      const api = window.OkfWidgets;
+      let problem = null;
+      if (!api) {
+        problem = "The interactive widget " + name + " is not built. Run npm run okf:view, which builds the widgets first (npm run okf:widgets:build).";
+      } else if (!api.mount(mountPoint, name, source)) {
+        problem = "Unknown widget " + name + ". Known widgets: " + api.names.join(", ") + ".";
+      }
+      mountPoint.dataset.state = problem ? "error" : "mounted";
+      if (problem) {
+        const message = document.createElement("p");
+        message.className = "widget-error";
+        message.textContent = problem;
+        mountPoint.append(message);
+      }
+    }
+  }
+
+  // --- Quiz -----------------------------------------------------------------
+  // A quiz fenced block: questions separated by a --- line, options as
+  // - [ ] / - [x], and ~ lines giving the feedback for the option above them.
+  // Question and option text is plain text, so markdown inside it shows
+  // literally.
+  function parseChoice(line) {
+    if (!line.startsWith("-")) return null;
+    const rest = line.slice(1).trimStart();
+    if (rest.charAt(0) !== "[") return null;
+    const close = rest.indexOf("]");
+    if (close < 0) return null;
+    const mark = rest.slice(1, close).trim().toLowerCase();
+    if (mark !== "" && mark !== "x") return null;
+    const text = rest.slice(close + 1).trim();
+    if (text === "") return null;
+    return { text, correct: mark === "x", feedback: [] };
+  }
+
+  function parseQuiz(source) {
+    const questions = [];
+    let question = null;
+    let option = null;
+    for (const raw of source.split(NEWLINE)) {
+      const line = raw.trim();
+      if (line === "---") {
+        if (question) questions.push(question);
+        question = null;
+        option = null;
+        continue;
+      }
+      if (line === "") continue;
+      const choice = parseChoice(line);
+      if (choice) {
+        question ||= { text: "", options: [] };
+        option = choice;
+        question.options.push(option);
+        continue;
+      }
+      if (line.startsWith("~")) {
+        if (option) option.feedback.push(line.slice(1).trim());
+        continue;
+      }
+      question ||= { text: "", options: [] };
+      question.text = question.text ? question.text + " " + line : line;
+    }
+    if (question) questions.push(question);
+    return questions;
+  }
+
+  function renderQuizzes(root) {
+    for (const block of [...root.querySelectorAll("pre > code.language-quiz")]) {
+      const questions = parseQuiz(block.textContent);
+      const quiz = document.createElement("div");
+      quiz.className = "quiz";
+      const score = document.createElement("p");
+      score.className = "quiz-score";
+      quiz.append(score);
+
+      const cards = [];
+      const updateScore = () => {
+        const answered = cards.filter((card) => card.dataset.answered === "true").length;
+        const right = cards.filter((card) => card.dataset.right === "true").length;
+        score.textContent = answered === 0
+          ? cards.length + " questions. Pick an answer to check yourself."
+          : "Score " + right + " / " + cards.length + "  (" + answered + " answered)";
+      };
+
+      questions.forEach((question, index) => {
+        const card = document.createElement("div");
+        card.className = "quiz-card";
+        card.dataset.answered = "false";
+        cards.push(card);
+
+        const head = document.createElement("div");
+        head.className = "quiz-q";
+        const num = document.createElement("span");
+        num.className = "quiz-num";
+        num.textContent = "Q" + (index + 1);
+        const text = document.createElement("span");
+        text.textContent = question.text;
+        head.append(num, text);
+
+        const list = document.createElement("ul");
+        list.className = "quiz-options";
+
+        const correctCount = question.options.filter((option) => option.correct).length;
+        if (correctCount !== 1) {
+          // An authoring mistake, shown rather than hidden: a question nobody can
+          // answer correctly is worse than a visible error.
+          const bad = document.createElement("p");
+          bad.className = "quiz-error";
+          bad.textContent = "This question has " + correctCount +
+            " options marked correct; it needs exactly one.";
+          list.append(bad);
+          card.append(head, list);
+          quiz.append(card);
+          return;
+        }
+
+        const feedback = document.createElement("div");
+        feedback.className = "quiz-feedback";
+        feedback.hidden = true;
+        // Recorded up front, not on click, so the render gate can drive the quiz.
+        card.dataset.correctIndex = String(question.options.findIndex((option) => option.correct));
+
+        question.options.forEach((option, optionIndex) => {
+          const item = document.createElement("li");
+          const button = document.createElement("button");
+          button.type = "button";
+          button.textContent = option.text;
+          button.addEventListener("click", () => {
+            if (card.dataset.answered === "true") return;
+            card.dataset.answered = "true";
+            card.dataset.right = String(option.correct);
+            [...list.querySelectorAll("button")].forEach((other, i) => {
+              other.classList.toggle("is-picked", i === optionIndex);
+              other.classList.toggle("is-correct", question.options[i].correct);
+              other.classList.toggle("is-wrong", i === optionIndex && !option.correct);
+              if (i !== optionIndex && !question.options[i].correct) other.classList.add("is-muted");
+            });
+            const verdict = document.createElement("p");
+            const strong = document.createElement("strong");
+            strong.className = "quiz-verdict";
+            strong.textContent = option.correct ? "Correct." : "Not quite.";
+            verdict.append(
+              strong,
+              " " + (option.feedback.join(" ") || (option.correct ? "That is the one." : "")),
+            );
+            feedback.replaceChildren(verdict);
+            feedback.className = "quiz-feedback " + (option.correct ? "is-correct" : "is-wrong");
+            feedback.hidden = false;
+            updateScore();
+          });
+          item.append(button);
+          list.append(item);
+        });
+
+        card.append(head, list, feedback);
+        quiz.append(card);
+      });
+
+      if (questions.length === 0) {
+        const bad = document.createElement("p");
+        bad.className = "quiz-error";
+        bad.textContent = "This quiz block has no questions.";
+        quiz.append(bad);
+      }
+      updateScore();
+      block.parentElement.replaceWith(quiz);
+    }
+  }
+
+  // --- Section anchors ------------------------------------------------------
+  // Heading ids, so a link inside a concept can point at a section. See the
+  // fragment branch in renderBody for why the click is handled, not followed.
+  // The id of a heading, from its rendered text. The reading pane and the contents both use it, so they agree.
+  function headingSlug(text) {
+    return text.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "section";
+  }
+
+  function addHeadingIds(root) {
+    const seen = new Set();
+    for (const heading of root.querySelectorAll("h2, h3")) {
+      const base = headingSlug(heading.textContent);
+      let id = base;
+      let n = 2;
+      while (seen.has(id)) id = base + "-" + n++;
+      seen.add(id);
+      heading.id = id;
+    }
+  }
+
+  function highlightCode(root) {
+    if (!window.hljs) return;
+    for (const block of root.querySelectorAll("pre > code:not(.language-mermaid):not(.language-quiz)")) {
+      hljs.highlightElement(block);
+    }
+  }
+
+  // Diagrams render one at a time, each in its own try, so a broken diagram shows
+  // its error and source instead of stopping the others.
+  async function renderMermaid(root, token) {
+    const figures = [...root.querySelectorAll("pre > code.language-mermaid")].map((block) => {
+      const figure = document.createElement("div");
+      figure.className = "mermaid";
+      figure.dataset.state = "pending";
+      block.parentElement.replaceWith(figure);
+      return { figure, source: block.textContent };
+    });
+    if (figures.length === 0) return;
+
+    if (!window.mermaid) {
+      for (const { figure, source } of figures) showDiagramError(figure, source, "Mermaid did not load");
+      return;
+    }
+
+    for (const { figure, source } of figures) {
+      const diagramId = "okf-diagram-" + ++diagramCount;
+      // The ER look is Mermaid theme CSS, which applies to the whole diagram it is given, so
+      // only an erDiagram gets it.
+      const isEr = /^\\s*(?:%%.*\\n\\s*)*erDiagram\\b/.test(source);
+      mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: theme === "dark" ? "dark" : "neutral", themeCSS: isEr ? ER_THEME_CSS : "" });
+      try {
+        const { svg } = await mermaid.render(diagramId, source);
+        if (token !== renderToken) return; // another concept was opened meanwhile
+        figure.innerHTML = svg;
+        prepareDiagram(figure);
+        figure.dataset.state = "rendered";
+      } catch (error) {
+        document.getElementById("d" + diagramId)?.remove(); // Mermaid leaves its error graphic in <body>
+        if (token !== renderToken) return;
+        showDiagramError(figure, source, error && error.message ? error.message : String(error));
+      }
+    }
+  }
+
+  function showDiagramError(figure, source, message) {
+    figure.dataset.state = "error";
+    const note = document.createElement("p");
+    note.textContent = "Diagram failed to render: " + message;
+    const pre = document.createElement("pre");
+    pre.textContent = source;
+    figure.replaceChildren(note, pre);
+    console.error("Mermaid diagram failed:", message);
+  }
+
+  // --- Diagram pan and zoom -------------------------------------------------
+  // Each diagram owns a transform (translate + scale) and a clipped canvas that
+  // acts as its viewport. Mermaid hands back an SVG sized to its viewBox, so
+  // pinning that size makes one scale factor mean the same thing everywhere;
+  // the toolbar, Ctrl/Cmd + wheel, and drag-to-pan all write to the same state.
+  const diagramViews = new WeakMap();
+  const MIN_DIAGRAM_ZOOM = 0.15;
+  const MAX_DIAGRAM_ZOOM = 8;
+  const ZOOM_STEP = 1.3;
+  let drag = null;
+
+  function prepareDiagram(figure) {
+    const svg = figure.querySelector("svg");
+    if (!svg) return;
+    const canvas = document.createElement("div");
+    canvas.className = "mermaid-canvas";
+    canvas.title = "Drag to pan, Ctrl or Cmd with the wheel to zoom, double-click to fit";
+    figure.replaceChildren(diagramTools(figure), canvas);
+    canvas.append(svg);
+    if (!diagramView(figure)) return;
+    sizeDiagramCanvas(figure);
+    fitDiagram(figure);
+  }
+
+  function diagramTools(figure) {
+    const tools = document.createElement("div");
+    tools.className = "mermaid-tools";
+    const level = document.createElement("span");
+    level.className = "mermaid-zoom-level";
+    level.textContent = "100%";
+    const button = (act, label, title, onClick) => {
+      const el = document.createElement("button");
+      el.type = "button";
+      el.dataset.act = act;
+      el.textContent = label;
+      el.title = title;
+      el.addEventListener("click", onClick);
+      return el;
+    };
+    tools.append(
+      button("zoom-out", "\u2212", "Zoom out", () => zoomDiagram(figure, 1 / ZOOM_STEP)),
+      level,
+      button("zoom-in", "+", "Zoom in", () => zoomDiagram(figure, ZOOM_STEP)),
+      button("fit", "Fit", "Fit the diagram to the pane", () => fitDiagram(figure)),
+      button("expand", "\u2922", "Expand this diagram (Esc closes)", () => toggleDiagramExpand(figure)),
+    );
+    return tools;
+  }
+
+  // The view is created once per rendered figure; the WeakMap keeps its
+  // listeners and transform state from being rebuilt on every fit or zoom.
+  function diagramView(figure) {
+    const canvas = figure.querySelector(".mermaid-canvas");
+    const svg = canvas && canvas.querySelector("svg");
+    if (!svg) return null;
+    const cached = diagramViews.get(figure);
+    if (cached) return cached;
+
+    const box = svg.viewBox && svg.viewBox.baseVal;
+    const bounds = svg.getBoundingClientRect();
+    const view = {
+      canvas,
+      svg,
+      width: (box && box.width) || bounds.width || 600,
+      height: (box && box.height) || bounds.height || 400,
+      scale: 1,
+      x: 0,
+      y: 0,
+    };
+    diagramViews.set(figure, view);
+    // Mermaid ships width="100%" plus a max-width, which makes the drawn size
+    // depend on the pane; pin it to the viewBox so the transform is predictable.
+    svg.style.maxWidth = "none";
+    svg.setAttribute("width", view.width);
+    svg.setAttribute("height", view.height);
+    svg.style.transformOrigin = "0 0";
+
+    canvas.addEventListener("wheel", (event) => zoomWheel(event, figure), { passive: false });
+    canvas.addEventListener("pointerdown", (event) => startDrag(event, figure));
+    canvas.addEventListener("pointermove", (event) => moveDrag(event, figure));
+    canvas.addEventListener("pointerup", endDrag);
+    canvas.addEventListener("pointercancel", endDrag);
+    canvas.addEventListener("dblclick", () => fitDiagram(figure));
+    return view;
+  }
+
+  function sizeDiagramCanvas(figure) {
+    const view = diagramView(figure);
+    if (!view) return;
+    if (figure.classList.contains("expanded")) {
+      // Fill everything under the toolbar.
+      const tools = figure.querySelector(".mermaid-tools");
+      view.canvas.style.height = Math.max(240, window.innerHeight - (tools ? tools.offsetHeight + 1 : 0)) + "px";
+      return;
+    }
+    const available = view.canvas.clientWidth || view.width;
+    const cap = Math.max(220, Math.min(Math.round(window.innerHeight * 0.7), 620));
+    const height = Math.max(150, Math.min(view.height * Math.min(1, available / view.width), cap));
+    view.canvas.style.height = Math.round(height) + "px";
+  }
+
+  function fitDiagram(figure) {
+    const view = diagramView(figure);
+    if (!view) return;
+    const available = view.canvas.clientWidth || view.width;
+    const availableHeight = view.canvas.clientHeight || view.height;
+    // Expanded, a small diagram grows to fill the screen; inline it never exceeds its natural size.
+    const most = figure.classList.contains("expanded") ? 4 : 1;
+    const scale = Math.min(available / view.width, availableHeight / view.height, most);
+    view.scale = scale > 0 ? scale : 1;
+    view.x = (available - view.width * view.scale) / 2;
+    view.y = (availableHeight - view.height * view.scale) / 2;
+    applyDiagramTransform(view);
+  }
+
+  function applyDiagramTransform(view) {
+    view.svg.style.transform = "translate(" + view.x + "px, " + view.y + "px) scale(" + view.scale + ")";
+    const level = view.canvas.parentElement.querySelector(".mermaid-zoom-level");
+    if (level) level.textContent = Math.round(view.scale * 100) + "%";
+  }
+
+  function zoomDiagram(figure, factor, originX, originY) {
+    const view = diagramView(figure);
+    if (!view) return;
+    const next = Math.min(MAX_DIAGRAM_ZOOM, Math.max(MIN_DIAGRAM_ZOOM, view.scale * factor));
+    if (next === view.scale) return;
+    // Keep the point under the cursor (or the middle) where it is.
+    const px = originX === undefined ? view.canvas.clientWidth / 2 : originX;
+    const py = originY === undefined ? view.canvas.clientHeight / 2 : originY;
+    view.x = px - ((px - view.x) / view.scale) * next;
+    view.y = py - ((py - view.y) / view.scale) * next;
+    view.scale = next;
+    applyDiagramTransform(view);
+  }
+
+  // A bare wheel belongs to the page: zooming on it would trap the reader inside
+  // a tall diagram. Ctrl/Cmd + wheel zooms (trackpad pinch sends that too).
+  function zoomWheel(event, figure) {
+    if (!event.ctrlKey && !event.metaKey) return;
+    const view = diagramView(figure);
+    if (!view) return;
+    event.preventDefault();
+    const rect = view.canvas.getBoundingClientRect();
+    zoomDiagram(figure, event.deltaY < 0 ? 1.12 : 1 / 1.12, event.clientX - rect.left, event.clientY - rect.top);
+  }
+
+  function startDrag(event, figure) {
+    if (event.button !== 0) return;
+    const view = diagramView(figure);
+    if (!view) return;
+    drag = { figure, view, pointerId: event.pointerId, clientX: event.clientX, clientY: event.clientY, x: view.x, y: view.y };
+    view.canvas.classList.add("dragging");
+    view.canvas.setPointerCapture(event.pointerId);
+  }
+
+  function moveDrag(event, figure) {
+    if (!drag || drag.pointerId !== event.pointerId || drag.figure !== figure) return;
+    drag.view.x = drag.x + (event.clientX - drag.clientX);
+    drag.view.y = drag.y + (event.clientY - drag.clientY);
+    applyDiagramTransform(drag.view);
+  }
+
+  function endDrag(event) {
+    if (!drag) return;
+    if (event && event.pointerId !== undefined && event.pointerId !== drag.pointerId) return;
+    drag.view.canvas.classList.remove("dragging");
+    drag = null;
+  }
+
+  function toggleDiagramExpand(figure) {
+    const expanded = figure.classList.toggle("expanded");
+    const button = figure.querySelector(".mermaid-tools button[data-act='expand']");
+    if (button) {
+      button.textContent = expanded ? "\u2715" : "\u2922";
+      button.title = expanded ? "Close the expanded diagram (Esc)" : "Expand this diagram (Esc closes)";
+    }
+    // Wait for the new size to be laid out before measuring and refitting.
+    requestAnimationFrame(() => {
+      sizeDiagramCanvas(figure);
+      fitDiagram(figure);
+    });
+  }
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || event.defaultPrevented) return;
+    const figure = document.querySelector("#detail-body .mermaid.expanded");
+    if (figure) toggleDiagramExpand(figure);
+  });
+
+  let layoutFrame = 0;
+  window.addEventListener("resize", () => {
+    if (layoutFrame) return;
+    layoutFrame = requestAnimationFrame(() => {
+      layoutFrame = 0;
+      for (const figure of document.querySelectorAll("#detail-body .mermaid[data-state='rendered']")) {
+        sizeDiagramCanvas(figure);
+        fitDiagram(figure);
+      }
+      updateStatusbar();
+    });
+  });
+
+  function renderBacklinks(id) {
+    const sources = backlinks[id] || [];
+    $("detail-backlinks").hidden = sources.length === 0;
+    $("backlinks-list").replaceChildren(...sources.map((source) => {
+      const item = document.createElement("li");
+      const link = document.createElement("a");
+      link.href = "#" + source;
+      link.textContent = byId[source].label;
+      item.append(link);
+      return item;
+    }));
+  }
+
+  function badge(text, className) {
+    const el = document.createElement("span");
+    el.className = "badge " + className;
+    el.textContent = text;
+    return el;
+  }
+
+  function code(text) {
+    const el = document.createElement("code");
+    el.textContent = text;
+    return el;
+  }
+
+  function actor(event) {
+    return event.at ? event.by + ", " + String(event.at).slice(0, 10) : String(event.by);
+  }
+
+  // --- Search -----------------------------------------------------------------
+  // "Ranked" runs the ranking g2g-search uses (window.OKF_RANK, the same file): BM25F over title,
+  // tags, path, description, headings, cited files and body, with stale, deprecated and unverified concepts
+  // ranked lower and flagged, never hidden. "Contains" is the plain match on title, path and tag.
+  // The type, trust and freshness selects narrow either mode.
+  const Rank = window.OKF_RANK;
+  const latestAt = (list) => {
+    let best = "";
+    let bestTime = -Infinity;
+    for (const v of list || []) {
+      const t = Date.parse(String(v.at));
+      if (!Number.isNaN(t) && t > bestTime) { bestTime = t; best = String(v.at); }
+    }
+    return best;
+  };
+  const metaById = {};
+  for (const node of bundle.nodes) {
+    const d = node.data;
+    metaById[d.id] = {
+      id: d.id,
+      type: d.type,
+      title: d.label,
+      description: d.description || "",
+      tags: d.tags,
+      status: String(d.status || "stable").toLowerCase(),
+      trust: d.trust_tier,
+      stale_after: d.stale_after || "",
+      generated_at: String((d.generated || {}).at || ""),
+      verified_at: latestAt(d.verified),
+      links_to: outLinks[d.id] || [],
+      // The files it rests on (not URLs), so a search for "poller.ts" finds what cites it.
+      cites: (d.sources || [])
+        .map((s) => (s && typeof s.resource === "string" ? s.resource.trim() : ""))
+        .filter((r) => r && !/^[a-z][a-z0-9+.-]*:/i.test(r)),
+    };
+  }
+  let rankIndex = null;
+  // Counting every concept's words costs a moment, so it waits for the first ranked query.
+  function getRankIndex() {
+    if (!rankIndex) {
+      rankIndex = Rank.buildIndex(bundle.nodes.map((node) => Rank.buildEntry(metaById[node.data.id], bundle.bodies[node.data.id] || "")));
+    }
+    return rankIndex;
+  }
+
+  let filtersNow = Rank.NO_FILTERS;
+  let searchedAt = new Date();
+  let ranking = [];
+  let rankedIds = null;
+  let userSorted = false;
+
+  function readFilters() {
+    const trust = $("filter-trust").value;
+    const fresh = $("filter-fresh").value;
+    return Object.assign({}, Rank.NO_FILTERS, {
+      type: $("filter-type").value || null,
+      trust: trust ? [trust] : null,
+      freshness: fresh === "fresh" || fresh === "stale" ? fresh : null,
+      expiresWithin: fresh === "soon" ? SOON_MS : null,
+    });
+  }
+
+  function runSearch() {
+    searchedAt = new Date();
+    filtersNow = readFilters();
+    const query = $("search").value.trim();
+    if ($("search-mode").value === "ranked" && query) {
+      ranking = Rank.search(getRankIndex(), filtersNow, searchedAt, query);
+      rankedIds = new Set(ranking.map((hit) => hit.entry.id));
+    } else {
+      ranking = [];
+      rankedIds = null;
+    }
+  }
+
+  function passesFilters(d) {
+    if (!Rank.matchesFilters(metaById[d.id], filtersNow, searchedAt)) return false;
+    if (rankedIds) return rankedIds.has(d.id);
+    const query = $("search").value.trim().toLowerCase();
+    if (query === "" || $("search-mode").value === "ranked") return true;
+    return (d.label + " " + d.id + " " + d.tags.join(" ")).toLowerCase().includes(query);
+  }
+
+  const PILL_COLOURS = { "human-reviewed": "#16a34a", "machine-confirmed": "#2563eb", unverified: "#d97706", stale: "#dc2626", fresh: "#16a34a", "no-expiry": "#94a3b8" };
+  const RESULT_LIMIT = 30;
+  const PREVIEW_LINES = 50;
+  const TICK = String.fromCharCode(96).repeat(3);
+  let activeResult = -1;
+  let searchOpen = false;
+  // Set while focus is handed back to the search box on close, so that focusing it does not reopen the modal.
+  let suppressOpen = false;
+  let savedOverflow = "";
+  let backdropDown = false;
+  let previewId = null;
+  let pendingSection = null;
+  const tocCache = {};
+  const modal = $("search-modal");
+
+  function pill(text, colour) {
+    const el = document.createElement("span");
+    el.className = "sr-pill";
+    el.style.color = colour;
+    el.textContent = text;
+    return el;
+  }
+
+  function listRows() {
+    return [...$("sm-list").querySelectorAll(".sr-item")];
+  }
+
+  // While the modal is open, the page behind it cannot be reached by mouse, keyboard or screen reader.
+  function behindModal() {
+    return [document.querySelector(".topbar"), document.querySelector("main"), $("statusbar")];
+  }
+
+  function openSearch() {
+    if (searchOpen) return;
+    searchOpen = true;
+    runSearch();
+    $("sm-input").value = $("search").value;
+    $("sm-input").placeholder = $("search").placeholder;
+    modal.hidden = false;
+    for (const el of behindModal()) el.inert = true;
+    savedOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.body.classList.add("search-open");
+    $("search").setAttribute("aria-expanded", "true");
+    renderResults();
+    $("sm-input").focus();
+  }
+
+  function closeSearch(restoreFocus) {
+    if (!searchOpen) return;
+    searchOpen = false;
+    modal.hidden = true;
+    for (const el of behindModal()) el.inert = false;
+    document.body.style.overflow = savedOverflow;
+    document.body.classList.remove("search-open");
+    $("search").setAttribute("aria-expanded", "false");
+    if (restoreFocus) {
+      suppressOpen = true;
+      $("search").focus();
+      suppressOpen = false;
+    }
+  }
+
+  // Opening a result closes the modal, so the concept is shown behind it. A contents link can also
+  // name a section, which is scrolled to once the concept is shown.
+  function openFromSearch(id, slug) {
+    closeSearch(true);
+    pendingSection = slug || null;
+    open(id);
+    if (current === id) flushSection();
+  }
+
+  function flushSection() {
+    const slug = pendingSection;
+    pendingSection = null;
+    if (!slug) return;
+    const el = document.getElementById(slug);
+    if (el && $("detail-body").contains(el)) el.scrollIntoView({ block: "start" });
+  }
+
+  function focusables() {
+    return [...modal.querySelectorAll("button:not([disabled]), input:not([disabled]), a[href]")]
+      .filter((el) => el.getClientRects().length > 0);
+  }
+
+  // Tab cycles inside the dialog: the page behind it is inert, so the cycle must not leak to the browser.
+  function trapTab(event) {
+    const items = focusables();
+    if (items.length === 0) return;
+    const first = items[0];
+    const last = items[items.length - 1];
+    const active = document.activeElement;
+    const inside = modal.querySelector(".sm-dialog").contains(active);
+    if (event.shiftKey && (!inside || active === first)) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && (!inside || active === last)) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  function onDialogKey(event) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeSearch(true);
+    } else if (event.key === "Tab") {
+      trapTab(event);
+    } else if ((event.key === "ArrowDown" || event.key === "ArrowUp") && event.target.closest && event.target.closest(".sr-item")) {
+      event.preventDefault();
+      setActive(activeResult + (event.key === "ArrowDown" ? 1 : -1));
+      const row = listRows()[activeResult];
+      if (row) row.focus();
+    }
+  }
+
+  // The contents of a concept, from its own headings (levels 2 and 3, fenced code ignored). Cached per
+  // concept. Each heading is rendered as the reading pane renders it, so its text and id match the pane's.
+  // The title (level 1) is left out, as the preview leaves it out. An inert document parses the markup.
+  function tocFor(id) {
+    if (!tocCache[id]) {
+      const seen = new Set();
+      const out = [];
+      const scratch = document.implementation.createHTMLDocument("").body;
+      for (const line of Rank.stripCode(bundle.bodies[id] || "", false).split("\\n")) {
+        const m = line.match(Rank.HEADING_RE);
+        if (!m || m[1].length < 2 || m[1].length > 3) continue;
+        scratch.innerHTML = marked.parseInline(m[2], { gfm: true });
+        const text = scratch.textContent.trim();
+        const base = headingSlug(text);
+        let slug = base;
+        let n = 2;
+        while (seen.has(slug)) slug = base + "-" + n++;
+        seen.add(slug);
+        out.push({ level: m[1].length, text, slug });
+      }
+      tocCache[id] = out;
+    }
+    return tocCache[id];
+  }
+
+  // The first PREVIEW_LINES lines. A cut never lands inside a fenced block: the block is taken whole
+  // when it closes after the cut, and dropped when it never closes.
+  function previewCut(body) {
+    const lines = body.split("\\n");
+    if (lines.length <= PREVIEW_LINES) return { text: body, more: 0 };
+    let end = PREVIEW_LINES;
+    let fence = null;
+    let fenceAt = -1;
+    for (let i = 0; i < end; i++) {
+      const t = lines[i].trim();
+      if (fence === null) {
+        if (t.startsWith(TICK) || t.startsWith("~~~")) {
+          fence = t.slice(0, 3);
+          fenceAt = i;
+        }
+      } else if (t.startsWith(fence) && t.split(fence[0]).join("").trim() === "") {
+        fence = null;
+      }
+    }
+    if (fence !== null) {
+      end = fenceAt;
+      for (let i = PREVIEW_LINES; i < lines.length; i++) {
+        const t = lines[i].trim();
+        if (t.startsWith(fence) && t.split(fence[0]).join("").trim() === "") {
+          end = i + 1;
+          break;
+        }
+      }
+    }
+    return { text: lines.slice(0, end).join("\\n"), more: lines.length - end };
+  }
+
+  // A link in the preview must not move the URL hash, which names the open concept.
+  function previewLink(link) {
+    const href = link.getAttribute("href");
+    let target = href.startsWith("/") ? href.slice(1).split("#")[0] : null;
+    if (target && target.endsWith(".md")) target = target.slice(0, -3);
+    if (target && byId[target]) {
+      link.setAttribute("href", "#" + target);
+      link.addEventListener("click", (event) => {
+        event.preventDefault();
+        openFromSearch(target, null);
+      });
+    } else if (href.startsWith("#")) {
+      link.removeAttribute("href");
+    } else {
+      link.target = "_blank";
+      link.rel = "noopener";
+    }
+  }
+
+  function clearPreview() {
+    previewId = null;
+    $("sm-preview-title").textContent = "";
+    $("sm-open").hidden = true;
+    $("sm-toc").hidden = true;
+    $("sm-toc").replaceChildren();
+    $("sm-text").replaceChildren();
+  }
+
+  function previewConcept(id) {
+    if (previewId === id || !byId[id]) return;
+    previewId = id;
+    $("sm-open").hidden = false;
+    $("sm-preview-title").textContent = byId[id].label;
+    const toc = tocFor(id);
+    $("sm-toc").replaceChildren(...toc.map((heading) => {
+      const link = document.createElement("button");
+      link.type = "button";
+      link.className = "sm-toc-link";
+      link.style.paddingLeft = 6 + (heading.level - 1) * 14 + "px";
+      link.textContent = heading.text;
+      link.addEventListener("click", () => openFromSearch(id, heading.slug));
+      return link;
+    }));
+    $("sm-toc").hidden = toc.length === 0;
+    const cut = previewCut(bundle.bodies[id] || "");
+    const text = $("sm-text");
+    // The same markdown renderer and the same post-processing as the reading pane (renderBody),
+    // minus the widgets, quizzes and diagrams, which stay as the code they are written as.
+    text.innerHTML = marked.parse(cut.text, { gfm: true });
+    const first = text.firstElementChild;
+    if (first && first.tagName === "H1") first.remove();
+    for (const table of text.querySelectorAll("table")) {
+      const wrap = document.createElement("div");
+      wrap.className = "table-wrap";
+      table.replaceWith(wrap);
+      wrap.append(table);
+    }
+    for (const link of text.querySelectorAll("a[href]")) previewLink(link);
+    if (cut.more > 0) {
+      const note = document.createElement("p");
+      note.className = "sm-more";
+      note.textContent = "… truncated, " + cut.more + " more lines";
+      text.append(note);
+    }
+    $("sm-preview").scrollTop = 0;
+  }
+
+  function setActive(index) {
+    const rows = listRows();
+    if (rows.length === 0) {
+      activeResult = -1;
+      return;
+    }
+    activeResult = (index + rows.length) % rows.length;
+    rows.forEach((row, i) => row.setAttribute("aria-selected", String(i === activeResult)));
+    const row = rows[activeResult];
+    $("sm-input").setAttribute("aria-activedescendant", row.id);
+    row.scrollIntoView({ block: "nearest" });
+    previewConcept(row.dataset.id);
+  }
+
+  function makeRow(item, i, query) {
+    const e = metaById[item.id];
+    const row = document.createElement("button");
+    row.type = "button";
+    row.id = "sm-opt-" + i;
+    row.className = "sr-item";
+    row.dataset.id = item.id;
+    row.setAttribute("role", "option");
+    row.setAttribute("aria-selected", "false");
+    const title = document.createElement("span");
+    title.className = "sr-title";
+    title.textContent = e.title;
+    const meta = document.createElement("div");
+    meta.className = "sr-meta";
+    const fresh = Rank.freshness(e, searchedAt);
+    meta.append(
+      pill(e.type, "var(--text-muted)"),
+      pill(e.trust, PILL_COLOURS[e.trust]),
+      pill(Rank.freshnessLabel(fresh), PILL_COLOURS[fresh.state]),
+    );
+    if (e.status !== "stable") meta.append(pill(e.status, "#d97706"));
+    row.append(title, meta);
+    // Ranked rows carry the score and the snippet; Contains rows are a plain list of matches.
+    if (item.hit) {
+      const score = document.createElement("span");
+      score.className = "sr-score";
+      score.textContent = item.hit.score.toFixed(2);
+      row.title = "text " + item.hit.text.toFixed(2) + item.hit.adjust.map((a) => " × " + a.factor.toFixed(2) + " (" + a.why + ")").join("");
+      row.prepend(score);
+      const text = Rank.snippet(bundle.bodies[item.id] || "", query, e.title);
+      if (text) {
+        const line = document.createElement("div");
+        line.className = "sr-snippet";
+        line.textContent = text;
+        row.append(line);
+      }
+    }
+    row.addEventListener("mousedown", (event) => event.preventDefault());
+    row.addEventListener("mouseenter", () => setActive(i));
+    row.addEventListener("focus", () => setActive(i));
+    row.addEventListener("click", () => openFromSearch(item.id, null));
+    return row;
+  }
+
+  function renderResults() {
+    if (!searchOpen) return;
+    const query = $("search").value.trim();
+    const ranked = $("search-mode").value === "ranked";
+    let items;
+    let status;
+    if (ranked && !query) {
+      items = [];
+      status = "Type to search";
+    } else if (ranked) {
+      const shown = ranking.slice(0, RESULT_LIMIT);
+      items = shown.map((hit) => ({ id: hit.entry.id, hit }));
+      status = ranking.length === 0
+        ? "No concepts match"
+        : ranking.length + " match" + (ranking.length === 1 ? "" : "es")
+          + (ranking.length > shown.length ? ", top " + shown.length : "") + " · best first; stale ranks lower";
+    } else {
+      items = bundle.nodes.map((node) => node.data).filter((d) => passesFilters(d))
+        .sort((a, b) => a.label.localeCompare(b.label))
+        .map((d) => ({ id: d.id, hit: null }));
+      status = items.length === 0 ? "No concepts match" : items.length + " match" + (items.length === 1 ? "" : "es");
+    }
+    $("sm-list").replaceChildren(...items.map((item, i) => makeRow(item, i, query)));
+    setStatus(status);
+    if (listRows().length > 0) {
+      setActive(0);
+    } else {
+      activeResult = -1;
+      $("sm-input").removeAttribute("aria-activedescendant");
+      clearPreview();
+    }
+  }
+
+  function setStatus(text) {
+    $("sm-status").textContent = text;
+  }
+
+  function applyFilters() {
+    runSearch();
+    // Ranked results arrive best-first, so the table follows them until the reader sorts it.
+    if (rankedIds && !userSorted) sort = { key: "match", dir: -1 };
+    else if (!rankedIds && sort.key === "match") sort = { key: "title", dir: 1 };
+    cy.nodes().forEach((node) => node.toggleClass("dim", !passesFilters(node.data())));
+    cy.edges().forEach((edge) => {
+      edge.toggleClass("dim", edge.source().hasClass("dim") || edge.target().hasClass("dim"));
+    });
+    refreshLists();
+    renderResults();
+    refreshToolbar();
+  }
+
+  // The top bar's search box is the entry point: focusing it, clicking it or typing in it opens the modal.
+  $("search").addEventListener("focus", () => { if (!suppressOpen) openSearch(); });
+  $("search").addEventListener("pointerdown", () => openSearch());
+  // The browser's own focus move to #search (on mousedown, and on the mousedown a tap sends) would land on
+  // the inert box and leave focus on body. Keeping the default stops it, so focus stays in the modal.
+  $("search").addEventListener("mousedown", (event) => event.preventDefault());
+  // A bare / (no Ctrl, Meta or Alt) reopens the modal after Escape, rather than being typed into the box.
+  $("search").addEventListener("keydown", (event) => {
+    if (event.isComposing || event.keyCode === 229) return;
+    const slash = event.key === "/" && !event.ctrlKey && !event.metaKey && !event.altKey;
+    if ((event.key === "Enter" || event.key === "ArrowDown" || slash) && !searchOpen) {
+      event.preventDefault();
+      openSearch();
+    }
+  });
+  $("search").addEventListener("input", () => {
+    openSearch();
+    applyFilters();
+  });
+  $("sm-input").addEventListener("input", () => {
+    $("search").value = $("sm-input").value;
+    applyFilters();
+  });
+  $("sm-input").addEventListener("keydown", (event) => {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActive(activeResult + 1);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActive(activeResult - 1);
+    } else if (event.key === "Enter") {
+      const row = listRows()[activeResult < 0 ? 0 : activeResult];
+      if (row) {
+        event.preventDefault();
+        openFromSearch(row.dataset.id, null);
+      }
+    }
+  });
+  // Escape and Tab are handled for the whole document while the modal is open, so they still work when
+  // focus has been lost to body. Capture runs first, so the Escape handlers below see the key handled.
+  document.addEventListener("keydown", (event) => { if (searchOpen) onDialogKey(event); }, true);
+  // Focus that falls to nothing while the modal is open (a press on text in it, or a phone tap whose
+  // compatibility mousedown lands on the sheet, which covers the top bar) comes back to the input.
+  document.addEventListener("focusout", (event) => {
+    if (!searchOpen || event.relatedTarget) return;
+    queueMicrotask(() => {
+      if (searchOpen && !modal.contains(document.activeElement)) $("sm-input").focus();
+    });
+  });
+  modal.addEventListener("pointerdown", (event) => { backdropDown = event.target === modal; });
+  modal.addEventListener("mousedown", (event) => { if (event.target === modal) event.preventDefault(); });
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal && backdropDown) closeSearch(true);
+    backdropDown = false;
+  });
+  $("sm-close").addEventListener("click", () => closeSearch(true));
+  $("sm-open").addEventListener("click", () => { if (previewId) openFromSearch(previewId, null); });
+  document.addEventListener("focusin", (event) => {
+    if (searchOpen && !modal.contains(event.target)) $("sm-input").focus();
+  });
+  // Back and Forward, or any other route to a concept, closes the modal too.
+  window.addEventListener("hashchange", () => {
+    closeSearch(true);
+    flushSection();
+  });
+  $("search-mode").addEventListener("change", () => {
+    $("search").placeholder = $("search-mode").value === "ranked" ? "Search concepts" : "Filter by title, path or tag";
+    $("sm-input").placeholder = $("search").placeholder;
+    applyFilters();
+  });
+  $("filter-trust").addEventListener("change", applyFilters);
+  $("filter-fresh").addEventListener("change", applyFilters);
+  $("filter-type").addEventListener("change", applyFilters);
+
+  $("layout").addEventListener("change", () => {
+    cy.layout(layoutOptions($("layout").value)).run();
+    cy.fit(undefined, 40);
+  });
+
+  // --- Toolbar: Filters and Display popovers, filter chips, the Reset button's visibility ---
+  const FILTER_SELECTS = [
+    { id: "filter-type", label: "Type" },
+    { id: "filter-trust", label: "Trust" },
+    { id: "filter-fresh", label: "Freshness" },
+  ];
+  const panels = [
+    { button: $("filters-toggle"), panel: $("filters-panel") },
+    { button: $("display-toggle"), panel: $("display-panel") },
+    { button: $("help-toggle"), panel: $("help-panel") },
+  ];
+  // The help panel is the one that also previews on hover, so the keys are one gesture away;
+  // a click pins it open until Escape, an outside click or another click on the button.
+  const helpPanel = panels.find((entry) => entry.button.id === "help-toggle");
+  let helpPinned = false;
+  function closePanel(entry) {
+    entry.panel.hidden = true;
+    entry.button.setAttribute("aria-expanded", "false");
+    if (entry === helpPanel) helpPinned = false;
+  }
+  function openPanel(entry) {
+    for (const other of panels) if (other !== entry) closePanel(other);
+    entry.panel.hidden = false;
+    entry.button.setAttribute("aria-expanded", "true");
+  }
+  for (const entry of panels) {
+    if (entry === helpPanel) continue;
+    entry.button.addEventListener("click", () => {
+      if (entry.panel.hidden) openPanel(entry);
+      else closePanel(entry);
+    });
+  }
+  for (const el of [helpPanel.button, helpPanel.panel]) {
+    el.addEventListener("pointerenter", () => openPanel(helpPanel));
+    el.addEventListener("pointerleave", () => { if (!helpPinned) closePanel(helpPanel); });
+  }
+  // Focus opens it too, so the keys are reachable without a pointer (the button keeps its own click).
+  helpPanel.button.addEventListener("focus", () => openPanel(helpPanel));
+  helpPanel.button.addEventListener("blur", () => { if (!helpPinned) closePanel(helpPanel); });
+  helpPanel.button.addEventListener("click", () => {
+    helpPinned = !helpPinned;
+    if (helpPinned) openPanel(helpPanel);
+    else closePanel(helpPanel);
+  });
+  // A click anywhere outside a button and its panel closes it. Escape closes it too, unless a
+  // handler already used the key (the search box closing its results list).
+  document.addEventListener("pointerdown", (event) => {
+    for (const entry of panels) {
+      if (!entry.panel.hidden && !entry.panel.parentElement.contains(event.target)) closePanel(entry);
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || event.defaultPrevented) return;
+    const open = panels.find((entry) => !entry.panel.hidden);
+    if (!open) return;
+    const hadFocus = open.panel.contains(document.activeElement);
+    closePanel(open);
+    if (hadFocus) open.button.focus();
+  });
+
+  function refreshToolbar() {
+    const active = FILTER_SELECTS.filter((f) => $(f.id).value !== "");
+    const count = $("filters-count");
+    count.textContent = String(active.length);
+    count.hidden = active.length === 0;
+    $("clear-filters").disabled = active.length === 0;
+    const chips = active.map((f) => {
+      const select = $(f.id);
+      const text = select.options[select.selectedIndex].textContent;
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "filter-chip";
+      chip.title = "Remove this filter";
+      chip.setAttribute("aria-label", "Remove filter " + f.label + ": " + text);
+      const label = document.createElement("span");
+      label.textContent = f.label + ": " + text;
+      const x = document.createElement("span");
+      x.setAttribute("aria-hidden", "true");
+      x.textContent = "×";
+      chip.append(label, x);
+      chip.addEventListener("click", () => {
+        select.value = "";
+        $("filters-toggle").focus();
+        applyFilters();
+      });
+      return chip;
+    });
+    $("filter-chips").replaceChildren(...chips);
+    $("filter-chips").hidden = chips.length === 0;
+    // Reset only has something to clear while a query or a filter is set.
+    $("reset").hidden = active.length === 0 && $("search").value === "";
+  }
+  $("clear-filters").addEventListener("click", () => {
+    for (const f of FILTER_SELECTS) $(f.id).value = "";
+    applyFilters();
+    $("filters-toggle").focus();
+  });
+  refreshToolbar();
+
+  // --- Views: graph, tree, table ---------------------------------------------
+  let view = "graph";
+  let previousView = "graph";
+  let hood = false;
+
+  function setView(next) {
+    if (next === view) return;
+    if (next !== "table") previousView = next;
+    else previousView = view;
+    view = next;
+    document.body.dataset.view = view;
+    syncKeyshortcuts();
+    $("tree").hidden = view !== "tree";
+    $("table-wrap").hidden = view !== "table";
+    for (const button of $("view-switch").querySelectorAll("button")) {
+      button.setAttribute("aria-pressed", String(button.dataset.view === view));
+    }
+    if (view === "graph") {
+      cy.resize();
+      if (hood) applyHood();
+      else cy.fit(undefined, 40);
+    }
+    refreshLists();
+  }
+  document.body.dataset.view = "graph";
+  $("view-switch").addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-view]");
+    if (button) setView(button.dataset.view);
+  });
+
+  // --- A: divider ---------------------------------------------------------------
+  // Resizes the graph pane against the reading pane. The width is a percentage of <main>, held in
+  // --split (read by #graph-pane's flex-basis) and kept for the session in sessionStorage.
+  const SPLIT_KEY = "okf-split";
+  const SPLIT_DEFAULT = 40;
+  const SPLIT_MIN = 20;
+  const SPLIT_MAX = 70;
+  const splitDivider = $("divider");
+  let storedSplit = null; // the fallback when sessionStorage is unavailable (blocked, private, throwing)
+  function clampSplit(value) {
+    return Math.min(SPLIT_MAX, Math.max(SPLIT_MIN, Math.round(value)));
+  }
+  function loadSplit() {
+    let raw = storedSplit;
+    try { raw = sessionStorage.getItem(SPLIT_KEY) ?? raw; } catch {}
+    if (raw === null || String(raw).trim() === "") return SPLIT_DEFAULT;
+    const value = Number(raw);
+    return Number.isFinite(value) ? clampSplit(value) : SPLIT_DEFAULT;
+  }
+  function storeSplit() {
+    storedSplit = String(paneSplit);
+    try { sessionStorage.setItem(SPLIT_KEY, String(paneSplit)); } catch {}
+  }
+  function applySplit(value) {
+    paneSplit = clampSplit(value);
+    document.documentElement.style.setProperty("--split", String(paneSplit));
+    splitDivider.setAttribute("aria-valuenow", String(paneSplit));
+    splitDivider.setAttribute("aria-valuetext", paneSplit + "% graph");
+  }
+  // Restored before the first fit: the graph was laid out at the default width, so resize it now.
+  let paneSplit = SPLIT_DEFAULT;
+  applySplit(loadSplit());
+  cy.resize();
+
+  // Once a drag or key press settles: the graph takes the new size, and refits when it is on screen.
+  function finishSplit() {
+    cy.resize();
+    if (view === "graph") cy.fit(undefined, 40);
+  }
+
+  let splitPointer = null; // the pointer id while a drag is under way
+  let splitFrame = 0;
+  splitDivider.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    splitPointer = event.pointerId;
+    splitDivider.setPointerCapture(event.pointerId);
+    document.body.classList.add("dragging-split");
+    event.preventDefault();
+  });
+  splitDivider.addEventListener("pointermove", (event) => {
+    if (event.pointerId !== splitPointer) return;
+    const main = splitDivider.parentElement.getBoundingClientRect();
+    applySplit(((event.clientX - main.left) / main.width) * 100);
+    if (splitFrame) return;
+    splitFrame = requestAnimationFrame(() => {
+      splitFrame = 0;
+      if (view === "graph") cy.resize();
+    });
+  });
+  // Ends the drag however it stops. Without this, a lost capture (a hidden divider, a pointer lifted
+  // outside the window) leaves dragging-split on, and #graph ignores the pointer until the next drag.
+  function stopSplitDrag() {
+    splitPointer = null;
+    document.body.classList.remove("dragging-split");
+    storeSplit();
+    finishSplit();
+  }
+  function endSplitDrag(event) {
+    if (event.pointerId !== splitPointer) return;
+    stopSplitDrag();
+  }
+  splitDivider.addEventListener("pointerup", endSplitDrag);
+  splitDivider.addEventListener("pointercancel", endSplitDrag);
+  splitDivider.addEventListener("lostpointercapture", endSplitDrag);
+  // A window blur ends the drag and lets go of the pointer, as a lost capture does.
+  window.addEventListener("blur", () => {
+    if (splitPointer === null) return;
+    const id = splitPointer;
+    stopSplitDrag();
+    try { splitDivider.releasePointerCapture(id); } catch {}
+  });
+  splitDivider.addEventListener("dblclick", () => {
+    applySplit(SPLIT_DEFAULT);
+    storeSplit();
+    finishSplit();
+  });
+  splitDivider.addEventListener("keydown", (event) => {
+    const step = event.shiftKey ? 10 : 2;
+    let next = null;
+    if (event.key === "ArrowLeft") next = paneSplit - step;
+    else if (event.key === "ArrowRight") next = paneSplit + step;
+    else if (event.key === "Home") next = SPLIT_MIN;
+    else if (event.key === "End") next = SPLIT_MAX;
+    if (next === null) return;
+    event.preventDefault();
+    applySplit(next);
+    storeSplit();
+    finishSplit();
+  });
+  // --- end A: divider ---
+
+  // A row or tree entry behaves like a graph node: open the concept, keeping the URL hash in sync.
+  function open(id) {
+    navigate(id);
+    if (view === "table") setView(previousView);
+  }
+
+  // Tree: concepts grouped by the folders of their path, built once; refreshLists() updates it.
+  const treeItems = [];
+  const treeFolders = [];
+  function buildTree() {
+    const root = { folders: new Map(), items: [] };
+    for (const node of bundle.nodes) {
+      const parts = node.data.id.split("/");
+      let at = root;
+      for (const part of parts.slice(0, -1)) {
+        if (!at.folders.has(part)) at.folders.set(part, { folders: new Map(), items: [] });
+        at = at.folders.get(part);
+      }
+      at.items.push(node.data);
+    }
+    const render = (folder, parent) => {
+      for (const [name, child] of [...folder.folders].sort((a, b) => a[0].localeCompare(b[0]))) {
+        const details = document.createElement("details");
+        details.open = true;
+        const summary = document.createElement("summary");
+        const count = document.createElement("span");
+        count.className = "count";
+        summary.append(name, count);
+        details.append(summary);
+        render(child, details);
+        parent.append(details);
+        treeFolders.push({ details, count });
+      }
+      for (const d of [...folder.items].sort((a, b) => a.label.localeCompare(b.label))) {
+        const link = document.createElement("a");
+        link.className = "tree-item";
+        link.href = "#" + d.id;
+        const dot = document.createElement("span");
+        dot.className = "dot";
+        const label = document.createElement("span");
+        label.textContent = d.label;
+        const kind = document.createElement("span");
+        kind.className = "kind";
+        kind.textContent = d.type;
+        link.append(dot, label, kind);
+        link.addEventListener("click", (event) => { event.preventDefault(); open(d.id); });
+        parent.append(link);
+        treeItems.push({ d, link, dot });
+      }
+    };
+    render(root, $("tree"));
+  }
+  buildTree();
+
+  function refreshTree() {
+    for (const { d, link, dot } of treeItems) {
+      link.hidden = !passesFilters(d);
+      dot.style.background = colorOf(d);
+      const mode = MODES[colorMode];
+      const hit = mode.entries.find((entry) => entry[0] === mode.key(d));
+      dot.title = hit ? hit[1] : "";
+      if (d.id === current) link.setAttribute("aria-current", "true");
+      else link.removeAttribute("aria-current");
+    }
+    // Folders are in reverse depth order (children first), so counts roll up correctly.
+    for (const { details, count } of treeFolders) {
+      const visible = details.querySelectorAll(".tree-item:not([hidden])").length;
+      details.hidden = visible === 0;
+      count.textContent = visible;
+    }
+  }
+
+  // Table: one row per concept, sortable by any column.
+  function latestVerified(d) {
+    const times = d.verified.map((v) => String(v.at || "")).filter(Boolean).sort();
+    return times.length ? times[times.length - 1].slice(0, 10) : "";
+  }
+  const FRESH_LABEL = Object.fromEntries(FRESHNESS_ENTRIES.map((e) => [e[0], e[1]]));
+  const TRUST_LABEL = Object.fromEntries(TRUST_ENTRIES.map((e) => [e[0], e[1]]));
+  const COLUMNS = [
+    { key: "title", label: "Title", value: (d) => d.label.toLowerCase() },
+    { key: "type", label: "Type", value: (d) => d.type.toLowerCase() },
+    { key: "trust", label: "Trust", value: (d) => TRUST_ENTRIES.findIndex((e) => e[0] === d.trust_tier) },
+    { key: "freshness", label: "Freshness", value: (d) => FRESHNESS_ENTRIES.findIndex((e) => e[0] === freshness(d)) },
+    { key: "verified", label: "Verified", value: (d) => latestVerified(d) },
+    { key: "tags", label: "Tags", value: (d) => d.tags.join(" ").toLowerCase() },
+    { key: "in", label: "In", num: true, value: (d) => (backlinks[d.id] || []).length },
+    { key: "out", label: "Out", num: true, value: (d) => (outLinks[d.id] || []).length },
+    // Only while a ranked query is active: how well each concept matches it.
+    { key: "match", label: "Match", num: true, value: (d) => (rankedIds && rankedIds.has(d.id) ? ranking.find((h) => h.entry.id === d.id).score : 0) },
+  ];
+  let sort = { key: "title", dir: 1 };
+  for (const column of COLUMNS) {
+    const th = document.createElement("th");
+    th.scope = "col";
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = column.label;
+    button.addEventListener("click", () => {
+      sort = { key: column.key, dir: sort.key === column.key ? -sort.dir : 1 };
+      userSorted = true;
+      refreshTable();
+    });
+    th.append(button);
+    column.th = th;
+    document.querySelector("#concept-table thead tr").append(th);
+  }
+
+  function refreshTable() {
+    const column = COLUMNS.find((c) => c.key === sort.key);
+    const scores = new Map(ranking.map((h) => [h.entry.id, h.score]));
+    COLUMNS.find((c) => c.key === "match").th.hidden = !rankedIds;
+    for (const c of COLUMNS) {
+      if (c === column) c.th.setAttribute("aria-sort", sort.dir === 1 ? "ascending" : "descending");
+      else c.th.removeAttribute("aria-sort");
+    }
+    const rows = bundle.nodes.map((n) => n.data).filter(passesFilters);
+    rows.sort((a, b) => {
+      const x = column.value(a);
+      const y = column.value(b);
+      const order = x < y ? -1 : x > y ? 1 : a.label.localeCompare(b.label);
+      // Blank dates sort last in both directions.
+      if (column.key === "verified" && (x === "" || y === "") && x !== y) return x === "" ? 1 : -1;
+      return order * sort.dir;
+    });
+    $("table-empty").hidden = rows.length > 0;
+    $("concept-table").hidden = rows.length === 0;
+    $("concept-table").querySelector("tbody").replaceChildren(...rows.map((d) => {
+      const tr = document.createElement("tr");
+      tr.tabIndex = 0;
+      if (d.id === current) tr.setAttribute("aria-selected", "true");
+      tr.addEventListener("click", () => open(d.id));
+      tr.addEventListener("keydown", (event) => { if (event.key === "Enter") open(d.id); });
+      const cell = (content, className) => {
+        const td = document.createElement("td");
+        if (className) td.className = className;
+        td.append(content);
+        return td;
+      };
+      const title = document.createElement("a");
+      title.href = "#" + d.id;
+      title.textContent = d.label;
+      title.addEventListener("click", (event) => event.preventDefault());
+      const type = document.createDocumentFragment();
+      const dot = document.createElement("span");
+      dot.className = "dot";
+      dot.style.background = d.typeColor;
+      type.append(dot, d.type);
+      const fresh = freshness(d);
+      const verified = latestVerified(d);
+      tr.append(
+        cell(title),
+        cell(type),
+        cell(TRUST_LABEL[d.trust_tier] || d.trust_tier),
+        cell(FRESH_LABEL[fresh] + (d.status !== "stable" ? " (" + d.status + ")" : "")),
+        cell(verified || "\u2014", verified ? "" : "muted"),
+        cell(d.tags.join(", ")),
+        cell(String((backlinks[d.id] || []).length), "num"),
+        cell(String((outLinks[d.id] || []).length), "num"),
+      );
+      if (rankedIds) tr.append(cell((scores.get(d.id) || 0).toFixed(2), "num"));
+      return tr;
+    }));
+  }
+
+  function refreshLists() {
+    if (view === "tree") refreshTree();
+    else if (view === "table") refreshTable();
+  }
+
+  // --- Colour by: type, trust or freshness -------------------------------------
+  $("color-by").addEventListener("change", () => {
+    colorMode = $("color-by").value;
+    cy.batch(() => cy.nodes().forEach((node) => node.data("color", colorOf(node.data()))));
+    renderLegend();
+    refreshTree();
+  });
+  cy.batch(() => cy.nodes().forEach((node) => node.data("color", colorOf(node.data()))));
+
+  // --- Neighbourhood: the open concept, what links to it on the left, what it links to on the right
+  function applyHood() {
+    const focus = cy.getElementById(current);
+    if (focus.empty()) return;
+    const near = focus.closedNeighborhood();
+    cy.elements().not(near).addClass("hood-hidden");
+    near.removeClass("hood-hidden");
+    const ins = focus.incomers("node");
+    const outs = focus.outgoers("node");
+    const both = ins.intersection(outs);
+    const column = (nodes, x, y0) => nodes.forEach((node, i) => node.position({ x, y: y0 + (i - (nodes.length - 1) / 2) * 76 }));
+    focus.position({ x: 0, y: 0 });
+    column(ins.difference(outs), -340, 0);
+    column(outs.difference(ins), 340, 0);
+    column(both, 0, 130 + Math.max(0, (both.length - 1) / 2) * 76);
+    cy.fit(near, 60);
+    if (cy.zoom() > 1.2) { cy.zoom(1.2); cy.center(near); }
+  }
+  $("hood-toggle").addEventListener("click", () => {
+    hood = !hood;
+    $("hood-toggle").setAttribute("aria-pressed", String(hood));
+    $("layout").disabled = hood;
+    if (hood) {
+      applyHood();
+    } else {
+      cy.elements().removeClass("hood-hidden");
+      cy.layout(layoutOptions($("layout").value)).run();
+      cy.fit(undefined, 40);
+    }
+  });
+
+  $("reset").addEventListener("click", () => {
+    $("search").value = "";
+    $("filter-type").value = "";
+    $("filter-trust").value = "";
+    $("filter-fresh").value = "";
+    userSorted = false;
+    applyFilters();
+    clearFocus();
+    if (hood) applyHood();
+    else cy.fit(undefined, 40);
+  });
+
+  $("reading-toggle").addEventListener("click", () => {
+    const reading = document.body.classList.toggle("reading");
+    $("reading-toggle").setAttribute("aria-pressed", String(reading));
+    if (!reading) {
+      cy.resize();
+      if (hood) applyHood();
+      else cy.fit(undefined, 40);
+    }
+  });
+
+  // The button names the theme it switches to; the full wording lives in aria-label and title.
+  function updateThemeButton() {
+    const to = theme === "dark" ? "light" : "dark";
+    const button = $("theme-toggle");
+    button.textContent = to === "dark" ? "Dark" : "Light";
+    button.title = "Switch to " + to + " theme (t)";
+    button.setAttribute("aria-label", "Switch to " + to + " theme");
+  }
+  $("theme-toggle").addEventListener("click", () => {
+    theme = theme === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = theme;
+    try { localStorage.setItem(THEME_KEY, theme); } catch {}
+    updateThemeButton();
+    cy.style(graphStyle());
+    if (current) {
+      // Re-render so diagrams pick up the new theme, keeping the reading position.
+      const scroll = $("detail").scrollTop;
+      show(current);
+      $("detail").scrollTop = scroll;
+    }
+  });
+
+  updateThemeButton();
+  cy.fit(undefined, 40);
+
+  // Open the concept named in the URL, else the first Application concept, else the most linked-to one.
+  const requested = decodeURIComponent(location.hash.slice(1));
+  const byLinks = [...bundle.nodes].sort((a, b) => (backlinks[b.data.id] || []).length - (backlinks[a.data.id] || []).length);
+  const start = byId[requested]
+    ? requested
+    : (bundle.nodes.find((node) => node.data.type === "Application") || byLinks[0] || { data: {} }).data.id;
+  if (start) show(start);
+
+  // Audit hook for --check-render (harmless in normal use): just enough access
+  // to drive the viewer and observe diagram render states. Note: this block
+  // lives inside a Node template literal, so no backticks are allowed here.
+  window.__OKF_VIEW__ = {
+    ids: bundle.nodes.map((node) => node.data.id),
+    show,
+    // Graph state for the tests: the nodes currently drawn, and where one sits.
+    visibleIds: () => cy.nodes().filter((node) => node.style("display") !== "none").map((node) => node.id()),
+    position: (id) => cy.getElementById(id).position(),
+    // Whether every drawn node lies inside the graph pane.
+    inView: () => cy.nodes().filter((node) => node.style("display") !== "none").every((node) => { const b = node.renderedBoundingBox(); return b.x1 >= 0 && b.y1 >= 0 && b.x2 <= cy.width() && b.y2 <= cy.height(); }),
+    // How many diagrams this concept should produce, counted the way
+    // renderMermaid finds them: from the parsed markdown, not from a pattern
+    // over the source. An example fence nested inside another fence is a code
+    // block to marked, so it is not counted here either, and a tilde fence is.
+    // Returns null if marked has not loaded, meaning "cannot say".
+    mermaidCount(id) {
+      if (!window.marked) return null;
+      const doc = new DOMParser().parseFromString(
+        marked.parse(bundle.bodies[id] || "", { gfm: true }),
+        "text/html",
+      );
+      return doc.querySelectorAll("pre > code.language-mermaid").length;
+    },
+    // How many widgets this concept should mount, counted from the parsed
+    // markdown the way renderWidgets finds them. Null means "cannot say".
+    widgetCount(id) {
+      if (!window.marked) return null;
+      const doc = new DOMParser().parseFromString(
+        marked.parse(bundle.bodies[id] || "", { gfm: true }),
+        "text/html",
+      );
+      return doc.querySelectorAll("pre > code.language-widget").length;
+    },
+    // How many quiz questions this concept should render, counted the way
+    // renderQuizzes finds them: from the parsed markdown. Returns null if
+    // marked has not loaded, meaning "cannot say".
+    quizCount(id) {
+      if (!window.marked) return null;
+      const doc = new DOMParser().parseFromString(
+        marked.parse(bundle.bodies[id] || "", { gfm: true }),
+        "text/html",
+      );
+      let total = 0;
+      for (const block of doc.querySelectorAll("pre > code.language-quiz")) {
+        total += parseQuiz(block.textContent).length;
+      }
+      return total;
+    },
+    // The error paths the render gate checks: how many quiz questions should
+    // show the "exactly one correct option" error, and how many [!type]
+    // blockquotes should become callouts (known) or stay blockquotes (unknown).
+    // Returns null if marked has not loaded.
+    markupCounts(id) {
+      if (!window.marked) return null;
+      const doc = new DOMParser().parseFromString(
+        marked.parse(bundle.bodies[id] || "", { gfm: true }),
+        "text/html",
+      );
+      let quizErrors = 0;
+      for (const block of doc.querySelectorAll("pre > code.language-quiz")) {
+        for (const question of parseQuiz(block.textContent)) {
+          if (question.options.filter((option) => option.correct).length !== 1) quizErrors++;
+        }
+      }
+      let knownCallouts = 0;
+      let unknownCallouts = 0;
+      for (const quote of doc.querySelectorAll("blockquote")) {
+        const type = calloutMarker(quote);
+        if (type === null) continue;
+        if (CALLOUT_TYPES[type]) knownCallouts++;
+        else unknownCallouts++;
+      }
+      return { quizErrors, knownCallouts, unknownCallouts };
+    },
+  };
+
+  // --- B: shortcuts ---
+  // A plain key runs one entry of SHORTCUTS when no modifier is held and focus is not where typing goes
+  // (a field, a select, or anything editable). Ctrl+K is the one modified shortcut, and it works from fields.
+  // '?' toggles the key badges on the buttons; Escape, another key, a click, a blur or a hidden tab clears them.
+  // The registry drives the handlers, the badges, aria-keyshortcuts and window.__OKF_SHORTCUTS__ (for the tests).
+  const isShown = (el) => !!el && el.getClientRects().length > 0;
+  const viewButton = (name) => $("view-switch").querySelector('button[data-view="' + name + '"]');
+  const SHORTCUTS = [
+    { id: "search", key: "/", ctrl: "k", label: "Search", el: $("search"), run: () => (modal.hidden ? openSearch() : $("sm-input").focus()), when: () => true },
+    { id: "view-graph", key: "1", label: "Graph view", el: viewButton("graph"), run: () => viewButton("graph").click(), when: () => true },
+    { id: "view-tree", key: "2", label: "Tree view", el: viewButton("tree"), run: () => viewButton("tree").click(), when: () => true },
+    { id: "view-table", key: "3", label: "Table view", el: viewButton("table"), run: () => viewButton("table").click(), when: () => true },
+    { id: "filters", key: "f", label: "Filters", el: $("filters-toggle"), run: () => $("filters-toggle").click(), when: () => true },
+    { id: "display", key: "d", label: "Display", el: $("display-toggle"), run: () => $("display-toggle").click(), when: () => true },
+    { id: "reading", key: "r", label: "Reading view", el: $("reading-toggle"), run: () => $("reading-toggle").click(), when: () => true },
+    { id: "theme", key: "t", label: "Theme", el: $("theme-toggle"), run: () => $("theme-toggle").click(), when: () => true },
+    { id: "hood", key: "n", label: "Neighbourhood", el: $("hood-toggle"), run: () => $("hood-toggle").click(), when: () => view === "graph" },
+    { id: "reset", key: "x", label: "Reset", el: $("reset"), run: () => $("reset").click(), when: () => isShown($("reset")) },
+  ];
+  // '?' toggles the badges on the other buttons; its own button (the ? in the bar) is the registry's
+  // target for it, so the bar names the key and the help panel can be built from this one list.
+  const HELP = { id: "help", key: "?", label: "Show keys on the buttons", el: $("help-toggle"), run: () => setHints(!hintsOn), when: () => true };
+  SHORTCUTS.push(HELP);
+  window.__OKF_SHORTCUTS__ = SHORTCUTS;
+
+  // The search box is an input and cannot hold a badge, so its hint is the placeholder. When the
+  // hint goes away, the placeholder returns to the one the search-mode control sets.
+  const modePlaceholder = () => ($("search-mode").value === "ranked" ? "Search concepts" : "Filter by title, path or tag");
+  // aria-keyshortcuts names the keys that work now. Neighbourhood's n works in the graph view only, so it is named only there.
+  // setView calls this again when the view changes.
+  function syncKeyshortcuts() {
+    for (const entry of SHORTCUTS) {
+      const keys = entry.ctrl ? entry.key + " Control+" + entry.ctrl.toUpperCase() : entry.key;
+      if (entry.id === "hood" && view !== "graph") entry.el.removeAttribute("aria-keyshortcuts");
+      else entry.el.setAttribute("aria-keyshortcuts", keys);
+    }
+  }
+  syncKeyshortcuts();
+  for (const entry of SHORTCUTS) {
+    // Search is an input, and the help button is the ? itself, so neither takes a badge.
+    if (entry.id === "search" || entry.id === "help") continue;
+    entry.badge = document.createElement("kbd");
+    entry.badge.className = "kbd-hint";
+    entry.badge.setAttribute("aria-hidden", "true");
+    entry.badge.textContent = entry.key;
+    entry.el.append(entry.badge);
+  }
+
+  // The help panel's list comes from the same registry, so a new shortcut cannot drift from what
+  // the panel shows. Ctrl+K shares the search row with '/', since both open the same thing.
+  $("help-list").replaceChildren(...SHORTCUTS.map((entry) => {
+    const li = document.createElement("li");
+    const cap = document.createElement("kbd");
+    cap.className = "keycap";
+    cap.textContent = entry.ctrl ? entry.key + " or Ctrl+" + entry.ctrl.toUpperCase() : entry.key;
+    const what = document.createElement("span");
+    what.textContent = entry.label;
+    li.append(cap, what);
+    return li;
+  }));
+
+  let hintsOn = false;
+  // Badges are reattached and re-shown here: a theme switch rewrites the theme button's text,
+  // which drops its badge, and a shortcut can open or close a panel that hides a target.
+  function syncHints() {
+    for (const entry of SHORTCUTS) {
+      if (!entry.badge) continue;
+      if (entry.badge.parentElement !== entry.el) entry.el.append(entry.badge);
+      entry.badge.hidden = !isShown(entry.el);
+    }
+  }
+  function setHints(on) {
+    hintsOn = on;
+    document.body.classList.toggle("kbd-hints", on);
+    $("search").placeholder = on ? "/ to search" : modePlaceholder();
+    if (on) syncHints();
+  }
+  function hideHints() {
+    if (hintsOn) setHints(false);
+  }
+
+  const MODIFIER_KEYS = new Set(["Shift", "Control", "Alt", "Meta", "CapsLock"]);
+  // Where typing goes: a text field, a select (its keys pick an option) or anything editable.
+  const isTyping = (el) => !!el && (el.isContentEditable || el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT");
+  // macOS, where Ctrl+K in a text field is the Cocoa kill-to-end-of-line command.
+  const isMac = () => /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent || "");
+  // The entry a key press asks for, or null. Ctrl+K is the only key with a modifier. Shift is not refused as
+  // a whole: '?' and the symbols some layouts need Shift for ('/' on German) work, and only a shifted letter is refused.
+  function shortcutFor(event) {
+    const key = event.key.toLowerCase();
+    if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) return SHORTCUTS.find((s) => s.ctrl === key) || null;
+    if (event.ctrlKey || event.metaKey || event.altKey) return null;
+    if (event.key === "?") return HELP;
+    if (event.shiftKey && /^[a-z]$/i.test(event.key)) return null;
+    // AZERTY types 1 2 3 only with Shift, and unshifted the same keys type & é ". So a key that is not a digit
+    // takes its digit from the physical key, unshifted only: US Shift+1 is '!', and Numpad1 with NumLock off is End.
+    let name = key;
+    const digitKey = /^(?:Digit|Numpad)([1-3])$/.exec(event.code || "");
+    if (!/^[1-3]$/.test(name) && digitKey && !event.shiftKey && name.length === 1) name = digitKey[1];
+    return SHORTCUTS.find((s) => s.key === name) || null;
+  }
+
+  document.addEventListener("keydown", (event) => {
+    // A key that is part of an IME composition is not a shortcut (keyCode 229 is how older browsers say so).
+    if (event.isComposing || event.keyCode === 229 || MODIFIER_KEYS.has(event.key) || event.repeat) return;
+    const entry = shortcutFor(event);
+    const modalOpen = document.body.classList.contains("search-open");
+    // Ctrl+K reaches the search from a field too, except on macOS, where it is the field's own command.
+    // A plain key never runs while typing, and while the search modal is open only search (its '/'
+    // refocuses the box) runs, so the modal keeps its keys.
+    const typing = isTyping(document.activeElement);
+    const fieldOk = event.ctrlKey ? !(typing && isMac()) : !typing;
+    const usable = !!entry && entry.when() && fieldOk && (!modalOpen || entry.id === "search");
+    if (!usable) {
+      hideHints();
+      return;
+    }
+    event.preventDefault();
+    if (entry !== HELP) hideHints();
+    entry.run();
+  });
+  // Clicking elsewhere, leaving the window or hiding the tab clears the badges.
+  document.addEventListener("pointerdown", hideHints);
+  window.addEventListener("blur", hideHints);
+  document.addEventListener("visibilitychange", hideHints);
+})();
+`;
+
+// --- CLI -------------------------------------------------------------------------
+
+function parseArgs(argv: string[]): Options {
+  const opts: Options = {
+    bundle: 'okf',
+    out: null,
+    validateOnly: false,
+    strict: false,
+    checkRender: false,
+    fix: false,
+    widgets: null,
+  };
+  const positional: string[] = [];
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i]!;
+    if (a === '--out') {
+      opts.out = argv[++i] ?? null;
+    } else if (a === '--validate') {
+      opts.validateOnly = true;
+    } else if (a === '--check-render') {
+      opts.checkRender = true;
+    } else if (a === '--fix') {
+      opts.fix = true;
+    } else if (a === '--strict') {
+      opts.strict = true;
+    } else if (a === '--widgets') {
+      opts.widgets = argv[++i] ?? null;
+    } else if (a.startsWith('-')) {
+      console.error('Unknown flag: ' + a);
+      process.exit(2);
+    } else positional.push(a);
+  }
+  if (positional.length) opts.bundle = positional[0]!;
+  if (opts.validateOnly && opts.checkRender) {
+    console.error(
+      '--check-render writes the viewer first; it cannot be combined with --validate.',
+    );
+    process.exit(2);
+  }
+  return opts;
+}
+
+const firstLine = (e: unknown): string => errorMessage(e).split('\n')[0] ?? '';
+
+/**
+ * Race a promise against a deadline. A late rejection from the loser (the
+ * browser closing under a still-pending evaluate) is swallowed, so it cannot
+ * surface as an unhandled rejection after the race has settled.
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  promise.catch(() => {});
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms);
+  });
+  return Promise.race([promise, deadline]).finally(() => clearTimeout(timer));
+}
+
+const CONCEPT_TIMEOUT_MS = 20000;
+
+/**
+ * Client-side render gate. Opens the freshly written viz.html in headless
+ * Chromium (via the project-local playwright, else playwright-core), walks
+ * every concept through view.show(), and waits for each concept's Mermaid
+ * figures to leave data-state="pending".
+ *
+ * Returns a process exit code, on the same contract as g2g-mermaid.mts:
+ *   0  every diagram rendered, each with working pan/zoom controls, and every
+ *      quiz question rendered
+ *   1  a diagram ended in error, never left pending, a concept rendered a
+ *      different number of figures or quiz questions than its markdown parses
+ *      to, a rendered diagram is missing its pan/zoom controls, the zoom-in
+ *      control did not change the diagram's transform, a click on a correct
+ *      quiz answer did not reveal its feedback and move the score, or a widget
+ *      did not mount or did not respond to its data-probe control
+ *   2  the check could not run: no playwright, no Chromium, the viewer's CDN
+ *      libraries never loaded, or the audit itself failed
+ *
+ * A check that could not run is never reported as a pass: exit 2 says the
+ * diagrams are unproven, which is not the same as fine.
+ */
+async function checkRender(outPath: string): Promise<number> {
+  // Loaded on demand: playwright is only needed by this gate, and is optional.
+  let chromium: typeof import('playwright').chromium | undefined;
+  for (const mod of ['playwright', 'playwright-core']) {
+    try {
+      chromium = (await import(mod)).chromium;
+      break;
+    } catch {
+      /* try next */
+    }
+  }
+  const cannotRun = (why: string, fix?: string) => {
+    console.log(`\nBrowser render check: could not run (${why})`);
+    if (fix) console.log(`  ${fix}`);
+    console.log(
+      '  exit 2: the gate did not run, so nothing is proven about the diagrams.',
+    );
+    return 2;
+  };
+  if (!chromium) {
+    return cannotRun(
+      'playwright not installed',
+      'fix: npm i -D playwright && npx playwright install chromium',
+    );
+  }
+
+  let browser;
+  try {
+    browser = await chromium.launch({ headless: true });
+  } catch (e) {
+    return cannotRun(
+      'could not launch chromium: ' + firstLine(e),
+      'fix: npx playwright install chromium',
+    );
+  }
+
+  console.log('\nBrowser render check (headless Chromium):');
+  try {
+    const page = await browser.newPage();
+    await page.goto(pathToFileURL(outPath).href, { waitUntil: 'load' });
+    try {
+      await page.waitForFunction(
+        'window.__OKF_VIEW__ && window.marked && window.mermaid',
+        null,
+        { timeout: 30000 },
+      );
+    } catch (e) {
+      // marked and Mermaid come from a CDN. Without them there is nothing to
+      // audit, and this is exactly the failure the gate exists to catch, so it
+      // must not pass quietly.
+      return cannotRun(
+        'the viewer never finished loading its CDN libraries: ' + firstLine(e),
+        'fix: re-run where cdn.jsdelivr.net is reachable (the viewer needs it to render at all)',
+      );
+    }
+
+    const ids: string[] = await page.evaluate('window.__OKF_VIEW__.ids');
+    const budgetMs = 60000 + ids.length * (CONCEPT_TIMEOUT_MS + 5000);
+    const report = await withTimeout(
+      page.evaluate(async (conceptTimeoutMs: number) => {
+        const view = window.__OKF_VIEW__;
+        const diagrams = [];
+        const mismatches = [];
+        const quizMismatches = [];
+        let zoomChecked = false;
+        let zoomWorks = null;
+        let quizChecked = false;
+        let quizWorks = null;
+        let quizQuestions = 0;
+        let quizErrors = 0;
+        let unknownCallouts = 0;
+        const markupMismatches = [];
+        const widgets = [];
+        const widgetMismatches = [];
+        const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+        for (const id of view.ids) {
+          view.show(id);
+          const expected = view.mermaidCount(id);
+          const deadline = Date.now() + conceptTimeoutMs;
+          while (
+            Date.now() < deadline &&
+            document.querySelector<HTMLElement>(
+              "#detail-body .mermaid[data-state='pending']",
+            )
+          ) {
+            await new Promise((resolve) => setTimeout(resolve, 100));
+          }
+          const figures = [
+            ...document.querySelectorAll<HTMLElement>('#detail-body .mermaid'),
+          ];
+          if (expected !== null && figures.length !== expected) {
+            mismatches.push({ concept: id, expected, found: figures.length });
+          }
+          for (const fig of figures) {
+            diagrams.push({
+              concept: id,
+              state:
+                fig.dataset.state === 'pending' ? 'timeout' : fig.dataset.state,
+              error:
+                fig.dataset.state === 'error'
+                  ? String(fig.querySelector<HTMLElement>('p')?.textContent || '').slice(
+                      0,
+                      400,
+                    )
+                  : undefined,
+              controls: fig.querySelectorAll<HTMLElement>('.mermaid-tools button').length,
+              canvas: Boolean(fig.querySelector<HTMLElement>('.mermaid-canvas > svg')),
+            }); // Prove the pan/zoom wiring on the first rendered diagram: one
+            // zoom-in click has to change the transform, not just exist.
+            if (!zoomChecked && fig.dataset.state === 'rendered') {
+              const zoomIn = fig.querySelector<HTMLElement>(
+                ".mermaid-tools button[data-act='zoom-in']",
+              );
+              const svg = fig.querySelector<HTMLElement>('.mermaid-canvas > svg');
+              if (zoomIn && svg) {
+                const before = svg.style.transform;
+                zoomIn.click();
+                zoomChecked = true;
+                zoomWorks =
+                  svg.style.transform !== before &&
+                  svg.style.transform.indexOf('scale(') !== -1;
+              }
+            }
+          }
+
+          // Quizzes: the rendered question count has to match the markdown, and
+          // the first question with a correct option has to respond to a click
+          // by revealing its feedback and moving the score.
+          const expectedQuiz = view.quizCount(id);
+          const cards = [
+            ...document.querySelectorAll<HTMLElement>('#detail-body .quiz-card'),
+          ];
+          if (expectedQuiz !== null && cards.length !== expectedQuiz) {
+            quizMismatches.push({
+              concept: id,
+              expected: expectedQuiz,
+              found: cards.length,
+            });
+          }
+          quizQuestions += cards.length;
+          // Error paths: a malformed question shows its error, a known [!type]
+          // becomes a callout, and an unknown one stays a plain blockquote.
+          const markup = view.markupCounts(id);
+          if (markup !== null) {
+            const body = document.querySelector<HTMLElement>('#detail-body')!;
+            const found: Record<string, number> = {
+              quizErrors: body.querySelectorAll<HTMLElement>('.quiz-error').length,
+              knownCallouts: body.querySelectorAll<HTMLElement>('.callout').length,
+              unknownCallouts: [...body.querySelectorAll<HTMLElement>('blockquote')].filter(
+                (quote) =>
+                  String(quote.textContent).trimStart().slice(0, 2) === '[!',
+              ).length,
+            };
+            for (const key of Object.keys(found)) {
+              if (found[key] !== markup[key]) {
+                markupMismatches.push({
+                  concept: id,
+                  what: key,
+                  expected: markup[key],
+                  found: found[key],
+                });
+              }
+            }
+            quizErrors += found.quizErrors!;
+            unknownCallouts += found.unknownCallouts!;
+            // A fixture's hand-declared counts are the independent check: they catch a bug
+            // in parseQuiz or calloutMarker that the comparison above would share.
+            const declared = (window.BUNDLE.expects || {})[id];
+            if (declared) {
+              const actual: Record<string, number> = { ...found, quizQuestions: cards.length };
+              for (const key of Object.keys(declared)) {
+                if (actual[key] !== declared[key]) {
+                  markupMismatches.push({
+                    concept: id,
+                    what: key + ' (declared in render_expect)',
+                    expected: declared[key],
+                    found: actual[key],
+                  });
+                }
+              }
+            }
+          }
+          if (!quizChecked) {
+            const card = cards.find(
+              (c) => c.dataset.correctIndex !== undefined,
+            );
+            if (card) {
+              const buttons = card.querySelectorAll<HTMLElement>('.quiz-options button');
+              const button = buttons[Number(card.dataset.correctIndex)];
+              const feedback = card.querySelector<HTMLElement>('.quiz-feedback');
+              const score = card.closest('.quiz')?.querySelector<HTMLElement>('.quiz-score');
+              if (button) {
+                button.click();
+                quizChecked = true;
+                quizWorks =
+                  card.dataset.answered === 'true' &&
+                  card.dataset.right === 'true' &&
+                  feedback !== null &&
+                  !feedback.hidden &&
+                  feedback.classList.contains('is-correct') &&
+                  (!score || score.textContent.indexOf('Score 1 /') === 0);
+              }
+            }
+          }
+          // Widgets: every widget block has to mount its React figure, and the
+          // control each widget marks with data-probe has to change what it shows.
+          const expectedWidgets = view.widgetCount(id);
+          const mounts = [
+            ...document.querySelectorAll<HTMLElement>('#detail-body .widget-mount'),
+          ];
+          if (expectedWidgets !== null && mounts.length !== expectedWidgets) {
+            widgetMismatches.push({
+              concept: id,
+              expected: expectedWidgets,
+              found: mounts.length,
+            });
+          }
+          for (const mount of mounts) {
+            const mountDeadline = Date.now() + 5000;
+            while (
+              Date.now() < mountDeadline &&
+              mount.dataset.state === 'mounted' &&
+              !mount.querySelector<HTMLElement>('figure.okfw')
+            ) {
+              await pause(50);
+            }
+            const figure = mount.querySelector<HTMLElement>('figure.okfw');
+            const probe = figure ? figure.querySelector<HTMLElement>('[data-probe]') : null;
+            let responds = false;
+            if (figure && probe) {
+              const before = figure.textContent;
+              probe.click();
+              const clickDeadline = Date.now() + 2000;
+              while (
+                Date.now() < clickDeadline &&
+                figure.textContent === before
+              ) {
+                await pause(50);
+              }
+              responds = figure.textContent !== before;
+            }
+            const error =
+              mount.querySelector<HTMLElement>('.widget-error') ||
+              (figure && figure.querySelector<HTMLElement>('.okfw-error'));
+            widgets.push({
+              concept: id,
+              name: mount.dataset.widget,
+              mounted: Boolean(figure),
+              probe: Boolean(probe),
+              responds,
+              error: error
+                ? String(error.textContent).slice(0, 300)
+                : undefined,
+            });
+          }
+        }
+        return {
+          diagrams,
+          mismatches,
+          quizMismatches,
+          quizChecked,
+          quizWorks,
+          quizQuestions,
+          quizErrors,
+          unknownCallouts,
+          markupMismatches,
+          zoomChecked,
+          zoomWorks,
+          widgets,
+          widgetMismatches,
+        };
+      }, CONCEPT_TIMEOUT_MS),
+      budgetMs,
+      `render audit did not finish within ${Math.round(budgetMs / 1000)}s`,
+    );
+
+    const total = report.diagrams.length;
+    const failed = report.diagrams.filter((d) => d.state !== 'rendered');
+    const bare = report.diagrams.filter(
+      (d) => d.state === 'rendered' && (!d.canvas || !d.controls),
+    );
+    const zoomBroken = report.zoomChecked && !report.zoomWorks;
+    const quizBroken = report.quizChecked && !report.quizWorks;
+    const widgetsBroken = report.widgets.filter(
+      (w) => !w.mounted || !w.probe || !w.responds || w.error,
+    );
+    console.log(`  concepts visited : ${ids.length}`);
+    console.log(`  diagrams found   : ${total}`);
+    console.log(`  rendered ok      : ${total - failed.length}`);
+    console.log(`  failed           : ${failed.length}`);
+    console.log(
+      `  pan/zoom wired   : ${report.zoomChecked ? (report.zoomWorks ? 'yes' : 'no') : 'not checked'}`,
+    );
+    console.log(`  quiz questions   : ${report.quizQuestions}`);
+    console.log(`  quiz errors shown: ${report.quizErrors}`);
+    console.log(
+      `  unknown callouts : ${report.unknownCallouts} (left as blockquotes)`,
+    );
+    console.log(
+      `  quiz click wired : ${report.quizChecked ? (report.quizWorks ? 'yes' : 'no') : 'not checked'}`,
+    );
+    console.log(
+      `  widgets mounted  : ${report.widgets.filter((w) => w.mounted).length} of ${report.widgets.length}`,
+    );
+    console.log(
+      `  widgets respond  : ${report.widgets.filter((w) => w.responds).length} of ${report.widgets.length}`,
+    );
+    for (const w of widgetsBroken) {
+      const why = w.error
+        ? w.error
+        : !w.mounted
+          ? 'did not mount'
+          : !w.probe
+            ? 'has no data-probe control'
+            : 'its data-probe control changed nothing';
+      console.log(`  ✗ ${w.concept}.md  widget ${w.name}: ${why}`);
+    }
+    for (const m of report.widgetMismatches) {
+      console.log(
+        `  ✗ ${m.concept}.md  markdown parses to ${m.expected} widget(s) but the viewer mounted ${m.found}`,
+      );
+    }
+    for (const f of failed) {
+      const detail =
+        f.state === 'timeout'
+          ? `diagram render timed out after ${CONCEPT_TIMEOUT_MS / 1000}s`
+          : f.error || f.state;
+      console.log(`  ✗ ${f.concept}.md  ${detail}`);
+    }
+    for (const b of bare) {
+      console.log(
+        `  ✗ ${b.concept}.md  rendered diagram has no pan/zoom controls (canvas: ${b.canvas}, buttons: ${b.controls})`,
+      );
+    }
+    if (zoomBroken) {
+      console.log('  ✗ clicking zoom-in did not change the diagram transform');
+    }
+    if (quizBroken) {
+      console.log(
+        '  ✗ clicking a correct quiz answer did not reveal its feedback and score',
+      );
+    }
+    for (const m of report.mismatches) {
+      console.log(
+        `  ✗ ${m.concept}.md  markdown parses to ${m.expected} diagram(s) but the viewer rendered ${m.found}`,
+      );
+    }
+    for (const m of report.markupMismatches) {
+      console.log(
+        `  ✗ ${m.concept}.md  expected ${m.expected} ${m.what} but the viewer rendered ${m.found}`,
+      );
+    }
+    for (const m of report.quizMismatches) {
+      console.log(
+        `  ✗ ${m.concept}.md  markdown parses to ${m.expected} quiz question(s) but the viewer rendered ${m.found}`,
+      );
+    }
+    if (
+      failed.length ||
+      bare.length ||
+      zoomBroken ||
+      quizBroken ||
+      report.mismatches.length ||
+      report.quizMismatches.length ||
+      report.markupMismatches.length ||
+      widgetsBroken.length ||
+      report.widgetMismatches.length
+    )
+      return 1;
+    console.log(
+      total
+        ? '  ✓ every mermaid diagram renders client-side with pan/zoom controls'
+        : '  ✓ no mermaid diagrams to check',
+    );
+    if (report.quizQuestions)
+      console.log(
+        '  ✓ every quiz question renders, and a click checks an answer',
+      );
+    if (report.widgets.length)
+      console.log(
+        '  ✓ every widget mounts, and its probe control changes what it shows',
+      );
+    return 0;
+  } catch (e) {
+    return cannotRun('the render audit failed: ' + firstLine(e));
+  } finally {
+    await browser.close();
+  }
+}
+
+function countBy(concepts: Concept[], key: 'trust_tier' | 'status' | 'confidence'): string {
+  const counts: Record<string, number> = {};
+  for (const c of concepts) counts[c[key] || 'none'] = (counts[c[key] || 'none'] || 0) + 1;
+  return Object.entries(counts)
+    .map(([k, v]) => `${k}=${v}`)
+    .join(', ');
+}
+
+async function main() {
+  const opts = parseArgs(process.argv.slice(2));
+  const bundleRoot = path.resolve(opts.bundle);
+  if (!fs.existsSync(bundleRoot) || !fs.statSync(bundleRoot).isDirectory()) {
+    console.error(`Bundle directory not found: ${bundleRoot}`);
+    process.exit(2);
+  }
+  if (opts.fix) {
+    const changed = fixErdLegends(bundleRoot);
+    console.log(
+      changed.length
+        ? `Wrote ER diagram keys in ${changed.length} file(s): ${changed.join(', ')}`
+        : 'ER diagram keys: nothing to fix',
+    );
+  }
+  const { concepts, issues, reserved } = walkBundle(bundleRoot, new Date());
+  const graph = buildGraph(concepts);
+  const outPath = opts.out
+    ? path.resolve(opts.out)
+    : path.join(bundleRoot, 'viz.html');
+
+  console.log(`\nOKF validation: ${bundleRoot}`);
+  const declared = readBundleVersion(bundleRoot);
+  console.log(
+    `  okf_version          : ${declared ?? '(not declared)'}` +
+      (declared === null || declared === OKF_VERSION
+        ? ''
+        : `  (this tool implements ${OKF_VERSION}; read best-effort, see the playbook's migration section)`),
+  );
+  console.log(`  concepts (valid)     : ${concepts.length}`);
+  console.log(`  graph edges          : ${graph.edges.length}`);
+  console.log(`  reserved (index/log) : ${reserved.length}`);
+  console.log(`  issues               : ${issues.length}`);
+  if (issues.length) {
+    console.log('\nIssues:');
+    for (const i of issues)
+      console.log(`  ✗ ${i.file}  [${i.kind}] ${i.message}`);
+  } else {
+    console.log(
+      '  ✓ every non-reserved .md has a type, and every internal link resolves',
+    );
+  }
+  console.log(`  trust tiers: ${countBy(concepts, 'trust_tier')}`);
+  console.log(`  statuses   : ${countBy(concepts, 'status')}`);
+  const lessons = concepts.filter((c) => c.type === 'Lesson');
+  if (lessons.length) console.log(`  confidence : ${countBy(lessons, 'confidence')}  (${lessons.length} lessons)`);
+
+  if (!opts.validateOnly) {
+    const widgetsFile = opts.widgets
+      ? path.resolve(opts.widgets)
+      : fs.existsSync(DEFAULT_WIDGETS_BUNDLE)
+        ? DEFAULT_WIDGETS_BUNDLE
+        : PROJECT_WIDGETS_BUNDLE;
+    const widgetsJs = readWidgetsBundle(widgetsFile);
+    const usesWidgets = concepts.some((c) => /^\s*(`{3,}|~{3,})\s*widget\s*$/m.test(c.body));
+    if (widgetsJs === null && usesWidgets) {
+      console.log(
+        `\nNote: no widget bundle at ${widgetsFile}, so widget blocks show a build hint.` +
+          '\n  fix: npm run okf:widgets:build (or scaffold one: good2go --widgets)',
+      );
+    }
+    const html = buildHTML(readBundleTitle(bundleRoot), graph, widgetsJs);
+    fs.mkdirSync(path.dirname(outPath), { recursive: true });
+    fs.writeFileSync(outPath, html, 'utf8');
+    console.log(
+      `\nWrote viewer: ${outPath} (${html.length} bytes). Open it in a browser; libraries load from a CDN.`,
+    );
+  }
+
+  // A render gate that could not run (2) outranks a conformance failure (1):
+  // the stronger signal is "this was not checked".
+  let exitCode = 0;
+  if (opts.checkRender) exitCode = await checkRender(outPath);
+  if (opts.strict && issues.length && exitCode === 0) exitCode = 1;
+  process.exit(exitCode);
+}
+
+main().catch((e) => {
+  console.error('g2g-view: ' + (e && e.stack ? e.stack : e));
+  process.exit(2);
+});

@@ -29,7 +29,7 @@ release rather than backporting a fix to an older line.
   lessons, and the source files that lessons cite, which are only hashed, never executed).
 - **Files written.** The tools write only under the paths the documentation names, such as the
   design bundle folder (`okf/` by default), `edukai/`, the `viz.html` and cache files inside
-  them, and `.okf-bootstrap.json`, `okf-*-template.md` and `.okf-update/` in the project root. A re-run keeps files you have authored; only `--force` overwrites them.
+  them, `.good2go.json`, and `okf-*-template.md` in the project root. A re-run keeps files you have authored; only `--force` overwrites them.
 - **The memory hook never runs project code.** The hook that tells an agent what its lessons say
   imports only Node built-ins and the bundled ranking module, and it never executes code from the
   project it runs in.

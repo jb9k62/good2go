@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = path.join(ROOT, 'dist');
-const ASSETS = path.join(ROOT, 'skills', 'okf-bootstrap', 'assets');
+const ASSETS = path.join(ROOT, 'src');
 
 fs.rmSync(DIST, { recursive: true, force: true });
 const tsc = path.join(ROOT, 'node_modules', 'typescript', 'bin', 'tsc');
@@ -22,23 +22,12 @@ fs.cpSync(path.join(ASSETS, 'templates'), path.join(DIST, 'templates'), {
   recursive: true,
   filter: (from) => !/(^|[\\/])(node_modules|dist)([\\/]|$)/.test(path.relative(path.join(ASSETS, 'templates'), from)),
 });
-// The skills, without their assets: the tools are the package now, so a skill is its SKILL.md
-// and references, and `good2go skills` installs them for an agent.
-for (const skill of fs.readdirSync(path.join(ROOT, 'skills'))) {
-  fs.cpSync(path.join(ROOT, 'skills', skill), path.join(DIST, 'skills', skill), {
-    recursive: true,
-    filter: (from) => !/(^|[\\/])assets([\\/]|$)/.test(path.relative(path.join(ROOT, 'skills', skill), from)),
-  });
-}
 // The skills (instructions and references, no tools) travel with the package so
 // `good2go skills` can install them for an agent.
-for (const skill of fs.readdirSync(path.join(ROOT, 'skills'))) {
-  const from = path.join(ROOT, 'skills', skill);
-  fs.cpSync(from, path.join(DIST, 'skills', skill), {
-    recursive: true,
-    filter: (src) => !path.relative(from, src).startsWith('assets'),
-  });
-}
+fs.cpSync(path.join(ROOT, 'skills'), path.join(DIST, 'skills'), {
+  recursive: true,
+  filter: (from) => !/(^|[\\/])(node_modules|dist)([\\/]|$)/.test(path.relative(path.join(ROOT, 'skills'), from)),
+});
 // The pi extension that `good2go hooks` installs, with its hook path resolved at install time.
 fs.copyFileSync(path.join(ROOT, 'extensions', 'edukai.ts'), path.join(DIST, 'templates', 'pi-extension.ts'));
 // The command's entry: a plain .js file so `bin` needs no extension rewriting.

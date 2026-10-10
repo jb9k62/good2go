@@ -1,4 +1,4 @@
-/** okf-new: the scaffold validates strictly, refuses escapes, keeps authored files, and reports usage errors. */
+/** g2g-new: the scaffold validates strictly, refuses escapes, keeps authored files, and reports usage errors. */
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -8,10 +8,10 @@ import { after, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const ASSETS = path.join(ROOT, 'skills', 'okf-bootstrap', 'assets');
-const NEW = path.join(ASSETS, 'okf-new.mts');
-const VIEW = path.join(ASSETS, 'okf-view.mts');
-const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'okf-new-'));
+const ASSETS = path.join(ROOT, 'src');
+const NEW = path.join(ASSETS, 'g2g-new.mts');
+const VIEW = path.join(ASSETS, 'g2g-view.mts');
+const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'g2g-new-'));
 after(() => fs.rmSync(scratch, { recursive: true, force: true }));
 
 let n = 0;
@@ -27,7 +27,7 @@ function run(script: string, args: string[]) {
 const make = (p: string, dir: string, extra: string[] = []) =>
   run(NEW, [dir, '--name', 'Runbooks', '--intent', 'How to run it, for the on-call.', '--project-dir', p, ...extra]);
 
-describe('okf-new', () => {
+describe('g2g-new', () => {
   it('scaffolds a bundle that passes the validator in strict mode', () => {
     const p = project();
     const r = make(p, 'ops');

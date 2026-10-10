@@ -3,7 +3,7 @@ type: Reference
 title: ADR template
 description: Starting point for a new decision record.
 tags: [adr, template]
-generated: { by: okf-bootstrap/0.6.0, at: 2026-10-08T20:00:00Z }
+generated: { by: good2go/0.6.0, at: 2026-10-08T20:00:00Z }
 ---
 
 # ADR-NNNN: Short, action-oriented title

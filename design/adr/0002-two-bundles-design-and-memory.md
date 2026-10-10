@@ -5,9 +5,9 @@ description: Why okf/ and edukai/ stay apart, with different readers, units and 
 tags: [adr, edukai, memory]
 generated: { by: pi/deepseek-ai/DeepSeek-V4.1-Flash, at: 2026-10-08T20:00:00Z }
 sources:
-  - resource: skills/okf-bootstrap/SKILL.md
+  - resource: skills/good2go/SKILL.md
   - resource: skills/edukai/SKILL.md
-  - resource: skills/okf-bootstrap/assets/okf-edukai.mts
+  - resource: src/g2g-edukai.mts
 ---
 
 # ADR-0002: Keep design docs and agent memory in two separate bundles

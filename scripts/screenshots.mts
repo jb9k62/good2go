@@ -20,7 +20,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium, type Page } from 'playwright';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const ASSETS = path.join(ROOT, 'skills', 'okf-bootstrap', 'assets');
+const ASSETS = path.join(ROOT, 'src');
 const WIDGETS = path.join(ASSETS, 'templates', 'okf-widgets', 'dist', 'okf-widgets.js');
 const VIEWER = path.join(ROOT, '.cache', 'screenshots', 'viz.html');
 
@@ -104,7 +104,7 @@ const shots = only ? SHOTS.filter((s) => only.includes(s.name)) : SHOTS;
 
 run('npm', ['run', 'build', '-w', 'okf-widgets']);
 run(process.execPath, [
-  path.join(ASSETS, 'okf-view.mts'),
+  path.join(ASSETS, 'g2g-view.mts'),
   'examples/demo/okf',
   '--out',
   VIEWER,

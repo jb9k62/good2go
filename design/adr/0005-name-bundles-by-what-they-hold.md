@@ -5,10 +5,9 @@ description: Why the design bundle should move from okf/ to a configurable desig
 tags: [adr, bundles, layout, ops]
 generated: { by: claude-code/claude-opus-5-5, at: 2026-10-09T12:00:00Z }
 sources:
-  - resource: skills/okf-bootstrap/assets/bootstrap.mts
-  - resource: skills/okf-bootstrap/assets/okf-edukai.mts
-  - resource: skills/okf-bootstrap/assets/okf-update.mts
-  - resource: skills/okf-bootstrap/references/PLAYBOOK.md
+  - resource: src/g2g-init.mts
+  - resource: src/g2g-edukai.mts
+  - resource: skills/good2go/references/PLAYBOOK.md
 ---
 
 # ADR-0005: Name each bundle for what it holds: design/, and an optional ops/
@@ -40,12 +39,12 @@ Many projects need none of this, so it must not be scaffolded by default.
 
 The code fixes the names in several places, which is what a change has to undo:
 
-- `bootstrap.mts` writes the skeleton to `path.join(target, 'okf')`, and every `okf:` npm
+- `g2g-init.mts` writes the skeleton to `path.join(target, 'okf')`, and every `okf:` npm
   script it adds passes the literal `okf` to the tool. `--tools-only` refuses to run without
   an `okf/` folder.
-- `okf-update.mts` maps each template to a path beginning `okf/`.
-- `okf-search.mts` and `okf-mermaid.mts` default their bundle to `okf`.
-- `okf-edukai.mts` decides a bundle is the memory bundle when its folder is *named* `edukai`.
+- `okf-update.mts` (since removed, see [ADR-0008](/adr/0008-rename-to-good2go-and-src-layout.md)) mapped each template to a path beginning `okf/`.
+- `g2g-search.mts` and `g2g-mermaid.mts` default their bundle to `okf`.
+- `g2g-edukai.mts` decides a bundle is the memory bundle when its folder is *named* `edukai`.
   A role is read from a folder name, so a renamed folder silently changes behaviour.
 - The scaffold also creates a subfolder `okf/design/` for a project's first concepts
   (`PLAYBOOK.md`). A bundle named `design/` would contain a `design/design/`.
@@ -78,7 +77,7 @@ In detail:
   `edukai/`. The design folder is chosen with `--design-dir`, for a project where `design/`
   already holds mock-ups. An ops bundle is made with `good2go new ops`, in whatever folder the
   project likes. A dedicated `--ops` flag with the starter sections below is still to do.
-- **The manifest records the choice.** `.okf-bootstrap.json` records the design folder
+- **The manifest records the choice.** `.good2go.json` records the design folder
   (`designDir`) today. A `bundles` map from role to folder, which the tools would read instead of
   a folder's name, is still to do. The npm scripts are generated from the design folder.
 - **An existing `okf/` is kept.** A manifest with no `bundles` map means `design: okf`. A

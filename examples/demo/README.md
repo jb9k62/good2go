@@ -40,7 +40,7 @@ file changes. (The brief names a scaffolded project's scripts, `edukai:recheck` 
 ## 2. What it is told when it opens a file
 
 ```text
-$ node skills/okf-bootstrap/assets/okf-edukai-hook.mts cites examples/demo/src/poller/retry.ts --bundle examples/demo/edukai
+$ node src/g2g-hook.mts cites examples/demo/src/poller/retry.ts --bundle examples/demo/edukai
 edukai: 1 lesson cites src/poller/retry.ts
 - [tested] The poller retries a failed poll five times (edukai/codebase-parcel-tracker/lessons/2026-10-02-poller-retries-five-times.md)
 ```
@@ -50,7 +50,7 @@ once per session. A lesson that is in the re-check queue is named with its state
 does not take it as fact:
 
 ```text
-$ node skills/okf-bootstrap/assets/okf-edukai-hook.mts cites examples/demo/src/poller/config.ts --bundle examples/demo/edukai --now 2026-10-15T00:00:00Z
+$ node src/g2g-hook.mts cites examples/demo/src/poller/config.ts --bundle examples/demo/edukai --now 2026-10-15T00:00:00Z
 edukai: 1 lesson cites src/poller/config.ts
 - [failed · observed] The poller times out a carrier call after ten seconds (edukai/codebase-parcel-tracker/lessons/2026-10-03-poller-timeout-is-ten-seconds.md): check "TIMEOUT_MS = 10_000" does not hold in src/poller/config.ts
 ```
@@ -141,7 +141,7 @@ lines). A copy's clock is the real one, not the demo's.
                       4) DONE
 [Stop hook, blocks]   edukai: your changes left 1 lesson wrong. Fix it before you finish: supersede it, or verify it.
                       - [failed] The poller retries a failed poll five times: check "RETRIES = 5" no longer holds in src/poller/retry.ts (…)
-[tool]                Skill okf-bootstrap:edukai
+[tool]                Skill good2go:edukai
 [assistant]           … The fix is to write a replacement lesson, verify it, and supersede the old one. …
                       I haven't touched the lesson files, because the skill says never to edit an old claim to make it true.
 ```
@@ -160,14 +160,14 @@ That run allowed only `Read` and `Edit`, so the model stopped at the commands it
 [tool]                edit src/poller/retry.ts          RETRIES = 4
 [assistant]           DONE
 [follow-up turn]      edukai: your changes left 1 lesson wrong. Fix it before you finish: supersede it, or verify it. …
-[tools]               okf-edukai new … / verify … / supersede …
+[tools]               g2g-edukai new … / verify … / supersede …
 [assistant]           The lesson I broke is fixed. Done.
                       - Replaced "five times" with a new verified lesson "The poller retries a failed poll four times"
                         (check: RETRIES = 4), and superseded the old one (marked deprecated). …
 ```
 
-This folder is not a scaffolded project, so it has no `scripts/okf-edukai.mts`: here the tool
-is run from `skills/okf-bootstrap/assets/`, which works because this repository has `yaml`
+This folder is not a scaffolded project, so it has no `scripts/g2g-edukai.mts`: here the tool
+is run from `src/`, which works because this repository has `yaml`
 installed. In that pi run the model went looking for the tool across the whole disk before it
 found it. The skill now tells an agent not to search, and to offer to scaffold instead.
 (Both transcripts predate one change: the Stop hook now runs through `hooks/edukai-hook.mjs`.)

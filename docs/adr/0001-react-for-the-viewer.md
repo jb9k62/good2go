@@ -6,7 +6,7 @@
 
 ## Context
 
-`okf-view.mts` writes one self-contained `viz.html`. Its client script is about 3,200 lines of
+`g2g-view.mts` writes one self-contained `viz.html`. Its client script is about 3,200 lines of
 imperative DOM code in a template literal: no build step, no bundler, libraries inlined or
 loaded from a pinned CDN. That rule is in `AGENTS.md`, and it is why the viewer is easy to ship
 and to open from anywhere.
@@ -61,8 +61,8 @@ leave the libraries that own their own DOM alone:
 - **The build.** The viewer today is TypeScript Node runs directly. A React viewer needs a
   build to produce its inlined bundle, as the widgets do, so the maintainer's workflow gains a
   step (`npm run build` before the demo and the render gate), and `AGENTS.md`'s "no build step"
-  line must be amended for the viewer's UI bundle. The tools themselves (`okf-view.mts`,
-  `okf-search.mts` and the rest) stay build-free.
+  line must be amended for the viewer's UI bundle. The tools themselves (`g2g-view.mts`,
+  `g2g-search.mts` and the rest) stay build-free.
 - **Size.** React and ReactDOM add to every `viz.html`. We have not measured it; a spike should.
   The widget bundle is only inlined when the project has widgets, but the viewer's UI would
   always be present.

@@ -8,7 +8,7 @@ import { after, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const GOOD2GO = path.join(ROOT, 'skills', 'okf-bootstrap', 'assets', 'good2go.mts');
+const GOOD2GO = path.join(ROOT, 'src', 'good2go.mts');
 const CACHE = path.join(ROOT, '.cache', 'test');
 fs.mkdirSync(CACHE, { recursive: true });
 const scratch = fs.mkdtempSync(path.join(CACHE, 'hooks-'));
@@ -128,7 +128,7 @@ describe('good2go hooks (pi)', () => {
     assert.equal(g2g(['hooks', '--pi', '--home', h]).code, 0);
     const text = fs.readFileSync(ext(h), 'utf8');
     assert.match(text.split('\n')[0]!, /managed by good2go hooks/);
-    assert.ok(text.includes(JSON.stringify(path.join(ROOT, 'skills', 'okf-bootstrap', 'assets', 'okf-edukai-hook.mts'))));
+    assert.ok(text.includes(JSON.stringify(path.join(ROOT, 'src', 'g2g-hook.mts'))));
     assert.ok(!text.includes("new URL('../skills"));
     assert.match(g2g(['hooks', '--pi', '--check', '--home', h]).out, /pi: configured/);
     assert.equal(g2g(['hooks', '--pi', '--remove', '--home', h]).code, 0);
@@ -152,7 +152,7 @@ describe('good2go hooks (pi)', () => {
     fs.mkdirSync(cwd);
     assert.equal(g2g(['hooks', '--project', '--pi'], { cwd }).code, 0);
     const text = fs.readFileSync(path.join(cwd, '.pi', 'extensions', 'edukai.ts'), 'utf8');
-    assert.ok(text.includes('node_modules/@jb9k62/good2go/dist/okf-edukai-hook.mjs'));
+    assert.ok(text.includes('node_modules/@jb9k62/good2go/dist/g2g-hook.mjs'));
   });
 });
 

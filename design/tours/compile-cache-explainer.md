@@ -5,9 +5,9 @@ description: "The two caches the tools keep for this repository's own scripts an
 tags: [explainer, guided-tour, caching, tooling]
 generated: { by: pi/deepseek-ai/DeepSeek-V4.1-Flash, at: 2026-10-08T20:30:00Z }
 sources:
-  - resource: skills/okf-bootstrap/assets/okf-start.mjs
+  - resource: src/g2g-start.mjs
   - resource: hooks/compile-cache.mjs
-  - resource: skills/okf-bootstrap/assets/okf-search.mts
+  - resource: src/g2g-search.mts
 ---
 
 This tour is for anyone who works on this repository, or who has wondered why its npm scripts
@@ -41,8 +41,8 @@ The answer is a cache. In fact there are two, of different kinds.
 
 **The compile cache** saves the stripping. It is switched on in two places:
 
-- `okf-start.mjs` is loaded first by this repository's own npm scripts (`node --import
-  ./skills/okf-bootstrap/assets/okf-start.mjs skills/okf-bootstrap/assets/okf-search.mts`). It
+- `g2g-start.mjs` is loaded first by this repository's own npm scripts (`node --import
+  ./src/g2g-start.mjs src/g2g-search.mts`). It
   is not copied to projects. It keeps the cache under the project's own
   `node_modules/.cache/okf-compile`, or in a private folder under the temp directory when
   there is no `node_modules` to write to.
@@ -50,7 +50,7 @@ The answer is a cache. In fact there are two, of different kinds.
   folder (`edukai-<uid>`, mode `0700`), because a hook may run where the project cannot be
   written to.
 
-**The index cache** saves the reading. `okf-search.mts` keeps an inverted index on disk, so a
+**The index cache** saves the reading. `g2g-search.mts` keeps an inverted index on disk, so a
 search does not have to read and parse every file again.
 
 ## The problem, one step at a time
@@ -77,7 +77,7 @@ never "keep the older entry".
 
 ```mermaid
 flowchart LR
-    start["npm run okf:search"] --> load["load okf-start.mjs"]
+    start["npm run okf:search"] --> load["load g2g-start.mjs"]
     load --> on["enable compile cache"]
     on --> tool["run the tool"]
     tool --> idx{"index cache<br/>key matches?"}
@@ -133,7 +133,7 @@ cache-policy
 > [!edge-case] A file written as the cache is written
 > When a file changes at almost the same moment the cache is written, their timestamps are
 > too close to say which came first. Version control tools call this the "racily clean" case.
-> `okf-search.mts` applies their rule: a file modified close to when the cache was written is
+> `g2g-search.mts` applies their rule: a file modified close to when the cache was written is
 > read again, not trusted.
 
 ## Quiz

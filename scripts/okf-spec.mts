@@ -6,7 +6,7 @@
  * ways, on purpose:
  *   vendor/knowledge-catalog/            a shallow git submodule, pinned to one upstream commit
  *                                        (for maintainers: the pin is visible in git history)
- *   skills/okf-bootstrap/references/okf-spec/
+ *   skills/good2go/references/okf-spec/
  *                                        SPEC.md + LICENSE.md + UPSTREAM.json, copied from that
  *                                        commit, because installs (pi install git:..., Claude
  *                                        Code plugins, plain clones) do not fetch submodules,
@@ -34,7 +34,7 @@ const LICENSE_PATH = 'okf/LICENSE.md';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SUBMODULE = path.join(ROOT, 'vendor', 'knowledge-catalog');
-const DEST = path.join(ROOT, 'skills', 'okf-bootstrap', 'references', 'okf-spec');
+const DEST = path.join(ROOT, 'skills', 'good2go', 'references', 'okf-spec');
 const UPSTREAM_FILE = path.join(DEST, 'UPSTREAM.json');
 
 interface Upstream {
@@ -199,7 +199,7 @@ function update(ref: string, dryRun: boolean): number {
       `  1. Read ${changes ? `"${changes[0].replace(/^## /, '')}"` : 'the "Changes from" section'} in the new SPEC.md,`,
     );
     console.log('     and the versioning rules (a major bump may rename required fields).');
-    console.log(`  2. Update the tools: OKF_VERSION in okf-view.mts, and any rule the changes touch`);
+    console.log(`  2. Update the tools: OKF_VERSION in g2g-view.mts, and any rule the changes touch`);
     console.log('     (reserved files, required frontmatter, trust tiers, link resolution).');
     console.log('  3. Update the templates (okf_version in templates/okf/index.md), SKILL.md, PLAYBOOK.md');
     console.log('     and the demo bundle. Files that name the old version:');

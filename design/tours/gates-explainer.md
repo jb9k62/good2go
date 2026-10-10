@@ -5,9 +5,9 @@ description: "Why every check here returns 0, 1 or 2, and why 'could not run' mu
 tags: [explainer, guided-tour, gates, ci]
 generated: { by: pi/deepseek-ai/DeepSeek-V4.1-Flash, at: 2026-10-08T20:30:00Z }
 sources:
-  - resource: skills/okf-bootstrap/references/PLAYBOOK.md
-  - resource: skills/okf-bootstrap/assets/okf-view.mts
-  - resource: skills/okf-bootstrap/assets/okf-mermaid.mts
+  - resource: skills/good2go/references/PLAYBOOK.md
+  - resource: src/g2g-view.mts
+  - resource: src/g2g-mermaid.mts
   - resource: .github/workflows/ci.yml
 ---
 
@@ -79,7 +79,7 @@ flowchart LR
 > exists.
 
 > [!edge-case] A gate that checks its own setup
-> Before it judges any diagram, `okf-mermaid.mts` renders one trivial diagram, and retries
+> Before it judges any diagram, `g2g-mermaid.mts` renders one trivial diagram, and retries
 > with `--no-sandbox` when the sandbox cannot start. That is how it tells "a bundle full of
 > syntax errors" apart from "this machine cannot run a browser".
 

@@ -1,7 +1,7 @@
 ---
 type: Architectural Decision
 title: "ADR-0001: Keep this repository's design knowledge in an OKF bundle"
-description: Why okf-bootstrap documents itself with the tooling it ships, and what that replaced.
+description: Why good2go documents itself with the tooling it ships, and what that replaced.
 tags: [adr, documentation, dogfooding]
 generated: { by: pi/deepseek-ai/DeepSeek-V4.1-Flash, at: 2026-10-08T20:00:00Z }
 sources:
@@ -18,7 +18,7 @@ sources:
 
 ## Context
 
-okf-bootstrap ships a skill that scaffolds an OKF bundle into other projects, and a demo
+good2go ships a skill that scaffolds an OKF bundle into other projects, and a demo
 bundle that shows what one looks like. It had no bundle of its own. What the repository knew
 about its own design was spread across `README.md`, `AGENTS.md` and `CHANGELOG.md`, and the
 reasons behind the tools lived only in the code, the tests and the git history.
@@ -55,7 +55,7 @@ tooling will be recorded here, and not only in commit messages.
   `npm run okf:recheck` can report a concept whose pinned sources have changed, but no concept
   here is pinned yet. Until one is, catching a stale concept is a reviewer's job.
 - The commands here differ from a scaffolded project's. The tools run from
-  `skills/okf-bootstrap/assets/`, not from copies under `scripts/`
+  `src/`, not from copies under `scripts/`
   ([ADR-0003](/adr/0003-run-the-tools-from-the-skill-assets.md)).
 
 ## Alternatives considered

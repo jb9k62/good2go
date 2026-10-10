@@ -3,7 +3,7 @@
  * moments: when a session opens or is compacted, when the agent reads or edits a file a
  * lesson cites, and when it is about to finish with a lesson it has just broken.
  *
- * It holds no logic. Every answer comes from okf-edukai-hook.mts, which reads only the JSON
+ * It holds no logic. Every answer comes from g2g-hook.mts, which reads only the JSON
  * cache `npm run edukai:index` writes and never runs code from the project. In a project with
  * no edukai/index.md it does nothing, and any error is swallowed unless EDUKAI_DEBUG=1.
  * EDUKAI_NUDGE=0 turns the finish nudge off. Needs pi 1.0 or later: on earlier versions a
@@ -63,7 +63,7 @@ interface Pi {
   sendMessage(message: CustomMessage, options?: { triggerTurn?: boolean; deliverAs?: 'steer' | 'followUp' | 'nextTurn' }): void;
 }
 
-const CORE = fileURLToPath(new URL('../skills/okf-bootstrap/assets/okf-edukai-hook.mts', import.meta.url));
+const CORE = fileURLToPath(new URL('../src/g2g-hook.mts', import.meta.url));
 // Loaded before the core, it keeps Node from stripping the core's TypeScript on every call.
 const COMPILE_CACHE = fileURLToPath(new URL('../hooks/compile-cache.mjs', import.meta.url));
 const NODE_ARGS = fs.existsSync(COMPILE_CACHE) ? ['--import', pathToFileURL(COMPILE_CACHE).href] : [];

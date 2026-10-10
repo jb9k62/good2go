@@ -13,7 +13,7 @@ if (major < 22 || (major === 22 && minor < 18)) {
 // The compile cache first, so the hook file's TypeScript is stripped once, not on every call.
 import('./compile-cache.mjs')
   .catch((e) => debug(e && e.stack ? e.stack : String(e)))
-  .then(() => import('../skills/okf-bootstrap/assets/okf-edukai-hook.mts'))
+  .then(() => import('../src/g2g-hook.mts'))
   .then((hook) => {
     process.exitCode = hook.runHook();
   })

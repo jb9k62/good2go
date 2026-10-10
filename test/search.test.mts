@@ -1,5 +1,5 @@
 /**
- * okf-search end to end: ranking, spec signals, filters, the cache and the exit codes, on
+ * g2g-search end to end: ranking, spec signals, filters, the cache and the exit codes, on
  * throwaway bundles under .cache/. Each run's cwd has an empty node_modules so the tool's
  * cache lands in the scratch directory, not in the repo.
  */
@@ -12,7 +12,7 @@ import { after, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const SEARCH = path.join(ROOT, 'skills', 'okf-bootstrap', 'assets', 'okf-search.mts');
+const SEARCH = path.join(ROOT, 'src', 'g2g-search.mts');
 const CACHE = path.join(ROOT, '.cache', 'test');
 fs.mkdirSync(CACHE, { recursive: true });
 const scratch = fs.mkdtempSync(path.join(CACHE, 'search-'));
@@ -58,7 +58,7 @@ const FILES: Record<string, string> = {
   'notes/draft.md': doc('title: Draft notes\ntags: [retries]\nstatus: draft', '# Notes\n\nRetry thoughts.'),
 };
 
-describe('okf-search ranking and the spec', () => {
+describe('g2g-search ranking and the spec', () => {
   const cwd = bundle('rank', FILES);
 
   it('ranks the human-reviewed, fresh concept above a stale twin, and flags the stale one', () => {
@@ -131,7 +131,7 @@ describe('okf-search ranking and the spec', () => {
   });
 });
 
-describe('okf-search: the words a query finds', () => {
+describe('g2g-search: the words a query finds', () => {
   const WORDS: Record<string, string> = {
     'index.md': '# Index\n',
     'boxes.md': doc('title: Parcel boxes', '# Boxes\n\nEach box holds one parcel. Indexes are rebuilt nightly; a rule matches on the prefix.'),
@@ -178,7 +178,7 @@ describe('okf-search: the words a query finds', () => {
   });
 });
 
-describe('okf-search: what counts towards a rank', () => {
+describe('g2g-search: what counts towards a rank', () => {
   it('puts the concept a query names above ones that only mention it', () => {
     const filler = 'The store keeps parcels and their events for ninety days. '.repeat(12);
     const cwd = bundle('named', {
@@ -211,7 +211,7 @@ describe('okf-search: what counts towards a rank', () => {
   });
 });
 
-describe('okf-search: judged queries on the demo bundles', () => {
+describe('g2g-search: judged queries on the demo bundles', () => {
   // What a reader would ask, and the concepts that answer it. A change to the ranking that
   // moves these down is a regression, whatever else it improves.
   const JUDGED: Array<[bundle: string, query: string, answers: string[]]> = [
@@ -259,7 +259,7 @@ describe('okf-search: judged queries on the demo bundles', () => {
   });
 });
 
-describe('okf-search: the files a concept cites', () => {
+describe('g2g-search: the files a concept cites', () => {
   const lesson = (title: string, extra: string) => `---\ntype: Lesson\ntitle: ${title}\n${extra}\n---\n\nA claim.\n`;
   const cwd = bundle('cites', {
     'index.md': '# Index\n',
@@ -295,7 +295,7 @@ describe('okf-search: the files a concept cites', () => {
   });
 });
 
-describe('okf-search show, related, facets, stale', () => {
+describe('g2g-search show, related, facets, stale', () => {
   const cwd = bundle('read', FILES);
 
   it('shows one section, or just the outline', () => {
@@ -346,11 +346,11 @@ describe('okf-search show, related, facets, stale', () => {
   });
 });
 
-describe('okf-search cache, bad files and exit codes', () => {
+describe('g2g-search cache, bad files and exit codes', () => {
   it('rebuilds from a corrupt cache, and picks up an edit', () => {
     const cwd = bundle('cache', FILES);
     json(cwd, ['search', 'retry']);
-    const dir = path.join(cwd, 'node_modules', '.cache', 'okf-search');
+    const dir = path.join(cwd, 'node_modules', '.cache', 'g2g-search');
     const [file] = fs.readdirSync(dir).filter((f) => f.endsWith('.json'));
     assert.ok(file, 'a cache was written');
     fs.writeFileSync(path.join(dir, file!), '{ not json');
@@ -413,7 +413,7 @@ describe('okf-search cache, bad files and exit codes', () => {
     settle();
     same('cold');
     same('warm');
-    const cache = path.join(cwd, 'node_modules', '.cache', 'okf-search');
+    const cache = path.join(cwd, 'node_modules', '.cache', 'g2g-search');
     const read = () => JSON.parse(fs.readFileSync(path.join(cache, fs.readdirSync(cache)[0]!), 'utf8'));
     assert.equal(read().docs.length, 12);
     assert.ok(Array.isArray(read().postings.jitter), 'an inverted index, not a copy of every concept');
@@ -443,16 +443,16 @@ describe('okf-search cache, bad files and exit codes', () => {
 
   it('needs `yaml` only to read a file it has not indexed, and exits 2 without it', () => {
     // Outside the repo there is no node_modules above the tools, as in a project before `npm install`.
-    const away = fs.mkdtempSync(path.join(os.tmpdir(), 'okf-search-test-'));
+    const away = fs.mkdtempSync(path.join(os.tmpdir(), 'g2g-search-test-'));
     try {
-      for (const f of ['okf-search.mts', 'okf-core.mts', 'okf-rank.mts']) fs.copyFileSync(path.join(path.dirname(SEARCH), f), path.join(away, f));
+      for (const f of ['g2g-search.mts', 'g2g-core.mts', 'g2g-rank.mts']) fs.copyFileSync(path.join(path.dirname(SEARCH), f), path.join(away, f));
       fs.mkdirSync(path.join(away, 'node_modules'));
       fs.mkdirSync(path.join(away, 'okf'));
       fs.writeFileSync(path.join(away, 'okf', 'retry.md'), doc('title: Retry policy', '# Retry policy\n\nFive retries.'));
       const past = new Date(Date.now() - 3_600_000);
       fs.utimesSync(path.join(away, 'okf', 'retry.md'), past, past);
       const at = (env: Record<string, string>) =>
-        spawnSync(process.execPath, [path.join(away, 'okf-search.mts'), 'search', 'retry', '--bundle', 'okf'], { cwd: away, encoding: 'utf8', env: { ...process.env, NODE_PATH: '', ...env } });
+        spawnSync(process.execPath, [path.join(away, 'g2g-search.mts'), 'search', 'retry', '--bundle', 'okf'], { cwd: away, encoding: 'utf8', env: { ...process.env, NODE_PATH: '', ...env } });
       const none = at({});
       assert.equal(none.status, 2, 'could not run is 2, never a pass and never a broken bundle');
       assert.match(none.stderr, /could not load the `yaml` package[\s\S]*fix: npm install/);

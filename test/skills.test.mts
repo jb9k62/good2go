@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const TOOL = path.join(ROOT, 'skills', 'okf-bootstrap', 'assets', 'okf-skills.mts');
+const TOOL = path.join(ROOT, 'src', 'g2g-skills.mts');
 
 function run(home: string, ...args: string[]) {
   const env = { ...process.env };
@@ -23,11 +23,11 @@ test('installs both skills, without their tools, for the agents whose home exist
   fs.mkdirSync(path.join(home, '.claude'));
   const r = run(home);
   assert.equal(r.status, 0, r.stderr);
-  for (const skill of ['okf-bootstrap', 'edukai']) {
+  for (const skill of ['good2go', 'edukai']) {
     assert.ok(fs.existsSync(path.join(home, '.claude', 'skills', skill, 'SKILL.md')));
   }
-  assert.ok(fs.existsSync(path.join(home, '.claude', 'skills', 'okf-bootstrap', 'references', 'PLAYBOOK.md')));
-  assert.ok(!fs.existsSync(path.join(home, '.claude', 'skills', 'okf-bootstrap', 'assets')));
+  assert.ok(fs.existsSync(path.join(home, '.claude', 'skills', 'good2go', 'references', 'PLAYBOOK.md')));
+  assert.ok(!fs.existsSync(path.join(home, '.claude', 'src')));
   assert.ok(!fs.existsSync(path.join(home, '.pi')));
   assert.match(r.stdout, /plugin marketplace add jb9k62\/good2go/);
   assert.match(r.stdout, /pi install git:github\.com\/jb9k62\/good2go/);

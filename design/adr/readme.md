@@ -1,9 +1,9 @@
 ---
 type: Reference
 title: Decision records
-description: The decisions recorded for okf-bootstrap, and how to add one.
+description: The decisions recorded for good2go, and how to add one.
 tags: [adr, decisions]
-generated: { by: okf-bootstrap/0.6.0, at: 2026-10-08T20:00:00Z }
+generated: { by: good2go/0.6.0, at: 2026-10-08T20:00:00Z }
 ---
 
 # Decision records
@@ -17,6 +17,7 @@ generated: { by: okf-bootstrap/0.6.0, at: 2026-10-08T20:00:00Z }
 | [0005](/adr/0005-name-bundles-by-what-they-hold.md) | Name each bundle for what it holds: `design/`, and an optional `ops/` | accepted in part |
 | [0006](/adr/0006-publish-the-tools-to-npm.md) | Publish the tools to npm as `@jb9k62/good2go` | accepted |
 | [0007](/adr/0007-install-hooks-and-skills-from-the-package.md) | Install the hooks and skills from the package, per user by default | accepted |
+| [0008](/adr/0008-rename-to-good2go-and-src-layout.md) | Name everything good2go, and move the sources to `src/` | accepted |
 
 ## Adding one
 

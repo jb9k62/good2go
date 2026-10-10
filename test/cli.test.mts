@@ -7,7 +7,7 @@ import { after, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const GOOD2GO = path.join(ROOT, 'skills', 'okf-bootstrap', 'assets', 'good2go.mts');
+const GOOD2GO = path.join(ROOT, 'src', 'good2go.mts');
 const CACHE = path.join(ROOT, '.cache', 'test');
 fs.mkdirSync(CACHE, { recursive: true });
 const scratch = fs.mkdtempSync(path.join(CACHE, 'cli-'));
@@ -42,7 +42,7 @@ describe('good2go', () => {
   it('lists the commands for --help (0) and for no command (2)', () => {
     const help = g2g(['--help']);
     assert.equal(help.code, 0);
-    for (const c of ['init', 'new', 'validate', 'view', 'search', 'recheck', 'edukai', 'update', 'skills']) {
+    for (const c of ['init', 'new', 'validate', 'view', 'search', 'recheck', 'edukai', 'skills']) {
       assert.match(help.out, new RegExp(`good2go ${c}\\b`), c);
     }
     assert.equal(g2g([]).code, 2);
@@ -93,7 +93,7 @@ describe('good2go', () => {
     assert.ok(JSON.parse(q.out).total >= 1);
   });
 
-  it('dispatches init, edukai, recheck, hook and update to their tools', () => {
+  it('dispatches init, edukai, recheck and hook to their tools', () => {
     const proj = path.join(scratch, 'proj');
     const init = g2g(['init', proj, '--name', 'Proj', '--edukai']);
     assert.equal(init.code, 0, init.out);
@@ -104,8 +104,7 @@ describe('good2go', () => {
     assert.equal(recheck.code, 0, recheck.out);
     assert.match(recheck.out, /edukai recheck/);
     assert.equal(g2g(['hook', 'brief'], proj).code, 0);
-    const update = g2g(['update'], proj);
-    assert.equal(update.code, 0, update.out);
+    assert.equal(g2g(['update'], proj).code, 2, 'there is no update command');
     assert.equal(g2g(['edukai', 'nonsense'], proj).code, 2);
   });
 });

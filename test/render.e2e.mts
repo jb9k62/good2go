@@ -14,7 +14,7 @@ import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const ASSETS = path.join(ROOT, 'skills', 'okf-bootstrap', 'assets');
+const ASSETS = path.join(ROOT, 'src');
 const WIDGETS = path.join(ASSETS, 'templates', 'okf-widgets', 'dist', 'okf-widgets.js');
 
 function run(args: string[]) {
@@ -30,7 +30,7 @@ describe('render gates', { timeout: 600_000 }, () => {
 
   it('renders the demo: diagrams, quizzes, and every widget mounts and responds', () => {
     const r = run([
-      path.join(ASSETS, 'okf-view.mts'),
+      path.join(ASSETS, 'g2g-view.mts'),
       'examples/demo/okf',
       '--out',
       '.cache/demo.html',
@@ -83,7 +83,7 @@ describe('render gates', { timeout: 600_000 }, () => {
     }
     try {
       const out = path.resolve(ROOT, '.cache', 'demo-erd.html');
-      const built = run([path.join(ASSETS, 'okf-view.mts'), 'examples/demo/okf', '--out', out, '--widgets', WIDGETS]);
+      const built = run([path.join(ASSETS, 'g2g-view.mts'), 'examples/demo/okf', '--out', out, '--widgets', WIDGETS]);
       assert.equal(built.code, 0, built.out);
       const page = await browser.newPage();
       const errors: string[] = [];
@@ -106,7 +106,7 @@ describe('render gates', { timeout: 600_000 }, () => {
 
   it('shows the authoring mistakes in the error fixture', () => {
     const r = run([
-      path.join(ASSETS, 'okf-view.mts'),
+      path.join(ASSETS, 'g2g-view.mts'),
       'test/fixtures/okf-render-errors',
       '--out',
       '.cache/fixture.html',
@@ -118,7 +118,7 @@ describe('render gates', { timeout: 600_000 }, () => {
   });
 
   it('parses every Mermaid block in the demo with mmdc', () => {
-    const r = run([path.join(ASSETS, 'okf-mermaid.mts'), 'examples/demo/okf']);
+    const r = run([path.join(ASSETS, 'g2g-mermaid.mts'), 'examples/demo/okf']);
     assert.equal(r.code, 0, r.out);
   });
 

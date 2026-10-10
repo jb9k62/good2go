@@ -3,15 +3,15 @@
 | | |
 | --- | --- |
 | Status | Implemented in 0.4.0. Where the build departs from this text is listed in [ADR-0002](../adr/0002-agent-memory-as-a-second-bundle.md). |
-| Target release | okf-bootstrap 0.4.0 |
-| Written against | `main` at `f0e4f32` (0.3.0 plus `okf-search`), pi 1.0.4 (`@earendil-works/pi-coding-agent`), Claude Code 2.1.292, OKF v0.2 |
+| Target release | good2go 0.4.0 |
+| Written against | `main` at `f0e4f32` (0.3.0 plus `g2g-search`), pi 1.0.4 (`@earendil-works/pi-coding-agent`), Claude Code 2.1.292, OKF v0.2 |
 
 This file is written to be executed: [section 14](#14-tasks) is an ordered task list, each task
 names its files and how to tell it is done. Sections 3 to 13 are the contract the tasks build.
 
 ## 1. Summary
 
-okf-bootstrap sets up one OKF bundle today: `okf/`, design docs an agent writes so people can
+good2go sets up one OKF bundle today: `okf/`, design docs an agent writes so people can
 follow the system. This change adds a second, opt-in bundle: `edukai/`, what the agent itself has
 learned, kept so the next session starts knowing it.
 
@@ -29,7 +29,7 @@ have different readers and different rules.
 
 What makes the memory bundle maintain itself:
 
-1. **A tool**, `okf-edukai.mts`, does every part that needs no model: creating lesson files,
+1. **A tool**, `g2g-edukai.mts`, does every part that needs no model: creating lesson files,
    pinning what a lesson depends on, re-checking, building the index.
 2. **Harness adapters** for Claude Code (hooks) and pi (an extension) call that tool at three
    moments: when a session opens, when the agent touches a file a lesson cites, and when the
@@ -67,9 +67,9 @@ prose, say "design bundle" and "memory bundle".
 | Thing | Name |
 | --- | --- |
 | Memory bundle folder | `edukai/` |
-| Cache and session files | `node_modules/.cache/edukai/`, the place `okf-search` already uses |
+| Cache and session files | `node_modules/.cache/edukai/`, the place `g2g-search` already uses |
 | Scaffold flag | `--edukai` |
-| The tool | `okf-edukai.mts` and `okf-edukai-hook.mts` in `skills/okf-bootstrap/assets/`, both copied to `scripts/` |
+| The tool | `g2g-edukai.mts` and `g2g-hook.mts` in `src/`, both copied to `scripts/` |
 | npm scripts | `edukai:validate`, `edukai:index`, `edukai:recheck`, `edukai:brief`, `edukai:search`, `edukai:view`, `okf:recheck` |
 | Concept types | `Lesson`, `Overview` |
 | Frontmatter keys added | `confidence`, `supersedes`, `superseded_by`, `check`, and `digest` on a `sources` entry |
@@ -94,13 +94,13 @@ your-project/
 │       └── lessons/
 │           └── YYYY-MM-DD-short-claim.md      type: Lesson
 └── scripts/
-    ├── okf-view.mts
-    ├── okf-mermaid.mts
-    ├── okf-search.mts           works on either bundle with --bundle
-    ├── okf-core.mts
-    ├── okf-rank.mts
-    ├── okf-edukai.mts           always copied, so okf:recheck works without --edukai
-    └── okf-edukai-hook.mts
+    ├── g2g-view.mts
+    ├── g2g-mermaid.mts
+    ├── g2g-search.mts           works on either bundle with --bundle
+    ├── g2g-core.mts
+    ├── g2g-rank.mts
+    ├── g2g-edukai.mts           always copied, so okf:recheck works without --edukai
+    └── g2g-hook.mts
 ```
 
 **Project root.** A path in `sources` or `check` is resolved against the project root, which is
@@ -108,7 +108,7 @@ the parent folder of the bundle unless `--root <dir>` says otherwise. It is not 
 level, so a bundle in a subfolder (the demo, a monorepo package) works. A path that resolves
 outside the root is an error.
 
-There is no per-domain `log.md`: `okf-view.mts` reserves only the bundle root's `index.md` and
+There is no per-domain `log.md`: `g2g-view.mts` reserves only the bundle root's `index.md` and
 `log.md`, so a nested one would need a `type`. Re-check history is the `verified` list plus git.
 
 ## 5. The lesson format
@@ -197,32 +197,32 @@ The **queue** is `broken`, `failed`, `suspect` and `stale`. A check is what lets
 an unrelated edit to its file without an agent re-reading it, so the skill asks for one wherever
 the claim can be stated as text in a file.
 
-## 7. The tool: `okf-edukai.mts`
+## 7. The tool: `g2g-edukai.mts`
 
 Two files, erasable TypeScript, same conventions as the other tools (`AGENTS.md`). They follow
-the split `okf-search` introduced: shared parsing comes from `okf-core.mts`, and one file carries
-a purity rule that a test enforces, as `okf-rank.mts` does.
+the split `g2g-search` introduced: shared parsing comes from `g2g-core.mts`, and one file carries
+a purity rule that a test enforces, as `g2g-rank.mts` does.
 
 | File | Runs | May import |
 | --- | --- | --- |
-| `okf-edukai.mts` | In the project, from `scripts/` | `okf-core.mts` (so `yaml`), `okf-rank.mts`, `okf-edukai-hook.mts` |
-| `okf-edukai-hook.mts` | From the installed plugin or package, where `node_modules` may not exist | `node:` built-ins and `okf-rank.mts` only |
+| `g2g-edukai.mts` | In the project, from `scripts/` | `g2g-core.mts` (so `yaml`), `g2g-rank.mts`, `g2g-hook.mts` |
+| `g2g-hook.mts` | From the installed plugin or package, where `node_modules` may not exist | `node:` built-ins and `g2g-rank.mts` only |
 
-**The hard rule for `okf-edukai-hook.mts`.** It holds the commands the adapters call (`brief`,
-`cites`, `debt`, `hook`) and the code that derives a lesson's state, which `okf-edukai.mts`
+**The hard rule for `g2g-hook.mts`.** It holds the commands the adapters call (`brief`,
+`cites`, `debt`, `hook`) and the code that derives a lesson's state, which `g2g-edukai.mts`
 imports for `recheck`. It reads only the cache and the files the cache names. It never parses
-YAML, so it must never import `okf-core.mts`, and it never runs code from the project.
+YAML, so it must never import `g2g-core.mts`, and it never runs code from the project.
 
-**Reuse, do not rewrite.** From `okf-core.mts`: `parseDocument`, `listMarkdown`, `RESERVED`,
-`normalizeVerified`, `trustTier`, `errorMessage`. From `okf-rank.mts`: `freshness`,
+**Reuse, do not rewrite.** From `g2g-core.mts`: `parseDocument`, `listMarkdown`, `RESERVED`,
+`normalizeVerified`, `trustTier`, `errorMessage`. From `g2g-rank.mts`: `freshness`,
 `freshnessLabel` and `DAY`, so "stale" means the same instant and reads the same way in
-`recheck`, in `okf-search stale` and in the viewer. From `okf-search.mts`, copy the shape, not
+`recheck`, in `g2g-search stale` and in the viewer. From `g2g-search.mts`, copy the shape, not
 the code: `VALUE_FLAGS` and `BOOL_FLAGS` argument parsing, a `UsageError` that exits 2, and one
 `print(options, data, text)` so every command has `--json`.
 
 ```text
-node scripts/okf-edukai.mts <command> [arguments] [--bundle <dir>] [flags]      --bundle defaults to edukai
-node <plugin>/…/okf-edukai-hook.mts <brief|cites|debt|hook> [arguments] [--bundle <dir>] [flags]
+node scripts/g2g-edukai.mts <command> [arguments] [--bundle <dir>] [flags]      --bundle defaults to edukai
+node <plugin>/…/g2g-hook.mts <brief|cites|debt|hook> [arguments] [--bundle <dir>] [flags]
 ```
 
 | Command | Does | Writes |
@@ -248,8 +248,8 @@ fail a build: a pull request must not go red because time passed.
 **Rewriting frontmatter.** Use the `yaml` package's document API so comments, key order and flow
 maps survive. Writing a file whose values did not change must leave it byte-identical.
 
-**The cache.** `okf-search` already solved where a cache lives and when to trust it. Use the
-same rules, in `okf-edukai-hook.mts`:
+**The cache.** `g2g-search` already solved where a cache lives and when to trust it. Use the
+same rules, in `g2g-hook.mts`:
 
 - **Where:** `<root>/node_modules/.cache/edukai/` when the project root has `node_modules`,
   otherwise a per-user folder in the temp dir that must be owned by this user and private
@@ -258,8 +258,8 @@ same rules, in `okf-edukai-hook.mts`:
 - **Writing:** to a temporary name with the `wx` flag, then rename, so a reader never sees half
   a file and a planted link is never written through.
 - **Trusting a file's entry:** same `size`, `mtime` and `ctime`, and not modified within two
-  seconds of the cache being written (the "racily clean" rule in `okf-search.mts`).
-- **Version:** a plain `"schema": 1`. Not a hash of the code, as `okf-search` uses, because two
+  seconds of the cache being written (the "racily clean" rule in `g2g-search.mts`).
+- **Version:** a plain `"schema": 1`. Not a hash of the code, as `g2g-search` uses, because two
   copies of the code read this cache: the project's and the plugin's.
 
 ```json
@@ -272,15 +272,15 @@ same rules, in `okf-edukai-hook.mts`:
                 "checks": [{ "file": "src/a.ts", "contains": "…" }] }] }
 ```
 
-One thing differs from `okf-search`, which re-parses changed files on every run. The hook file
+One thing differs from `g2g-search`, which re-parses changed files on every run. The hook file
 cannot parse YAML, so it cannot heal the cache. When the `files` map no longer matches the
 folder, the hook commands still answer from it and add one line to the brief:
 `edukai: the index is out of date. Run npm run edukai:index.` An unknown `schema` is treated as
 no cache. With no cache, `brief` prints only
 `edukai: this project keeps agent memory in edukai/, but it has no index yet. Run npm run edukai:index.`
 and `cites` and `debt` print nothing. A fresh clone is in this state until that command is run.
-Every command in `okf-edukai.mts` re-parses what changed and rewrites the cache as it starts,
-the way `okf-search` does, so any use of the project tool heals it.
+Every command in `g2g-edukai.mts` re-parses what changed and rewrites the cache as it starts,
+the way `g2g-search` does, so any use of the project tool heals it.
 
 **Output for the agent.** Plain text, short, pointers and titles only, never lesson bodies.
 
@@ -309,19 +309,19 @@ a lesson twice in one session, and lists at most 5 with a count of the rest. `br
 **Limits.** A hook command must answer in under 200 ms for a bundle of 500 lessons. `brief`
 hashes at most 2,000 source files and says so if it stopped early.
 
-## 8. Finding lessons: `okf-search`
+## 8. Finding lessons: `g2g-search`
 
-`okf-search.mts` takes `--bundle`, so it already works on the memory bundle with no change:
+`g2g-search.mts` takes `--bundle`, so it already works on the memory bundle with no change:
 
 ```jsonc
-"edukai:search": "node --import ./scripts/okf-start.mjs scripts/okf-search.mts --bundle edukai"
+"edukai:search": "node --import ./scripts/g2g-start.mjs scripts/g2g-search.mts --bundle edukai"
 ```
 
 This is how an agent finds a lesson that no file path leads to, and it replaces an earlier
 "recall at scale" rule. It also fits the memory bundle unusually well, because its ranking
 already reads the fields this spec sets:
 
-| What the lesson says | What `okf-search` does with it today |
+| What the lesson says | What `g2g-search` does with it today |
 | --- | --- |
 | `status: deprecated` (a superseded lesson) | Ranked at half weight and flagged, never hidden |
 | No `verified` (every `inferred` lesson) | Lowest trust tier, ranked below verified lessons |
@@ -329,27 +329,27 @@ already reads the fields this spec sets:
 | `--type Lesson`, `--tag ci`, `--fresh`, `--trust machine` | Filters that work as they are |
 | Links from an overview to its lessons | A small boost for each lesson an overview points to |
 
-The skill tells the agent to search before reading, as the okf-bootstrap skill now does: never
+The skill tells the agent to search before reading, as the good2go skill now does: never
 read a whole bundle to answer a question, and treat a stale or unverified hit as a lead to
 check.
 
-**Two queues, one meaning.** `okf-search stale` lists concepts past `stale_after`. `recheck`
+**Two queues, one meaning.** `g2g-search stale` lists concepts past `stale_after`. `recheck`
 lists those too, and adds what only it can see: a changed source, a failed check, a missing
 file. The docs name `recheck` as the queue to work, and `stale` as a quick look.
 
-**Optional additions to search**, small and additive, keeping `okf-rank.mts` pure:
+**Optional additions to search**, small and additive, keeping `g2g-rank.mts` pure:
 
 - Carry `confidence` and `superseded_by` in `EntryMeta`, show "replaced by `<id>`" in a result's
   badge, and add a `--confidence` filter.
-- `okf-view.mts` inlines `okf-rank.mts`, so the viewer's results list would show the same badge.
+- `g2g-view.mts` inlines `g2g-rank.mts`, so the viewer's results list would show the same badge.
 
 **Prompt matching, later.** The reason it was cut is gone: there is now a real ranking, and it
 has no imports, so the hook file could run it over cached term counts. It stays out of this
-release because the cached index would have to be shared between `okf-search` and the hooks,
+release because the cached index would have to be shared between `g2g-search` and the hooks,
 and because a pointer added to every prompt must first be shown to help. An agent that searches
 on its own is the cheaper thing to try first.
 
-## 9. Validator changes: `okf-view.mts`
+## 9. Validator changes: `g2g-view.mts`
 
 Small and targeted, per the repo rule against rewriting this file. They apply to any bundle.
 
@@ -384,7 +384,7 @@ output) unless `EDUKAI_DEBUG=1`. `EDUKAI_NUDGE=0` turns the finish nudge off.
 `"timeout": 5`:
 
 ```text
-node "${CLAUDE_PLUGIN_ROOT}/skills/okf-bootstrap/assets/okf-edukai-hook.mts" hook
+node "${CLAUDE_PLUGIN_ROOT}/src/g2g-hook.mts" hook
 ```
 
 `hook` reads `hook_event_name`, `session_id`, `cwd` and `tool_input.file_path` from stdin, and
@@ -400,7 +400,7 @@ the project folder from `CLAUDE_PROJECT_DIR` (falling back to `cwd`). Replies:
 
 **pi**, `extensions/edukai.ts`, declared as `"extensions": ["./extensions"]` under the `pi` key
 in `package.json`. It declares the few types it needs itself, so the repo takes no dependency on
-pi. It resolves `okf-edukai-hook.mts` relative to its own file and runs it with
+pi. It resolves `g2g-hook.mts` relative to its own file and runs it with
 `pi.exec("node", [core, command, "--bundle", bundle, "--session", ctx.sessionManager.getSessionId()], { timeout: 5000 })`.
 
 - `session_start`, `session_compact`: `pi.sendMessage({ customType: "edukai", content, display: true }, { deliverAs: "nextTurn" })`.
@@ -453,12 +453,12 @@ It carries these rules:
 - **Git:** changes under `edukai/` go into the agent's normal commits. The skill never commits on
   its own.
 
-`skills/okf-bootstrap/SKILL.md` and `PLAYBOOK.md` gain a short "two bundles" section that points
+`skills/good2go/SKILL.md` and `PLAYBOOK.md` gain a short "two bundles" section that points
 here, and the `--edukai` flag.
 
-## 12. Scaffold changes: `bootstrap.mts`
+## 12. Scaffold changes: `g2g-init.mts`
 
-- `TOOLS` gains `'okf-edukai'` and `'okf-edukai-hook'` after the five it has now. All are always
+- `TOOLS` gains `'g2g-edukai'` and `'g2g-hook'` after the five it has now. All are always
   refreshed. Neither is added to `LEGACY_MJS`.
 - `--edukai` creates `edukai/index.md` and `edukai/log.md` from `templates/edukai/` (kept on a
   re-run, replaced by `--force`, like the `okf/` files), and writes the `AGENTS.md` snippet unless its marker is present.
@@ -466,13 +466,13 @@ here, and the `--edukai` flag.
 - npm scripts. Always: `okf:recheck`. When `edukai/` exists (the pattern `hasWidgets` uses):
 
 ```jsonc
-"okf:recheck":     "node --import ./scripts/okf-start.mjs scripts/okf-edukai.mts recheck --bundle okf",
-"edukai:validate": "node --import ./scripts/okf-start.mjs scripts/okf-view.mts edukai --validate --strict && node --import ./scripts/okf-start.mjs scripts/okf-edukai.mts index --check",
-"edukai:index":    "node --import ./scripts/okf-start.mjs scripts/okf-edukai.mts index",
-"edukai:recheck":  "node --import ./scripts/okf-start.mjs scripts/okf-edukai.mts recheck",
-"edukai:brief":    "node --import ./scripts/okf-start.mjs scripts/okf-edukai.mts index && node --import ./scripts/okf-start.mjs scripts/okf-edukai-hook.mts brief",
-"edukai:search":   "node --import ./scripts/okf-start.mjs scripts/okf-search.mts --bundle edukai",
-"edukai:view":     "node --import ./scripts/okf-start.mjs scripts/okf-view.mts edukai"
+"okf:recheck":     "node --import ./scripts/g2g-start.mjs scripts/g2g-edukai.mts recheck --bundle okf",
+"edukai:validate": "node --import ./scripts/g2g-start.mjs scripts/g2g-view.mts edukai --validate --strict && node --import ./scripts/g2g-start.mjs scripts/g2g-edukai.mts index --check",
+"edukai:index":    "node --import ./scripts/g2g-start.mjs scripts/g2g-edukai.mts index",
+"edukai:recheck":  "node --import ./scripts/g2g-start.mjs scripts/g2g-edukai.mts recheck",
+"edukai:brief":    "node --import ./scripts/g2g-start.mjs scripts/g2g-edukai.mts index && node --import ./scripts/g2g-start.mjs scripts/g2g-hook.mts brief",
+"edukai:search":   "node --import ./scripts/g2g-start.mjs scripts/g2g-search.mts --bundle edukai",
+"edukai:view":     "node --import ./scripts/g2g-start.mjs scripts/g2g-view.mts edukai"
 ```
 
 - A new template, `templates/edukai-recheck.yml`, is a GitHub workflow the scaffold prints the
@@ -530,7 +530,7 @@ edukai recheck: examples/demo/edukai  (now 2026-10-15T00:00:00Z)
 ```
 
 **Root npm scripts.** `E` below stands for
-`node skills/okf-bootstrap/assets/okf-edukai.mts` and `H` for `okf-edukai-hook.mts` beside it.
+`node src/g2g-edukai.mts` and `H` for `g2g-hook.mts` beside it.
 Every call also passes
 `--bundle examples/demo/edukai --now 2026-10-15T00:00:00Z`. None changes a tracked file: `index`
 finds the committed `index.md` already current and writes only the ignored cache.
@@ -539,8 +539,8 @@ finds the committed `index.md` already current and writes only the ignored cache
 "demo:edukai":         "npm run demo:edukai:brief && npm run demo:edukai:recheck",
 "demo:edukai:brief":   "E index && H brief",
 "demo:edukai:recheck": "E recheck",
-"demo:edukai:search":  "node skills/okf-bootstrap/assets/okf-search.mts --bundle examples/demo/edukai --now 2026-10-15T00:00:00Z",
-"demo:edukai:view":    "node skills/okf-bootstrap/assets/okf-view.mts examples/demo/edukai"
+"demo:edukai:search":  "node src/g2g-search.mts --bundle examples/demo/edukai --now 2026-10-15T00:00:00Z",
+"demo:edukai:view":    "node src/g2g-view.mts examples/demo/edukai"
 ```
 
 **`examples/demo/README.md`** (new) is the walkthrough: the two bundles in one paragraph, then
@@ -577,22 +577,22 @@ In order. Each is one commit-sized change. Run `npm run check` after each.
 
 **A. Format and validation**
 
-- [ ] **A1. Validator rules.** `okf-view.mts`: the `lesson`, `supersede` and `budget` issues,
+- [ ] **A1. Validator rules.** `g2g-view.mts`: the `lesson`, `supersede` and `budget` issues,
   the two palette entries, the confidence line in the report. *Done when:* new cases in
-  `test/bootstrap.test.mts` (`okf-view validation`) show each issue kind firing on a scratch
+  `test/init.test.mts` (`g2g-view validation`) show each issue kind firing on a scratch
   bundle and a valid lesson passing `--strict`.
 - [ ] **A2. Fixture.** `test/fixtures/edukai-errors/`: one file per rule broken. *Done when:* a
   test asserts the exact issue list.
 
 **B. The tool**
 
-- [ ] **B1. Skeleton and parsing.** `okf-edukai.mts` and `okf-edukai-hook.mts`: argument parsing
-  in the `okf-search.mts` shape, the bundle walk from `okf-core.mts`, path confinement,
+- [ ] **B1. Skeleton and parsing.** `g2g-edukai.mts` and `g2g-hook.mts`: argument parsing
+  in the `g2g-search.mts` shape, the bundle walk from `g2g-core.mts`, path confinement,
   `--bundle`, `--root`, `--now`, `--json`, exit codes. *Done when:* `--help` works, an unknown
   flag exits 2, and `npm run typecheck` covers both files.
 - [ ] **B2. `new`, `verify`, `supersede`.** *Done when:* tests cover the digest (including CRLF),
   each check kind, one `verified` entry per actor, byte-identical rewrite of an unchanged file,
-  a path escaping the root being refused, and the output passing `okf-view --validate --strict`.
+  a path escaping the root being refused, and the output passing `g2g-view --validate --strict`.
 - [ ] **B3. States and `recheck`.** *Done when:* a test builds one lesson per state in section 6
   and asserts the report, `--strict` exit codes, `--json`, and that `--write` changes only
   `renewable` files.
@@ -604,17 +604,17 @@ In order. Each is one commit-sized change. Run `npm run check` after each.
 - [ ] **B5. `brief`, `cites`, `debt`, session file.** *Done when:* tests cover the caps, no
   repeat within a session, `debt` naming a lesson once, pruning, and a 500-lesson bundle
   answered within the budget (modelled on the 600-concept test in `test/search.test.mts`).
-- [ ] **B6. The dependency rule.** *Done when:* one test reads `okf-edukai-hook.mts` and fails
-  on any import other than `node:` built-ins and `./okf-rank.mts`, and another copies those two
+- [ ] **B6. The dependency rule.** *Done when:* one test reads `g2g-hook.mts` and fails
+  on any import other than `node:` built-ins and `./g2g-rank.mts`, and another copies those two
   files to a folder outside the repo (`os.tmpdir()`), where `yaml` cannot resolve, and runs
   `brief`, `cites`, `debt` and `hook` against a prepared cache with exit 0.
 - [ ] **B7. Search on the memory bundle.** The `edukai:search` script. *Done when:* a test runs
-  `okf-search.mts --bundle` on a scratch memory bundle and shows a superseded lesson ranked
+  `g2g-search.mts --bundle` on a scratch memory bundle and shows a superseded lesson ranked
   below its replacement and an `inferred` lesson below a verified twin. No code change is
   expected; if one is needed, that is a finding.
 - [ ] **B8. Optional: search knows lessons.** `confidence` and `superseded_by` in `EntryMeta`,
   the "replaced by" badge, `--confidence`. *Done when:* `test/search.test.mts` covers them and
-  `okf-rank.mts` still has no imports.
+  `g2g-rank.mts` still has no imports.
 
 **C. Adapters**
 
@@ -633,7 +633,7 @@ In order. Each is one commit-sized change. Run `npm run check` after each.
 
 - [ ] **D1. `skills/edukai/SKILL.md`.** *Done when:* the release-metadata test covers its
   frontmatter (name, description at most 1,024 characters).
-- [ ] **D2. `bootstrap.mts`** per section 12, with `templates/edukai/index.md`, `log.md` and
+- [ ] **D2. `g2g-init.mts`** per section 12, with `templates/edukai/index.md`, `log.md` and
   `templates/edukai-recheck.yml`. *Done when:* tests cover `--edukai`, `--tools-only --edukai`,
   a re-run keeping authored files, the `AGENTS.md` snippet written once, and a
   scaffolded project where `new`, `verify` and `edukai:validate` all pass.
@@ -646,7 +646,7 @@ In order. Each is one commit-sized change. Run `npm run check` after each.
 - [ ] **E2. Memory bundle**: the nine lessons, two overviews, `index.md`, `log.md`, written with
   the tool. Lessons 3, 4 and 9 are verified first against a source that agrees with them; the
   source is then changed (a comment added, `10_000` to `8_000`, the file deleted). Lesson 6 is
-  verified with `--now 2026-09-01T00:00:00Z`. *Done when:* `okf-view examples/demo/edukai --validate --strict` passes, and a test
+  verified with `--now 2026-09-01T00:00:00Z`. *Done when:* `g2g-view examples/demo/edukai --validate --strict` passes, and a test
   pins the expected report in section 13 line for line.
 - [ ] **E3. Root scripts and `examples/demo/README.md`.** *Done when:* each command in the
   walkthrough prints what the README says it prints.
@@ -664,8 +664,8 @@ In order. Each is one commit-sized change. Run `npm run check` after each.
 - [ ] **F1. `README.md`**: tagline for two bundles, a row in "What you get", an "Agent memory"
   section of about fifteen lines after "Explainers that teach" linking the tour and the demo
   README, `--edukai` in Quick start, `edukai/` in the tree.
-- [ ] **F2. `AGENTS.md`** (layout table; `okf-edukai-hook.mts` gets a "must stay" rule beside
-  the one for `okf-rank.mts`; both new files join the "copied into user projects" list),
+- [ ] **F2. `AGENTS.md`** (layout table; `g2g-hook.mts` gets a "must stay" rule beside
+  the one for `g2g-rank.mts`; both new files join the "copied into user projects" list),
   `SKILL.md`, `PLAYBOOK.md`, `templates/package-json-scripts.md`, `templates/concept.md` (a note
   that `sources` now feeds `okf:recheck`), `CHANGELOG.md`.
 - [ ] **F3. Version 0.4.0** in the four places.
@@ -699,15 +699,15 @@ A critical pass over the design notes this spec came from. Each finding changed 
 | 16 | A fresh clone has no cache, and the first draft of this spec did not say what the hooks do then. | `brief` prints one line asking for `edukai:index`; the other two stay quiet (section 7). |
 | 17 | In the first draft, demo lesson 8 would have been `renewable`, not `fresh`: its 30 days ran out before the demo clock. | It carries a later entry from the scripted re-check, which also shows that signature in the demo. |
 
-**Second pass, after `okf-search` landed** (commits `9cf66f7` to `f0e4f32`):
+**Second pass, after `g2g-search` landed** (commits `9cf66f7` to `f0e4f32`):
 
 | # | Problem found | What the spec does instead |
 | --- | --- | --- |
-| 18 | The spec said nothing could be imported from `okf-view.mts`, so the tool would carry its own parser. `okf-core.mts` now exports that parser. | `okf-edukai.mts` imports it (section 7). |
-| 19 | `okf-core.mts` imports `yaml` at the top, so one file could no longer hold both the project commands and the hook commands. | Two files, with an import rule on the hook file that a test enforces, the way `okf-rank.mts` is kept pure. |
-| 20 | The spec invented a `.edukai/` folder and its own cache rules. `okf-search` already has a cache place and trust rules, including why a planted cache matters. | Same place and rules (section 7). No `.gitignore` change. |
+| 18 | The spec said nothing could be imported from `g2g-view.mts`, so the tool would carry its own parser. `g2g-core.mts` now exports that parser. | `g2g-edukai.mts` imports it (section 7). |
+| 19 | `g2g-core.mts` imports `yaml` at the top, so one file could no longer hold both the project commands and the hook commands. | Two files, with an import rule on the hook file that a test enforces, the way `g2g-rank.mts` is kept pure. |
+| 20 | The spec invented a `.edukai/` folder and its own cache rules. `g2g-search` already has a cache place and trust rules, including why a planted cache matters. | Same place and rules (section 7). No `.gitignore` change. |
 | 21 | Prompt matching was cut for lack of a search. A ranked, freshness-aware one now exists and runs on any bundle. | `edukai:search`, named in the brief and the skill (section 8). Matching inside a hook stays out, for the reasons given there. |
-| 22 | The spec had its own wording for staleness. | `freshness` and `freshnessLabel` from `okf-rank.mts`. |
+| 22 | The spec had its own wording for staleness. | `freshness` and `freshnessLabel` from `g2g-rank.mts`. |
 | 23 | An optional viewer colour mode was planned. ADR-0001 says each new viewer control is costly and proposes React. | No new viewer controls. |
 | 24 | The tour outline predated the cast and step-by-step pattern the demo tours now follow. | Task E4 follows it. |
 
@@ -784,7 +784,7 @@ Tasks C2 and C3 are checked by hand with these models: Claude Code with Sonnet 5
 **Later** (open tasks, not part of 0.4.0):
 
 - [ ] **L1. Search from a hook.** On `UserPromptSubmit` and `before_agent_start`, rank the
-  prompt against the memory bundle with `okf-rank.mts` and add at most three pointers. Needs a
+  prompt against the memory bundle with `g2g-rank.mts` and add at most three pointers. Needs a
   term-count index the hook file can read without `yaml`, a score floor so weak matches add
   nothing, and a measure of whether the pointers help before it is on by default.
 

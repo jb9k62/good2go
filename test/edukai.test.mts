@@ -1,6 +1,6 @@
 /**
- * edukai, the memory bundle, end to end: the validator's lesson rules, okf-edukai.mts
- * (new, verify, supersede, index, recheck), okf-edukai-hook.mts (brief, cites, debt, hook), the
+ * edukai, the memory bundle, end to end: the validator's lesson rules, g2g-edukai.mts
+ * (new, verify, supersede, index, recheck), g2g-hook.mts (brief, cites, debt, hook), the
  * two harness adapters and the demo. Throwaway projects live under .cache/ with an empty
  * node_modules, so each one's cache lands in its own folder and the copied tools resolve `yaml`
  * from this repo.
@@ -15,12 +15,12 @@ import { after, describe, it } from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const ASSETS = path.join(ROOT, 'skills', 'okf-bootstrap', 'assets');
-const EDUKAI = path.join(ASSETS, 'okf-edukai.mts');
-const HOOK = path.join(ASSETS, 'okf-edukai-hook.mts');
-const VIEW = path.join(ASSETS, 'okf-view.mts');
-const SEARCH = path.join(ASSETS, 'okf-search.mts');
-const BOOTSTRAP = path.join(ASSETS, 'bootstrap.mts');
+const ASSETS = path.join(ROOT, 'src');
+const EDUKAI = path.join(ASSETS, 'g2g-edukai.mts');
+const HOOK = path.join(ASSETS, 'g2g-hook.mts');
+const VIEW = path.join(ASSETS, 'g2g-view.mts');
+const SEARCH = path.join(ASSETS, 'g2g-search.mts');
+const BOOTSTRAP = path.join(ASSETS, 'g2g-init.mts');
 const GOOD2GO = path.join(ASSETS, 'good2go.mts');
 const CACHE = path.join(ROOT, '.cache', 'test');
 fs.mkdirSync(CACHE, { recursive: true });
@@ -99,7 +99,7 @@ const frontmatter = (file: string) => read(file).split('\n---\n')[0]!;
 
 // --- A. format and validation ---------------------------------------------------
 
-describe('okf-view: lessons, supersede pointers and budgets', () => {
+describe('g2g-view: lessons, supersede pointers and budgets', () => {
   it('reports exactly the rule each fixture file breaks', () => {
     const r = run(VIEW, [path.join(ROOT, 'test', 'fixtures', 'edukai-errors'), '--validate', '--strict'], ROOT);
     assert.equal(r.code, 1, r.all);
@@ -115,7 +115,7 @@ describe('okf-view: lessons, supersede pointers and budgets', () => {
       'check-two-tests [lesson] check[0] needs exactly one of contains, lacks, matches, exists (it has contains and lacks)',
       'cycle-a [supersede] The superseded_by chain from here returns to /d/lessons/cycle-a.md: a cycle',
       'cycle-b [supersede] The superseded_by chain from here returns to /d/lessons/cycle-b.md: a cycle',
-      'hand-digest [lesson] sources[0].digest is not one okf-edukai wrote; never write it by hand',
+      'hand-digest [lesson] sources[0].digest is not one g2g-edukai wrote; never write it by hand',
       'inferred-verified [lesson] confidence: inferred, but it has a `verified` entry; a checked lesson is tested or observed',
       'missing-target [supersede] supersedes: /d/lessons/nope.md is not a concept in the bundle',
       'no-confidence [lesson] A Lesson needs `confidence`: tested, observed, inferred',
@@ -125,9 +125,9 @@ describe('okf-view: lessons, supersede pointers and budgets', () => {
       'old-not-deprecated [supersede] superseded_by names /d/lessons/new-one-way.md, which does not name this file in `supersedes`',
       'overview [budget] An Overview body is at most 60 lines; this one has 61',
       'relative-pointer [supersede] supersedes: valid.md is not a bundle-root path ending .md, such as /adr/0002-short-title.md',
-      'tested-unverified [lesson] confidence: tested needs a `verified` entry (run okf-edukai verify), or it is inferred',
+      'tested-unverified [lesson] confidence: tested needs a `verified` entry (run g2g-edukai verify), or it is inferred',
       'too-long [budget] A Lesson body is at most 30 lines; this one has 31. One lesson, one claim: split it',
-      'verified-no-stale [lesson] `verified` without `stale_after` (okf-edukai verify sets both)',
+      'verified-no-stale [lesson] `verified` without `stale_after` (g2g-edukai verify sets both)',
     ]);
     assert.doesNotMatch(r.out, /valid\.md {2}\[/, 'the valid lesson is not reported');
   });
@@ -162,7 +162,7 @@ describe('okf-view: lessons, supersede pointers and budgets', () => {
 
 // --- B. the tool ---------------------------------------------------------------
 
-describe('okf-edukai: arguments and exit codes', () => {
+describe('g2g-edukai: arguments and exit codes', () => {
   it('prints help, and exits 2 for bad arguments or a missing bundle', () => {
     const cwd = project('args');
     for (const file of [EDUKAI, HOOK]) {
@@ -181,11 +181,11 @@ describe('okf-edukai: arguments and exit codes', () => {
     assert.equal(edukai(cwd, ['new', '--domain', 'codebase-x', '--title', 'T', '--by', ME, '--confidence', 'sure']).code, 2);
     assert.equal(hook(cwd, ['brief', '--bogus']).code, 2);
     assert.equal(hook(cwd, ['brief', '--bundle', 'missing']).code, 2);
-    assert.match(edukai(cwd, ['brief']).err, /okf-edukai-hook\.mts/, 'points at the file that has the hook commands');
+    assert.match(edukai(cwd, ['brief']).err, /g2g-hook\.mts/, 'points at the file that has the hook commands');
   });
 });
 
-describe('okf-edukai: new, verify, supersede', () => {
+describe('g2g-edukai: new, verify, supersede', () => {
   it('creates a lesson and, for a new domain, an overview stub', () => {
     const cwd = project('new', { 'src/a.ts': 'x\n' });
     const r = edukai(cwd, ['new', '--domain', 'tooling-x', '--title', 'Tests: run "btest", not make', '--by', ME, '--source', './src/a.ts', '--tags', 'ci, testing', '--now', NOW]);
@@ -365,7 +365,7 @@ describe('okf-edukai: new, verify, supersede', () => {
   });
 });
 
-describe('okf-edukai: states and recheck', () => {
+describe('g2g-edukai: states and recheck', () => {
   /** One lesson in each state of the spec's section 6, on the demo clock. */
   function everyState(name: string): string {
     const cwd = project(name, Object.fromEntries(['fresh', 'renewable', 'failed', 'suspect', 'stale', 'broken', 'old', 'guess'].map((n) => [`src/${n}.ts`, `export const ${n.toUpperCase()} = 1;\n`])));
@@ -464,7 +464,7 @@ describe('okf-edukai: states and recheck', () => {
   });
 });
 
-describe('okf-edukai: index and the cache', () => {
+describe('g2g-edukai: index and the cache', () => {
   const cacheFile = (cwd: string) => {
     const dir = path.join(cwd, 'node_modules', '.cache', 'edukai');
     const [file] = fs.readdirSync(dir).filter((f) => f.endsWith('.json'));
@@ -551,7 +551,7 @@ describe('okf-edukai: index and the cache', () => {
   });
 });
 
-describe('okf-edukai-hook: brief, cites, debt and the session file', () => {
+describe('g2g-hook: brief, cites, debt and the session file', () => {
   it('briefs with the counts, the queue and where to look', () => {
     const cwd = project('brief', { 'src/a.ts': 'A = 1\n' });
     lesson(cwd, { slug: 'holds', sources: ['src/a.ts'] });
@@ -749,7 +749,7 @@ describe('okf-edukai-hook: brief, cites, debt and the session file', () => {
   });
 });
 
-describe('okf-edukai-hook: checks that cannot finish, and lessons the index no longer describes', () => {
+describe('g2g-hook: checks that cannot finish, and lessons the index no longer describes', () => {
   it('stops a `matches` check that backtracks without end, and reports it as failed', () => {
     const cwd = project('slow-regex', { 'src/a.txt': 'a'.repeat(40) + '!\n', 'src/b.ts': 'RETRIES = 5\n' });
     lesson(cwd, { slug: 'fast', title: 'A quick check', sources: ['src/b.ts'], checks: ['{ file: src/b.ts, matches: "RETRIES = \\\\d+" }'], verify: 'tested' });
@@ -779,7 +779,7 @@ describe('okf-edukai-hook: checks that cannot finish, and lessons the index no l
     const gone = lesson(cwd, { slug: 'gone', title: 'Deleted by hand', sources: ['src/a.ts'], checks: ['{ file: src/a.ts, contains: "V = 1" }'] });
     assert.ok(kept);
 
-    // By hand, with no okf-edukai command after: the index still describes the old files.
+    // By hand, with no g2g-edukai command after: the index still describes the old files.
     fs.appendFileSync(path.join(cwd, edited), '\nA line added by hand.\n');
     fs.rmSync(path.join(cwd, gone));
     const note = /\(this lesson was edited after the index was built: run npm run edukai:index\)/;
@@ -811,22 +811,22 @@ describe('okf-edukai-hook: checks that cannot finish, and lessons the index no l
   });
 });
 
-describe('okf-edukai-hook: the dependency rule', () => {
-  it('imports nothing but node: built-ins and ./okf-rank.mts', () => {
+describe('g2g-hook: the dependency rule', () => {
+  it('imports nothing but node: built-ins and ./g2g-rank.mts', () => {
     const source = read(HOOK);
     const specifiers = [...source.matchAll(/^\s*(?:import|export)\b[^'"\n]*?from\s+['"]([^'"]+)['"]/gm), ...source.matchAll(/\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g), ...source.matchAll(/\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/g), ...source.matchAll(/^\s*import\s+['"]([^'"]+)['"]/gm)].map((m) => m[1]!);
     assert.ok(specifiers.length >= 5, 'the import scan found the imports');
-    for (const s of specifiers) assert.ok(s.startsWith('node:') || s === './okf-rank.mts', `okf-edukai-hook.mts must not import ${s}`);
-    const rank = read(path.join(ASSETS, 'okf-rank.mts'));
-    assert.doesNotMatch(rank, /^\s*import\b|\brequire\s*\(|\bimport\s*\(/m, 'okf-rank.mts stays pure');
+    for (const s of specifiers) assert.ok(s.startsWith('node:') || s === './g2g-rank.mts', `g2g-hook.mts must not import ${s}`);
+    const rank = read(path.join(ASSETS, 'g2g-rank.mts'));
+    assert.doesNotMatch(rank, /^\s*import\b|\brequire\s*\(|\bimport\s*\(/m, 'g2g-rank.mts stays pure');
   });
 
   it('runs where `yaml` cannot resolve, against a prepared cache', () => {
     // Outside the repo, as an installed plugin is: no node_modules above it.
     const plugin = path.join(outside, 'plugin');
     fs.mkdirSync(plugin, { recursive: true });
-    for (const f of ['okf-edukai-hook.mts', 'okf-rank.mts']) fs.copyFileSync(path.join(ASSETS, f), path.join(plugin, f));
-    const copied = path.join(plugin, 'okf-edukai-hook.mts');
+    for (const f of ['g2g-hook.mts', 'g2g-rank.mts']) fs.copyFileSync(path.join(ASSETS, f), path.join(plugin, f));
+    const copied = path.join(plugin, 'g2g-hook.mts');
     const proj = fs.realpathSync(fs.mkdtempSync(path.join(outside, 'project-')));
     fs.mkdirSync(path.join(proj, 'node_modules'));
     write(proj, 'edukai/index.md', '# Memory\n');
@@ -864,7 +864,7 @@ describe('okf-edukai-hook: the dependency rule', () => {
   });
 });
 
-describe('okf-search on the memory bundle', () => {
+describe('g2g-search on the memory bundle', () => {
   const search = (cwd: string, args: string[]) => JSON.parse(run(SEARCH, [...args, '--bundle', 'edukai', '--now', NOW, '--json'], cwd).out);
   const ids = (r: { results: Array<{ id: string }> }) => r.results.map((x) => x.id.split('/').pop());
 
@@ -973,7 +973,7 @@ describe('the Claude Code adapter: hook', () => {
     assert.equal(send({ hook_event_name: 'PostToolUse', tool_name: 'Read', tool_input: { file_path: '/etc/hosts' } }).all, '');
     const noisy = run(HOOK, ['hook'], cwd, { input: '{ not json', env: { CLAUDE_PROJECT_DIR: cwd, EDUKAI_DEBUG: '1' } });
     assert.equal(noisy.code, 0);
-    assert.match(noisy.err, /okf-edukai-hook:/, 'EDUKAI_DEBUG=1 reports the error');
+    assert.match(noisy.err, /g2g-hook:/, 'EDUKAI_DEBUG=1 reports the error');
   });
 
   it('finds the memory bundle from a subfolder of the project', () => {
@@ -1058,7 +1058,7 @@ describe('hooks/hooks.json', () => {
     assert.doesNotMatch(source, /^import .* from|\bawait\b|: (string|number)\b|\?\?|\?\./m, 'only syntax an old Node parses');
     assert.match(source, /major < 22 \|\| \(major === 22 && minor < 18\)/);
     const imported = [...source.matchAll(/import\('([^']+)'\)/g)].map((m) => m[1]!);
-    assert.deepEqual(imported, ['./compile-cache.mjs', '../skills/okf-bootstrap/assets/okf-edukai-hook.mts']);
+    assert.deepEqual(imported, ['./compile-cache.mjs', '../src/g2g-hook.mts']);
     for (const file of imported) assert.ok(fs.existsSync(path.resolve(path.dirname(launcher), file)), file);
     const cwd = fs.realpathSync(project('launcher', { 'src/a.ts': 'a\n' }));
     lesson(cwd, { slug: 'one', title: 'Through the launcher', sources: ['src/a.ts'] });
@@ -1133,7 +1133,7 @@ describe('the pi adapter: extensions/edukai.ts', () => {
     assert.deepEqual(pkg.pi.skills, ['./skills']);
     assert.ok(fs.existsSync(path.join(ROOT, 'extensions', 'edukai.ts')));
     const source = read(path.join(ROOT, 'extensions', 'edukai.ts'));
-    const rel = source.match(/new URL\('([^']+okf-edukai-hook\.mts)', import\.meta\.url\)/)?.[1];
+    const rel = source.match(/new URL\('([^']+g2g-hook\.mts)', import\.meta\.url\)/)?.[1];
     assert.ok(rel, 'the extension resolves the hook file relative to itself');
     assert.equal(path.resolve(ROOT, 'extensions', rel!), HOOK);
     assert.doesNotMatch(source, /from ['"]@|from ['"]pi/, 'no dependency on pi: it declares the types it uses');
@@ -1245,7 +1245,7 @@ describe('the pi adapter: extensions/edukai.ts', () => {
 
 describe('scripts/install-skill.mts', () => {
   const INSTALL = path.join(ROOT, 'scripts', 'install-skill.mts');
-  const skills = ['edukai', 'okf-bootstrap'];
+  const skills = ['edukai', 'good2go'];
 
   function homes(name: string) {
     const home = path.join(scratch, name);
@@ -1272,7 +1272,7 @@ describe('scripts/install-skill.mts', () => {
     assert.ok(!fs.existsSync(path.join(home, '.agents')), '--agents is opt-in');
     const again = install([]);
     assert.equal(again.code, 0);
-    assert.match(again.out, /edukai already linked[\s\S]*okf-bootstrap already linked/);
+    assert.match(again.out, /edukai already linked[\s\S]*good2go already linked/);
   });
 
   it('honours --claude, --agents, --copy and --force, and rejects an unknown flag', () => {
@@ -1285,7 +1285,7 @@ describe('scripts/install-skill.mts', () => {
       assert.ok(fs.lstatSync(dest).isDirectory() && !fs.lstatSync(dest).isSymbolicLink(), 'a copy, not a link');
       assert.ok(fs.existsSync(path.join(dest, 'SKILL.md')));
     }
-    assert.ok(!fs.existsSync(path.join(claude, 'skills', 'okf-bootstrap', 'assets', 'templates', 'okf-widgets', 'node_modules')), 'no node_modules copied');
+    assert.ok(!fs.existsSync(path.join(claude, 'src', 'templates', 'okf-widgets', 'node_modules')), 'no node_modules copied');
     const refused = install(['--claude']);
     assert.equal(refused.code, 1);
     assert.match(refused.err, /already exists; pass --force/);
@@ -1311,7 +1311,7 @@ describe('the edukai skill', () => {
 
   it('is self-contained: no links into the other skill\'s folder', () => {
     assert.doesNotMatch(text, /\]\((?!https?:|#)[^)]*\)/, 'no relative links, so linking this one folder still works');
-    assert.doesNotMatch(text, /\.\.\/okf-bootstrap/);
+    assert.doesNotMatch(text, /\.\.\/good2go/);
   });
 
   it('names commands and flags the tools really have', () => {
@@ -1556,13 +1556,13 @@ describe('the demo: Parcel tracker\'s memory', () => {
 
   it('has root scripts that pass the demo bundle and clock to every call', () => {
     const args = ' --bundle examples/demo/edukai --now 2026-10-15T00:00:00Z';
-    const E = 'node skills/okf-bootstrap/assets/okf-edukai.mts';
-    const H = 'node skills/okf-bootstrap/assets/okf-edukai-hook.mts';
+    const E = 'node src/g2g-edukai.mts';
+    const H = 'node src/g2g-hook.mts';
     assert.equal(pkg.scripts['demo:edukai'], 'npm run demo:edukai:brief && npm run demo:edukai:recheck');
     assert.equal(pkg.scripts['demo:edukai:brief'], `${E} index${args} && ${H} brief${args}`);
     assert.equal(pkg.scripts['demo:edukai:recheck'], `${E} recheck${args}`);
-    assert.equal(pkg.scripts['demo:edukai:search'], `node skills/okf-bootstrap/assets/okf-search.mts${args}`);
-    assert.equal(pkg.scripts['demo:edukai:view'], 'node skills/okf-bootstrap/assets/okf-view.mts examples/demo/edukai');
+    assert.equal(pkg.scripts['demo:edukai:search'], `node src/g2g-search.mts${args}`);
+    assert.equal(pkg.scripts['demo:edukai:view'], 'node src/g2g-view.mts examples/demo/edukai');
   });
 
   it('links the memory bundle from the design bundle: ADR-0004 and the tour', () => {
@@ -1591,8 +1591,8 @@ describe('release metadata for 0.7.0', () => {
   });
 
   it('ships both edukai tools in the package, and typechecks the pi extension', () => {
-    assert.match(read(GOOD2GO), /edukai: \['okf-edukai', \[\]\]/);
-    assert.match(read(GOOD2GO), /hook: \['okf-edukai-hook', \[\]\]/);
+    assert.match(read(GOOD2GO), /edukai: \['g2g-edukai', \[\]\]/);
+    assert.match(read(GOOD2GO), /hook: \['g2g-hook', \[\]\]/);
     assert.match(read(path.join(ROOT, 'tsconfig.json')), /"extensions\/\*\.ts"/);
   });
 });

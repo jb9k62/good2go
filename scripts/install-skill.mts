@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Link this clone's skills (every folder under skills/: okf-bootstrap and edukai) into the
+ * Link this clone's skills (every folder under skills/: good2go and edukai) into the
  * agents' personal skill directories, so a `git pull` here updates every agent at once.
  *
  *   node scripts/install-skill.mts [--claude] [--pi] [--agents] [--copy] [--force]

@@ -2,9 +2,9 @@
 okf_version: "0.2"
 ---
 
-# okf-bootstrap: agent memory
+# good2go: agent memory
 
-What agents have learned while working on **okf-bootstrap**, kept so the next session starts
+What agents have learned while working on **good2go**, kept so the next session starts
 knowing it. This is the **memory bundle**. The design bundle, written for the team, is in
 `design/`.
 
@@ -13,8 +13,8 @@ knowing it. This is the **memory bundle**. The design bundle, written for the te
 One line per domain, written by `npm run edukai:index`. Do not edit between the markers.
 
 <!-- edukai:index -->
-* [The okf-bootstrap codebase](/codebase-okf-bootstrap/overview.md) - What each tool and adapter must never do, and why
-* [Working in the okf-bootstrap repository](/tooling-okf-bootstrap/overview.md) - How to build, test and release the skill, and the traps that are easy to miss
+* [The good2go codebase](/codebase-good2go/overview.md) - What each tool and adapter must never do, and why
+* [Working in the good2go repository](/tooling-good2go/overview.md) - How to build, test and release the skill, and the traps that are easy to miss
 <!-- /edukai:index -->
 
 ## How it is kept

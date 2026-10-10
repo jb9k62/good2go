@@ -5,9 +5,9 @@ description: Why the viewer inlines the ranking and the widgets, loads its libra
 tags: [adr, viewer, viz]
 generated: { by: pi/deepseek-ai/DeepSeek-V4.1-Flash, at: 2026-10-08T20:00:00Z }
 sources:
-  - resource: skills/okf-bootstrap/assets/okf-view.mts
-  - resource: skills/okf-bootstrap/assets/okf-rank.mts
-  - resource: skills/okf-bootstrap/assets/templates/okf-widgets/package.json
+  - resource: src/g2g-view.mts
+  - resource: src/g2g-rank.mts
+  - resource: src/templates/okf-widgets/package.json
 ---
 
 # ADR-0004: Keep viz.html one self-contained file, with no bundler
@@ -32,7 +32,7 @@ promises.
 We will keep `viz.html` a single generated file with no build step. Its parts reach the page
 in two ways:
 
-- **Inlined:** the ranking (`okf-rank.mts`) and the project's built widget bundle.
+- **Inlined:** the ranking (`g2g-rank.mts`) and the project's built widget bundle.
 - **Loaded from a CDN:** Cytoscape, marked, Mermaid and highlight.js, each pinned to an exact
   version with a subresource-integrity hash, so a changed file does not run.
 
@@ -44,9 +44,9 @@ The viewer gets no bundler, and no network fetch beyond those four script tags.
 
 - A project reads its docs by opening one file. There is nothing to install and nothing to
   serve.
-- The search box and `okf-search` run the same ranking from one source, because
-  `okf-rank.mts` is inlined with its types stripped. That is why the file must stay pure,
-  with no imports ([the tools](/okf-bootstrap/tools.md)).
+- The search box and `g2g-search` run the same ranking from one source, because
+  `g2g-rank.mts` is inlined with its types stripped. That is why the file must stay pure,
+  with no imports ([the tools](/good2go/tools.md)).
 - The integrity hashes turn a compromised CDN into a load failure, not a silent change.
 
 ### Trade-offs

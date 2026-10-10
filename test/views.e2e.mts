@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 import type { Browser, Page } from 'playwright';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const VIEWER = path.join(ROOT, 'skills', 'okf-bootstrap', 'assets', 'okf-view.mts');
+const VIEWER = path.join(ROOT, 'src', 'g2g-view.mts');
 const require = createRequire(import.meta.url);
 
 // CDN host path fragment -> [npm package, browser build inside it].
@@ -85,7 +85,7 @@ describe('viewer views', { timeout: 120_000 }, () => {
   let skipReason = '';
 
   before(async () => {
-    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'okf-views-'));
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'g2g-views-'));
     const out = path.join(dir, 'viz.html');
     const built = spawnSync(process.execPath, [VIEWER, 'examples/demo/okf', '--out', out], {
       cwd: ROOT,
@@ -736,12 +736,12 @@ describe('viewer views', { timeout: 120_000 }, () => {
     await page.click('[data-view=graph]');
   });
 
-  view('the search box finds a lesson by a file it cites, as okf-search does', async () => {
+  view('the search box finds a lesson by a file it cites, as g2g-search does', async () => {
     // The memory bundle is the one whose concepts name project files in `sources`.
     const out = path.join(dir, 'memory.html');
     const built = spawnSync(process.execPath, [VIEWER, 'examples/demo/edukai', '--out', out], { cwd: ROOT, encoding: 'utf8' });
     assert.equal(built.status, 0, built.stdout + built.stderr);
-    const cli = spawnSync(process.execPath, [path.join(path.dirname(VIEWER), 'okf-search.mts'), 'search', 'week.ts', '--bundle', 'examples/demo/edukai', '--json', '--no-cache'], { cwd: ROOT, encoding: 'utf8' });
+    const cli = spawnSync(process.execPath, [path.join(path.dirname(VIEWER), 'g2g-search.mts'), 'search', 'week.ts', '--bundle', 'examples/demo/edukai', '--json', '--no-cache'], { cwd: ROOT, encoding: 'utf8' });
     const expected = JSON.parse(cli.stdout).results[0];
     assert.equal(expected.id, 'codebase-parcel-tracker/lessons/2026-10-02-weeks-start-monday-utc');
 

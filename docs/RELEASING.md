@@ -43,7 +43,7 @@ Do this once, before the first automated release.
    - `package.json` (`version`)
    - `.claude-plugin/plugin.json` (`version`)
    - `.claude-plugin/marketplace.json` (`plugins[0].version`)
-   - `VERSION` in `skills/okf-bootstrap/assets/bootstrap.mts`
+   - `VERSION` in `src/g2g-init.mts`
 
    The release workflow fails if they differ from each other or from the tag.
 3. In `CHANGELOG.md`, move the entries under `## Unreleased` into a new heading

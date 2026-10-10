@@ -6,9 +6,8 @@ tags: [adr, distribution, npm, tooling]
 generated: { by: claude-code/claude-opus-5-5, at: 2026-10-09T12:00:00Z }
 sources:
   - resource: package.json
-  - resource: skills/okf-bootstrap/assets/bootstrap.mts
-  - resource: skills/okf-bootstrap/assets/okf-update.mts
-  - resource: skills/okf-bootstrap/assets/okf-mermaid.mts
+  - resource: src/g2g-init.mts
+  - resource: src/g2g-mermaid.mts
   - resource: scripts/install-skill.mts
   - resource: README.md
 ---
@@ -26,9 +25,9 @@ Two things are distributed today, by two routes.
 **The skills and the harness adapters** reach an agent as a pi package, a Claude Code plugin,
 or a clone linked by `scripts/install-skill.mts`.
 
-**The tools** reach a project as copies. `bootstrap.mts` copies eight TypeScript tools and
-`okf-start.mjs` into the project's `scripts/`, about 9,500 lines, writes their hashes to
-`scripts/.okf-bootstrap.json`, adds the `okf:` npm scripts, and adds `yaml` to the project's
+**The tools** reach a project as copies. `g2g-init.mts` copies eight TypeScript tools and
+`g2g-start.mjs` into the project's `scripts/`, about 9,500 lines, writes their hashes to
+`scripts/.good2go.json`, adds the `okf:` npm scripts, and adds `yaml` to the project's
 own `devDependencies` because the copied viewer imports it.
 
 Copies do not update themselves, so the skill ships an updater. `okf-update.mts` is 561 lines.
@@ -55,7 +54,7 @@ whether the tools can be an npm package. We found four facts that shape the answ
   needs a compile step this project does not have. The step is small: the code is already
   erasable TypeScript, and `tsconfig.json` already sets `rewriteRelativeImportExtensions`.
 - **The names are free.** `@jb9k62/good2go` and `good2go` returned 404 from the registry on
-  2026-10-09, as did `okf-bootstrap`. The unscoped `okf` is taken. The `@jb9k62` scope
+  2026-10-09, as did `good2go`. The unscoped `okf` is taken. The `@jb9k62` scope
   belongs to whoever holds the npm user of that name, which we have not confirmed.
 - **The memory hook cannot come from the project's `node_modules`.** It runs from an installed
   plugin, where `node_modules` may not exist, and it must never run code from the project.
@@ -69,7 +68,7 @@ name **Good2Go**; the package is the first place the name is used.
 
 In detail:
 
-- **The package holds compiled JavaScript**, built from `skills/okf-bootstrap/assets/` when a
+- **The package holds compiled JavaScript**, built from `src/` when a
   release is published. Nothing compiled is committed. This repository keeps running the
   TypeScript sources directly ([ADR-0003](/adr/0003-run-the-tools-from-the-skill-assets.md)).
 - **One command, with subcommands** for what the copied scripts do now: `good2go init`,
@@ -89,7 +88,9 @@ In detail:
   dependencies. The skill's job becomes running `good2go init` and guiding the writing.
 - **`okf-update.mts` shrinks.** Its script-refresh half goes. What remains is a report of the
   templates a release changed, written under `.okf-update/` for a hand diff.
-- **Old projects migrate once.** A tools-only run removes each `scripts/okf-*` file whose hash
+  *Note, 2026-10-10: the updater was removed entirely in 0.7.0. `npm update` replaces it, and
+  a re-run of `good2go init` keeps authored files ([ADR-0008](/adr/0008-rename-to-good2go-and-src-layout.md)).*
+- **Old projects migrate once.** *(Note, 2026-10-10: this migration was also removed.)* A tools-only run removes each `scripts/okf-*` file whose hash
   still matches the manifest, rewrites the npm scripts, and adds the dependency. A script the
   project edited is kept and named, never deleted.
 - **Releases are published from CI**, from a version tag, with npm provenance.
@@ -101,7 +102,7 @@ Renaming the repository, the skills and the plugin to match Good2Go is not decid
 - `good2go` is a small dispatcher (`good2go.mts`) that runs each tool as a child process, so
   every tool keeps its own flags, exit codes and entry-point checks. Subcommands: `init`, `new`,
   `validate`, `fix`, `view`, `mermaid`, `search`, `recheck`, `edukai`, `hook`, `update`, `skills`.
-- `npm run build` (`scripts/build.mts`) compiles `skills/okf-bootstrap/assets/*.mts` with
+- `npm run build` (`scripts/build.mts`) compiles `src/*.mts` with
   `tsconfig.build.json` into `dist/`, copies `templates/` and the skills' instructions beside
   them, and marks the command executable. `prepack` runs it, so `npm publish` cannot ship a stale
   `dist/`. CI packs the tarball, installs it in a fresh folder and runs it.
@@ -109,8 +110,8 @@ Renaming the repository, the skills and the plugin to match Good2Go is not decid
   skills folder, so `npx @jb9k62/good2go skills` works with no clone. The hooks still need the
   Claude Code plugin or the pi package, because a hook must run where `node_modules` may not
   exist and from files Node will strip types from.
-- The install manifest moved to `.okf-bootstrap.json` at the project root, with no script
-  hashes; the old `scripts/.okf-bootstrap.json` is read once to migrate.
+- The install manifest moved to `.good2go.json` at the project root, with no script
+  hashes; the old `scripts/.good2go.json` is read once to migrate.
 - Publishing uses npm trusted publishing (OIDC) with provenance and no stored token; the first
   version is published by hand so the trusted publisher can be attached
   (the steps are in `docs/RELEASING.md` in the repository).
@@ -125,7 +126,7 @@ Renaming the repository, the skills and the plugin to match Good2Go is not decid
 - Most of the updater, and its hardest cases (edited scripts, backups, interrupted applies),
   go away.
 - The tools work without an agent: `npx @jb9k62/good2go init` scaffolds a project by hand.
-- The `node --import ./scripts/okf-start.mjs` prefix on every script goes too. It exists to
+- The `node --import ./scripts/g2g-start.mjs` prefix on every script goes too. It exists to
   cache stripped TypeScript, and there is none left to strip.
 
 ### Trade-offs
@@ -138,7 +139,7 @@ Renaming the repository, the skills and the plugin to match Good2Go is not decid
 - The plugin's hook and the project's package can be different versions, and the hook reads a
   cache the package writes. The same gap exists today between a plugin and scaffolded copies;
   the cache needs a format version that the hook checks.
-- Two names are in play, Good2Go for the package and okf-bootstrap for the repository, skill
+- Two names are in play, Good2Go for the package and good2go for the repository, skill
   and plugin, until the wider rename is decided.
 - The version already lives in four places that must match. Publishing adds a fifth thing to
   get right, the tag that triggers it.
@@ -152,5 +153,5 @@ Renaming the repository, the skills and the plugin to match Good2Go is not decid
 | Publish the TypeScript sources to npm | Node refuses to strip types under `node_modules`, so the package would not run |
 | A git dependency on a release tag | It also installs under `node_modules`, so it needs compiled output committed to the repository, or a build on every install with the development dependencies present |
 | One bundled JavaScript file per tool, downloaded from a release | It removes the dependency on `yaml` but keeps a custom download and update path, and adds a bundler, which this project has declined for the viewer ([ADR-0004](/adr/0004-viz-html-stays-one-file.md)) |
-| An unscoped name, `good2go` or `okf-bootstrap` | Both are free, but a scope ties the package to its owner and cannot be confused with, or squatted next to, someone else's |
+| An unscoped name, `good2go` or `good2go` | Both are free, but a scope ties the package to its owner and cannot be confused with, or squatted next to, someone else's |
 | Put the skills in the npm package too | The harnesses load skills and hooks from their own plugin systems, and a hook must run where `node_modules` may not exist |

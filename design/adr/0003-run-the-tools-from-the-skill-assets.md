@@ -1,47 +1,47 @@
 ---
 type: Architectural Decision
 title: "ADR-0003: Run the tools from the skill's assets, not generated copies"
-description: Why this repository's npm scripts point at skills/okf-bootstrap/assets/ instead of copying tools into scripts/.
+description: Why this repository's npm scripts point at src/ instead of copying tools into scripts/.
 tags: [adr, tooling, self-hosting]
 generated: { by: pi/deepseek-ai/DeepSeek-V4.1-Flash, at: 2026-10-08T20:00:00Z }
 sources:
   - resource: package.json
-  - resource: skills/okf-bootstrap/assets/bootstrap.mts
+  - resource: src/g2g-init.mts
   - resource: AGENTS.md
 ---
 
 # ADR-0003: Run the tools from the skill's assets, not generated copies
 
 - **Status:** accepted
-- **Note:** [ADR-0006](/adr/0006-publish-the-tools-to-npm.md) replaced the "generated copies in projects" half of this record: a scaffolded project now depends on the `@jb9k62/good2go` package and holds no tool copies. This record still stands for this repository's own layout, which runs the tools from `skills/okf-bootstrap/assets/`.
+- **Note:** [ADR-0006](/adr/0006-publish-the-tools-to-npm.md) replaced the "generated copies in projects" half of this record: a scaffolded project now depends on the `@jb9k62/good2go` package and holds no tool copies. This record still stands for this repository's own layout, which runs the tools from `src/`.
 - **Date:** 2026-10-08
 - **Deciders:** the maintainers
 
 ## Context
 
-In a scaffolded project, `bootstrap.mts` copies the tools to `scripts/okf-*.mts`, writes
-`scripts/.okf-bootstrap.json`, and adds `okf:` npm scripts that run those copies. Later,
+In a scaffolded project, `g2g-init.mts` copies the tools to `scripts/okf-*.mts`, writes
+`scripts/.good2go.json`, and adds `okf:` npm scripts that run those copies. Later,
 `npm run okf:update` compares the manifest against a release and refreshes them. There, the
 copies are the product: a project that is not this repository has no other way to get the
 tools.
 
 This repository is different, because it is where those files come from. It already keeps
 its maintainer tools in `scripts/` (`install-skill.mts`, `okf-spec.mts`, `screenshots.mts`),
-and `npm run demo` already runs the tools straight from `skills/okf-bootstrap/assets/`.
+and `npm run demo` already runs the tools straight from `src/`.
 Scaffolding into this repository would add a second copy of roughly nine thousand lines, to
 be refreshed from the originals on every release.
 
 ## Decision
 
 We will run this repository's own bundles with the tools where they live,
-`skills/okf-bootstrap/assets/okf-*.mts`, and keep `scripts/` for maintainer tools only. The
-repository gets no `scripts/okf-*.mts` copies, no `.okf-bootstrap.json` and no `okf:update`.
+`src/g2g-*.mts`, and keep `scripts/` for maintainer tools only. The
+repository gets no `scripts/okf-*.mts` copies, no `.good2go.json` and no `okf:update`.
 
 ## Consequences
 
 ### Positive
 
-- There is one copy of every tool. A change to `okf-view.mts` cannot leave a stale duplicate
+- There is one copy of every tool. A change to `g2g-view.mts` cannot leave a stale duplicate
   behind, and `npm run typecheck` checks the real file once.
 - `scripts/` keeps one clear meaning, the one AGENTS.md gives it: maintainer tools.
 - The bundle here is validated by exactly the code under review. That is the strongest form
@@ -49,12 +49,12 @@ repository gets no `scripts/okf-*.mts` copies, no `.okf-bootstrap.json` and no `
 
 ### Trade-offs
 
-- This repository never runs the copy-and-refresh path on itself (`bootstrap.mts` writing
+- This repository never runs the copy-and-refresh path on itself (`g2g-init.mts` writing
   `scripts/`, `okf:update` applying a release). The tests cover that path in throwaway
   projects instead.
 - The npm scripts name a path a scaffolded project does not have. Anyone comparing the two
   will see the difference and need it explained, which is this record's job.
-- If a tool is ever renamed or moved under `assets/`, the scripts here break at once. That is
+- If a tool is ever renamed or moved under `src/`, the scripts here break at once. That is
   the early warning we want.
 
 ## Alternatives considered
