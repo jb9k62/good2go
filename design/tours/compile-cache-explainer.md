@@ -12,7 +12,9 @@ sources:
 
 This tour is for anyone who works on this repository, or who has wondered why its npm scripts
 load a file before the tool. (A project that installs the `@jb9k62/good2go` package gets no
-compile cache: the package holds compiled JavaScript, so there is nothing to strip.) By the end you will know what the two caches are, what each is keyed on,
+compile cache: the published package holds compiled JavaScript from publish time, so there is nothing to strip.
+The compile cache only matters when running the `.mts` source files locally — it is Node.js's built-in
+`Module.enableCompileCache()` API, not user-code.) By the end you will know what the two caches are, what each is keyed on,
 and why neither ever has to decide what to throw away. There is a widget to play with, and a
 [quiz](#quiz) at the end.
 
