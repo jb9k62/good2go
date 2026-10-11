@@ -11,7 +11,7 @@ description: >
   widget to docs, when moving a bundle to a new OKF spec version, or when updating a project's
   okf tools to a newer good2go release or when adding another bundle such as ops.
 license: MIT
-compatibility: Node 24+. npm. Chromium via playwright for the render gate. Harnesses: Claude Code and pi.
+compatibility: "Node 24+. npm. Chromium via playwright for the render gate. Harnesses: Claude Code and pi."
 ---
 
 # good2go

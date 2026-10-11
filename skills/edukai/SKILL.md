@@ -10,7 +10,7 @@ description: >
   lessons before reading files, writing one claim per lesson with sources and a re-runnable
   check, verifying, and superseding a lesson that stopped being true.
 license: MIT
-compatibility: Node 24+. The project must be scaffolded with `good2go init --edukai`; `good2go hooks` adds the session hooks. Harnesses: Claude Code and pi.
+compatibility: "Node 24+. The project must be scaffolded with `good2go init --edukai`; `good2go hooks` adds the session hooks. Harnesses: Claude Code and pi."
 ---
 
 # edukai: the agent memory bundle

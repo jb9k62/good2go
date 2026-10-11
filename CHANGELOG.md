@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Skill front matter parses as strict YAML.** The `compatibility:` line in both `SKILL.md` files held `Harnesses: …` unquoted, which pi rejected ("Nested mappings are not allowed"); it is now quoted.
+
 - **Dependencies brought to latest, installed with a cool-down.** The repository's `.npmrc` sets `min-release-age=2` (npm 11.10 or later will not install a version published in the last two days, so a malicious release has time to be noticed and pulled). Mermaid and `mmdc` move to 12, marked to 18, Cytoscape to 3.34.3, highlight.js to 11.12.0, Playwright to 1.64; the GitHub Actions are pinned by SHA to checkout v7, setup-node v7, upload-artifact v7 and download-artifact v8. marked 18 no longer ships `marked.min.js`, so the viewer loads `lib/marked.umd.js`. The scaffolded `edukai-recheck.yml` uses checkout and setup-node v7.
 
 - **`good2go hooks --local`** writes the project hooks to `.claude/settings.local.json` (yours alone, uncommitted) for trying them in one repository; Claude Code only.
