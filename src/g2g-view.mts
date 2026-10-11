@@ -3517,7 +3517,15 @@ const JS = `
   document.body.dataset.view = "graph";
   $("view-switch").addEventListener("click", (event) => {
     const button = event.target.closest("button[data-view]");
-    if (button) setView(button.dataset.view);
+    if (button) {
+      if (document.body.classList.contains("reading")) {
+        document.body.classList.remove("reading");
+        $("reading-toggle").setAttribute("aria-pressed", "false");
+        if (hood) applyHood();
+        else cy.fit(undefined, 40);
+      }
+      setView(button.dataset.view);
+    }
   });
 
   // --- A: divider ---------------------------------------------------------------
