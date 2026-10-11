@@ -1,0 +1,19 @@
+{
+  "id": "d1-add-carrier",
+  "kind": "discovery",
+  "title": "Add the zephyr carrier",
+  "prompt": "Add support for a new carrier, `zephyr`. Its tracking numbers are `ZP` followed by 10 digits (customers often type them in lower case or with spaces), and its webhooks send the same payload shape as `northpost`'s. Make sure the tests pass when you are done.",
+  "arms": ["A", "B", "C"],
+  "targetFiles": ["src/carriers/registry.ts", "src/api/webhooks.ts", "src/util/tracking.ts", "snapshots/carriers.snap.json"],
+  "grader": {
+    "kind": "all",
+    "of": [
+      { "kind": "test", "hiddenDir": "hidden", "command": ["node", "--test", "test/hidden-d1.test.ts"] },
+      { "kind": "test", "command": ["npm", "test"], "stdoutMatches": "# fail 0" }
+    ]
+  },
+  "lessons": [
+    "codebase-parcel-tracker/lessons/2026-10-11-adding-a-carrier-touches-four-places.md",
+    "codebase-parcel-tracker/lessons/2026-10-11-webhooks-for-unlisted-carriers-get-a-404.md"
+  ]
+}

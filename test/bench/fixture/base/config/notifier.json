@@ -1,0 +1,4 @@
+{
+  "channels": ["email", "sms"],
+  "quietHours": { "from": "22:00", "to": "07:00" }
+}

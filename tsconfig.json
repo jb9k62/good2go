@@ -16,5 +16,5 @@
     "rewriteRelativeImportExtensions": true,
     "skipLibCheck": true
   },
-  "include": ["src/*.mts", "scripts/*.mts", "test/*.mts", "extensions/*.ts"]
+  "include": ["src/*.mts", "scripts/*.mts", "test/*.mts", "test/bench/*.mts", "test/bench/lib/*.mts", "extensions/*.ts"]
 }

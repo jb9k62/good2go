@@ -1,0 +1,15 @@
+{
+  "id": "d3-run-the-suite",
+  "kind": "discovery",
+  "title": "Make the failing tests pass",
+  "prompt": "Make the failing tests pass.",
+  "arms": ["A", "B", "C"],
+  "targetFiles": ["package.json", "test/integration/support.ts"],
+  "grader": {
+    "kind": "test",
+    "hiddenDir": "hidden",
+    "command": ["env", "PARCEL_FAKE_CARRIERS=1", "node", "--test", "--test-reporter=tap", "test/unit/*.test.ts", "test/integration/*.test.ts"],
+    "stdoutMatches": "(?=[\\s\\S]*# pass [1-9])(?=[\\s\\S]*# fail 0)(?=[\\s\\S]*# skipped 0)"
+  },
+  "lessons": ["tooling-parcel-tracker/lessons/2026-10-11-the-full-suite-skips-silently-without-fake-carriers.md"]
+}

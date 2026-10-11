@@ -21,6 +21,7 @@
 - **Keyboard shortcuts**: `/` or Ctrl+K searches; `1`, `2`, `3` switch view; `f` Filters, `d` Display, `r` Reading, `t` theme, `n` Neighbourhood, `x` Reset; `?` shows the keys on the buttons, and the buttons' tooltips name their key. They stay out of the way while you type. They work on German and AZERTY layouts too, and a bare `/` reopens search after Escape. On macOS, Ctrl+K in a text box is left to the box. A **?** button at the end of the bar lists every key on hover (click to pin the list), so the shortcuts are discoverable without knowing one first.
 - **Search and divider fixes**: clicking or tapping the search box keeps focus in the modal; Escape and Tab work from anywhere while it is open; the contents of a concept link to headings with links or emphasis in them; a drag that loses its pointer ends cleanly.
 - **A benchmark for edukai** (`npm run bench`, `npm run bench:report`, [docs/BENCHMARK.md](docs/BENCHMARK.md)) measures tokens, cost, turns and correctness with and without the memory bundle and its hooks. It is a maintainer tool that spends money on real model calls, so it is not part of `npm run check`.
+- **The benchmark installs the `edukai` skill in arms B and C and separates memory upkeep.** Each run records how many turns, tool calls and (estimated) dollars went to task work, memory use and memory upkeep, and the report shows A against B with and without upkeep; `report.mts --reanalyse` fills this in from stored transcripts without a model call.
 
 ## 0.6.0 - 2026-10-08
 

@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "data": {
+    "carriers": [
+      "ironrail",
+      "northpost",
+      "parcelhawk",
+      "quickfox",
+      "vela"
+    ],
+    "webhooks": [
+      "northpost",
+      "vela"
+    ],
+    "patterns": {
+      "ironrail": "^IR[A-Z]{2}\\d{6}$",
+      "northpost": "^NP\\d{12}$",
+      "parcelhawk": "^PH\\d{9}$",
+      "quickfox": "^QF\\d{8}$",
+      "vela": "^VL[A-Z0-9]{8}$"
+    }
+  },
+  "checksum": "a38c136bcd1a66e46672f5ade53f10de6b19438157363c16b51d3423410c0a1c"
+}

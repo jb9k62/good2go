@@ -1,0 +1,10 @@
+{
+  "id": "t1-stale-timeout",
+  "kind": "trap",
+  "title": "Document the poll timeout",
+  "prompt": "What is the carrier poll timeout? Write it in `docs/runbook.md` under the Poller heading, as `<n> seconds`.",
+  "arms": ["A", "B"],
+  "targetFiles": ["src/poller/config.ts", "docs/runbook.md"],
+  "grader": { "kind": "file", "path": "docs/runbook.md", "contains": ["## Poller[^#]*(?<![\\d.,])8 seconds"], "absent": ["10"] },
+  "lessons": ["codebase-parcel-tracker/lessons/2026-10-11-the-poller-times-out-after-ten-seconds.md"]
+}

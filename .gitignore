@@ -4,3 +4,4 @@ design/viz.html
 okf/viz.html
 examples/**/viz.html
 .cache/
+test/bench/results/

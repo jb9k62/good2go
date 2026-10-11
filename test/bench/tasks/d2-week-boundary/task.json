@@ -1,0 +1,16 @@
+{
+  "id": "d2-week-boundary",
+  "kind": "discovery",
+  "title": "Monday-morning parcels in the wrong week",
+  "prompt": "A customer in Pacific/Auckland reports that parcels delivered on a Monday morning (their time) show up in the previous week's report. Fix it. Keep the existing tests passing.",
+  "arms": ["A", "B", "C"],
+  "targetFiles": ["src/api/customer-report.ts", "src/report/week.ts"],
+  "grader": {
+    "kind": "all",
+    "of": [
+      { "kind": "test", "hiddenDir": "hidden", "command": ["node", "--test", "test/hidden-d2.test.ts"] },
+      { "kind": "test", "command": ["npm", "test"], "stdoutMatches": "# fail 0" }
+    ]
+  },
+  "lessons": ["codebase-parcel-tracker/lessons/2026-10-11-report-weeks-are-utc-by-decision.md"]
+}

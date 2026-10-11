@@ -1,0 +1,10 @@
+{
+  "id": "c2-explain-one-file",
+  "kind": "control",
+  "title": "Explain one file",
+  "prompt": "What does `src/report/rollup.ts` do? Answer in a few sentences and do not change any files.",
+  "arms": ["A", "B"],
+  "targetFiles": ["src/report/rollup.ts"],
+  "grader": { "kind": "answer", "all": ["week", "carrier", "deliver", "count|total", "oldest|earliest|sort|chronolog|ascending|monday|utc|week ?start|week-start"], "none": ["can'?t (read|find|access)"] },
+  "lessons": []
+}

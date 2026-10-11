@@ -1,0 +1,16 @@
+{
+  "id": "c1-format-eta",
+  "kind": "control",
+  "title": "Add formatEta",
+  "prompt": "Add `formatEta(minutes)` to `src/util/duration.ts`. It returns `45 min` for anything under an hour, `2 h 05 min` for an hour or more (minutes padded to two digits), and `2 h` when the minutes are exactly zero. Non-finite or negative input throws a RangeError. Add tests for it to the existing test file for that module.",
+  "arms": ["A", "B"],
+  "targetFiles": ["src/util/duration.ts", "test/unit/duration.test.ts"],
+  "grader": {
+    "kind": "all",
+    "of": [
+      { "kind": "test", "hiddenDir": "hidden", "command": ["node", "--test", "test/hidden-c1.test.ts"] },
+      { "kind": "test", "command": ["npm", "test"], "stdoutMatches": "# fail 0" }
+    ]
+  },
+  "lessons": []
+}
