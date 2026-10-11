@@ -13,7 +13,7 @@ supersedes: /tooling-parcel-tracker/lessons/2026-08-20-tests-run-via-make.md
 sources:
   - id: ci
     resource: .github/workflows/ci.yml
-    digest: sha256:64e7950abbe1f1ce
+    digest: sha256:2dc08ca25ebdc9f5
   - id: make
     resource: Makefile
     digest: sha256:533ba53fa27926a1
