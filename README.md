@@ -21,6 +21,16 @@ sourced lessons that code re-checks, handed back to the agent at the moment they
 <sub>The viewer on the [demo bundle](examples/demo/okf): a fictional parcel-tracking service
 with 22 concepts. Every internal link is an edge; the selected concept's neighbours stay lit.</sub>
 
+**Search** is one keystroke away: `/` or `Ctrl+K` opens it over the viewer. Results are ranked
+best first, with stale and unverified concepts ranked lower, each with its type, trust tier and
+freshness; the highlighted one is previewed alongside, so you can read before you open. It is the
+same ranking `npm run g2g:search` gives an agent on the command line.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/search-dark.png">
+  <img alt="The search modal over the viewer, searching for retry: eight ranked results on the left, each with a score, type, trust and freshness badges and a snippet, and a preview of the top result, Retry policy, on the right with an Open concept button" src="docs/images/search-light.png">
+</picture>
+
 ## What you get
 
 | | |

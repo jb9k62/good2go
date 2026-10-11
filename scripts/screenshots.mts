@@ -2,7 +2,7 @@
 /**
  * Regenerate the README images from the demo bundle, so they follow the viewer as it improves.
  *
- *   node scripts/screenshots.mts [--out docs/images] [--only viewer,widget-herd,quiz]
+ *   node scripts/screenshots.mts [--out docs/images] [--only viewer,search,widget-herd,quiz]
  *
  * Builds the example widgets, writes the demo viewer to .cache/, opens it in headless Chromium
  * (playwright), and saves each shot in a light and a dark variant: <name>-light.png and
@@ -55,6 +55,19 @@ const SHOTS: Shot[] = [
     viewport: { width: 1440, height: 900 },
     scale: 1,
     prepare: async () => [],
+  },
+  {
+    // The search modal over the viewer: ranked results on the left, a preview of the first on the right.
+    name: 'search',
+    concept: 'parcel-tracker/architecture',
+    viewport: { width: 1440, height: 900 },
+    scale: 1,
+    prepare: async (page) => {
+      await page.keyboard.press('/');
+      await page.locator('#sm-input').fill('retry');
+      await page.waitForSelector('#search-modal:not([hidden]) #sm-list .sr-item');
+      return [];
+    },
   },
   {
     // The same widget in two states: the lesson is the difference between them.
