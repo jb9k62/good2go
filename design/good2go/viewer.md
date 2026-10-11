@@ -61,12 +61,38 @@ writes its own widgets beside them.
 - **Mermaid diagrams**, rendered one at a time. A diagram that fails shows a visible error
   and its source. Each has pan/zoom controls, which the render gate checks are wired.
 - **Callouts** (`> [!definition] Term`), click-to-check quizzes, and widgets.
-- **Deep links.** Headings have ids and the URL hash names the concept (`#slug/concept`), so
-  Back and reload land on the right one. The page title comes from the bundle's `index.md`
-  H1.
+- **Deep links.** The URL hash carries the view's state; see [The route](#the-route). The page
+  title comes from the bundle's `index.md` H1.
 - **Small comforts.** A theme that follows the system setting and is remembered, an IDE-style
   status bar with reading progress, and raw-path link text replaced by the linked concept's
   title.
+
+## The route
+
+The URL hash is the viewer's state, so a link opens the same view and Back and reload land
+where they did. The grammar is `#<concept-id>[?<params>]`, and the bare `#<concept-id>` form
+still works. A tour is a concept, so tours route the same way. Params are left out when they
+hold their default:
+
+| Param | Meaning |
+| --- | --- |
+| `s` | the section: the id of a level 2 or 3 heading |
+| `search=1` | the search modal is open |
+| `q` | the search text |
+| `mode` | the search mode, when it is not the default |
+| `type`, `trust`, `fresh` | the three filters |
+
+Loading a link opens the concept, scrolls to the section and restores the search modal, its
+query and the filters. Contents entries write their section into the hash. Opening a concept
+or a search result adds a history entry; filter, query and modal changes replace the current
+one, so Back moves between concepts and not between keystrokes.
+
+The rule is that one module owns the route. `parseRoute` and `formatRoute` are pure, and
+they are the only code that reads or writes the hash's grammar. `go` is the only function
+that pushes a history entry, `syncRoute` is the only one that replaces the current entry,
+and `applyRoute` takes a URL to the UI. The filters and the search are read from the URL
+once, at load; after that the UI is the source and `syncRoute` writes it back, so the two
+cannot drift apart silently.
 
 ## Versions
 

@@ -2005,12 +2005,113 @@ const JS = `
     if (offscreen && cy.width() > 0 && !hood) cy.animate({ center: { eles: node } }, { duration: 250 });
   }
 
-  // The URL hash names the open concept, so links, Back/Forward, and reloads all work.
-  function navigate(id) {
-    if (location.hash.slice(1) === id) show(id);
-    else location.hash = id;
+  // --- Route: the URL hash carries the concept, section, search modal and filters ---
+  // Grammar: #<concept-id>[?<params>], params s, search, q, mode, type, trust, fresh.
+  // go() is the only writer that pushes history; syncRoute() is the only writer that replaces it.
+  // Nothing writes the URL before the initial load has applied it.
+  let routeReady = false;
+
+  function safeDecode(text) {
+    try { return decodeURIComponent(text); } catch { return text; }
   }
-  window.addEventListener("hashchange", () => show(decodeURIComponent(location.hash.slice(1))));
+
+  // Pure: the hash string to the route fields, "" for an absent field.
+  function parseRoute(hash) {
+    const text = String(hash || "").replace(/^#/, "");
+    const cut = text.indexOf("?");
+    const params = new URLSearchParams(cut < 0 ? "" : text.slice(cut + 1));
+    return {
+      id: safeDecode(cut < 0 ? text : text.slice(0, cut)),
+      s: params.get("s") || "",
+      search: params.get("search") === "1",
+      q: params.get("q") || "",
+      mode: params.get("mode") || "",
+      type: params.get("type") || "",
+      trust: params.get("trust") || "",
+      fresh: params.get("fresh") || "",
+    };
+  }
+
+  // Pure: the route fields to a hash string. encodeURI keeps "/" readable; "?" is escaped so it can split.
+  function formatRoute(route) {
+    const params = new URLSearchParams();
+    if (route.s) params.set("s", route.s);
+    if (route.search) params.set("search", "1");
+    if (route.q) params.set("q", route.q);
+    if (route.mode) params.set("mode", route.mode);
+    if (route.type) params.set("type", route.type);
+    if (route.trust) params.set("trust", route.trust);
+    if (route.fresh) params.set("fresh", route.fresh);
+    const query = params.toString();
+    return "#" + encodeURI(route.id).replace(/\\?/g, "%3F") + (query ? "?" + query : "");
+  }
+
+  // The route as the UI now stands, for the concept id and section given.
+  function uiRoute(id, s) {
+    const mode = $("search-mode");
+    return {
+      id,
+      s: s || "",
+      search: searchOpen,
+      q: $("search").value,
+      mode: mode.selectedIndex > 0 ? mode.value : "",
+      type: $("filter-type").value,
+      trust: $("filter-trust").value,
+      fresh: $("filter-fresh").value,
+    };
+  }
+
+  // Opens a concept (and optionally a section) by pushing a history entry, or by applying it directly
+  // when the hash already says so.
+  function go(id, slug) {
+    const hash = formatRoute(uiRoute(id, slug));
+    if (formatRoute(parseRoute(location.hash)) === hash) applyRoute(false);
+    else location.hash = hash;
+  }
+
+  function navigate(id) {
+    go(id, "");
+  }
+
+  // Replaces the URL with the current state. The section is kept from the present hash unless a slug is given.
+  function syncRoute(slug) {
+    if (!routeReady || !current) return;
+    const s = slug !== undefined ? slug : parseRoute(location.hash).s;
+    const hash = formatRoute(uiRoute(current, s));
+    if (hash !== location.hash) history.replaceState(null, "", hash);
+  }
+
+  // URL to UI. Concept and section on every call; search and filters only on the initial load, after
+  // which the UI writes them to the URL and Back/Forward move between concepts and sections only.
+  function applyRoute(initial) {
+    const route = parseRoute(location.hash);
+    if (initial) {
+      $("search").value = route.q;
+      $("search").placeholder = $("search-mode").value === "ranked" ? "Search concepts" : "Filter by title, path or tag";
+      setSelectTo($("search-mode"), route.mode);
+      setSelectTo($("filter-type"), route.type);
+      setSelectTo($("filter-trust"), route.trust);
+      setSelectTo($("filter-fresh"), route.fresh);
+      applyFilters();
+    }
+    const id = initial && !byId[route.id] ? fallbackId() : route.id;
+    if (id !== current && byId[id]) show(id);
+    if (route.s) {
+      const el = document.getElementById(route.s);
+      if (el && $("detail-body").contains(el)) el.scrollIntoView({ block: "start" });
+    }
+    if (initial && route.search) openSearch();
+    routeReady = true;
+    syncRoute();
+  }
+
+  // A select takes the URL's value when it has such an option, and its first option otherwise.
+  function setSelectTo(select, value) {
+    const known = [...select.options].some((option) => option.value === value);
+    select.value = known ? value : select.options[0].value;
+  }
+
+  window.addEventListener("hashchange", () => applyRoute(false));
 
   function show(id) {
     const data = byId[id];
@@ -2221,6 +2322,7 @@ const JS = `
           $("detail-toc-toggle").focus({ preventScroll: true });
         }
         heading.scrollIntoView({ behavior: "smooth", block: "start" });
+        syncRoute(heading.id);
       });
       return link;
     });
@@ -2974,7 +3076,6 @@ const JS = `
   let savedOverflow = "";
   let backdropDown = false;
   let previewId = null;
-  let pendingSection = null;
   const tocCache = {};
   const modal = $("search-modal");
 
@@ -3009,6 +3110,7 @@ const JS = `
     $("search").setAttribute("aria-expanded", "true");
     renderResults();
     $("sm-input").focus();
+    syncRoute();
   }
 
   function closeSearch(restoreFocus) {
@@ -3024,23 +3126,15 @@ const JS = `
       $("search").focus();
       suppressOpen = false;
     }
+    syncRoute();
   }
 
   // Opening a result closes the modal, so the concept is shown behind it. A contents link can also
   // name a section, which is scrolled to once the concept is shown.
   function openFromSearch(id, slug) {
     closeSearch(true);
-    pendingSection = slug || null;
-    open(id);
-    if (current === id) flushSection();
-  }
-
-  function flushSection() {
-    const slug = pendingSection;
-    pendingSection = null;
-    if (!slug) return;
-    const el = document.getElementById(slug);
-    if (el && $("detail-body").contains(el)) el.scrollIntoView({ block: "start" });
+    go(id, slug || "");
+    if (view === "table") setView(previousView);
   }
 
   function focusables() {
@@ -3310,6 +3404,7 @@ const JS = `
     refreshLists();
     renderResults();
     refreshToolbar();
+    syncRoute();
   }
 
   // The top bar's search box is the entry point: focusing it, clicking it or typing in it opens the modal.
@@ -3373,10 +3468,7 @@ const JS = `
     if (searchOpen && !modal.contains(event.target)) $("sm-input").focus();
   });
   // Back and Forward, or any other route to a concept, closes the modal too.
-  window.addEventListener("hashchange", () => {
-    closeSearch(true);
-    flushSection();
-  });
+  window.addEventListener("hashchange", () => closeSearch(true));
   $("search-mode").addEventListener("change", () => {
     $("search").placeholder = $("search-mode").value === "ranked" ? "Search concepts" : "Filter by title, path or tag";
     $("sm-input").placeholder = $("search").placeholder;
@@ -3886,13 +3978,12 @@ const JS = `
   updateThemeButton();
   cy.fit(undefined, 40);
 
-  // Open the concept named in the URL, else the first Application concept, else the most linked-to one.
-  const requested = decodeURIComponent(location.hash.slice(1));
+  // The concept to open when the URL names none that exists: the first Application concept, else the most linked-to one.
   const byLinks = [...bundle.nodes].sort((a, b) => (backlinks[b.data.id] || []).length - (backlinks[a.data.id] || []).length);
-  const start = byId[requested]
-    ? requested
-    : (bundle.nodes.find((node) => node.data.type === "Application") || byLinks[0] || { data: {} }).data.id;
-  if (start) show(start);
+  function fallbackId() {
+    return (bundle.nodes.find((node) => node.data.type === "Application") || byLinks[0] || { data: {} }).data.id || "";
+  }
+  applyRoute(true);
 
   // Audit hook for --check-render (harmless in normal use): just enough access
   // to drive the viewer and observe diagram render states. Note: this block
@@ -3900,6 +3991,7 @@ const JS = `
   window.__OKF_VIEW__ = {
     ids: bundle.nodes.map((node) => node.data.id),
     show,
+    route: () => parseRoute(location.hash),
     // Graph state for the tests: the nodes currently drawn, and where one sits.
     visibleIds: () => cy.nodes().filter((node) => node.style("display") !== "none").map((node) => node.id()),
     position: (id) => cy.getElementById(id).position(),

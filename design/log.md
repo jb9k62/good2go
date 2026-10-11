@@ -1,5 +1,10 @@
 # Bundle update log
 
+## 2026-10-11
+* **Changed**: the viewer's URL hash now carries its state (concept, section, search modal,
+  query, mode and filters). The grammar and the single route module are described in
+  [the viewer](/good2go/viewer.md#the-route).
+
 ## 2026-10-10
 * **Renamed**: the project, package, skills and plugin are all `good2go`; the sources moved
   from `skills/okf-bootstrap/assets/` to `src/`, the tools became `g2g-*`, and the updater and

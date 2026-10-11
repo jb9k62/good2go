@@ -128,7 +128,7 @@ describe('viewer views', { timeout: 120_000 }, () => {
   // and replace the concept that test opened.
   const hashShown = () =>
     page.waitForFunction(() => {
-      const id = decodeURIComponent(location.hash.slice(1));
+      const id = decodeURIComponent(location.hash.slice(1).split('?')[0]!);
       const node = (window.BUNDLE as unknown as { nodes: Array<{ data: { id: string; label: string } }> }).nodes.find((n) => n.data.id === id);
       return !!node && document.title.startsWith(node.data.label + ' | ');
     });
@@ -259,7 +259,7 @@ describe('viewer views', { timeout: 120_000 }, () => {
     const second = await page.getAttribute('#sm-list .sr-item:nth-child(2)', 'data-id');
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('Enter');
-    await page.waitForFunction((id) => location.hash === '#' + id, second);
+    await page.waitForFunction((id) => decodeURIComponent(location.hash.slice(1).split('?')[0]!) === id, second);
     assert.equal(await page.isHidden('#search-modal'), true);
     assert.equal(await page.evaluate('document.body.classList.contains("search-open")'), false);
     assert.equal(await page.evaluate('document.querySelector("main").inert'), false, 'the page is usable again');
@@ -354,7 +354,7 @@ describe('viewer views', { timeout: 120_000 }, () => {
     assert.ok((await tocLinks.count()) > 0, 'the first result has contents');
     const id = await page.getAttribute('#sm-list .sr-item[aria-selected=true]', 'data-id');
     await tocLinks.last().click();
-    await page.waitForFunction((want) => location.hash === '#' + want, id);
+    await page.waitForFunction((want) => decodeURIComponent(location.hash.slice(1).split('?')[0]!) === want, id);
     assert.equal(await page.isHidden('#search-modal'), true);
     await hashShown();
     await page.click('#reset');
@@ -704,12 +704,11 @@ describe('viewer views', { timeout: 120_000 }, () => {
     assert.equal(await page.evaluate('window.__OKF_VIEW__.inView()'), true, 'graph fits after reading');
     await page.setViewportSize({ width: 1400, height: 800 });
 
-    // Switching view while reading keeps reading; the new view shows on the way out.
+    // Switching view while reading closes reading view, and the new view shows at once.
     await page.click('#reading-toggle');
     await page.click('#view-switch [data-view=table]');
-    assert.equal(await paneVisible(), false, 'still reading after switching to the table');
-    assert.equal(await page.isVisible('#detail'), true);
-    await page.click('#reading-toggle');
+    assert.equal(await page.getAttribute('#reading-toggle', 'aria-pressed'), 'false', 'reading closed by the view switch');
+    assert.equal(await paneVisible(), true, 'the pane is back after switching to the table');
     assert.equal(await page.isVisible('#concept-table'), true);
     assert.equal(await page.isVisible('#detail'), false);
 
@@ -1218,7 +1217,7 @@ describe('viewer views', { timeout: 120_000 }, () => {
       );
       assert.equal(await p.isVisible('#detail-toc-list'), false, 'a choice closes the list');
       assert.equal(await p.evaluate(() => document.activeElement?.id), 'detail-toc-toggle', 'focus stays on the toggle');
-      assert.equal(await p.evaluate(() => location.hash), '#parcel-tracker/agent-memory', 'the URL hash still names the concept');
+      assert.equal(await p.evaluate(() => location.hash.split('?')[0]), '#parcel-tracker/agent-memory', 'the URL hash still names the concept');
     } finally {
       await p.context().close();
     }
@@ -1356,6 +1355,8 @@ describe('viewer keyboard shortcuts', { timeout: 120_000 }, () => {
     it(name, async (t) => {
       if (skipReason) return t.skip(skipReason);
       pageErrors = [];
+      // The hash carries the search and filters, and a reload restores them: drop it first.
+      await page.evaluate(() => history.replaceState(null, '', location.pathname));
       await page.reload();
       await page.waitForFunction('window.__OKF_SHORTCUTS__');
       await fn();
@@ -1816,5 +1817,223 @@ describe('viewer keyboard shortcuts', { timeout: 120_000 }, () => {
     assert.equal(await page.evaluate(() => document.body.classList.contains('kbd-hints')), true);
     assert.deepEqual((await visibleBadges()).sort(), ['1', '2', '3', 'd', 'f', 'r', 't']);
     await page.keyboard.press('Escape');
+  });
+});
+
+// The viewer's URL state: the concept, the open heading, the search modal, its query and the
+// filters all live in the hash (#<concept-id>?s=&search=&q=&mode=&type=&trust=&fresh=). Each test
+// loads its own URL, through about:blank, so the document is new and reads the hash on load.
+const hashQuery = (p: Page) =>
+  p.evaluate(() => location.hash.slice(1).split('?')[1] ?? '').then((q) => new URLSearchParams(q));
+describe('viewer URL state', { timeout: 120_000 }, () => {
+  let dir = '';
+  let fileUrl = '';
+  let browser: Browser | undefined;
+  let page: Page;
+  let pageErrors: string[] = [];
+  let skipReason = '';
+  // Picked at run time from the demo bundle: a concept with at least three h2/h3 that overflows the pane.
+  let target = { id: '', label: '', slug: '', count: 0, word: '', type: '', mode: '' };
+
+  const loadAt = async (url: string) => {
+    await page.goto('about:blank');
+    await page.goto(url);
+    await page.waitForFunction('window.__OKF_VIEW__ && window.marked && window.cytoscape', undefined, {
+      timeout: 20_000,
+    });
+  };
+  const labelOf = (id: string) =>
+    page.evaluate((cid) => {
+      const nodes = (window as unknown as { BUNDLE: { nodes: Array<{ data: { id: string; label: string } }> } }).BUNDLE.nodes;
+      return nodes.find((n) => n.data.id === cid)?.data.label ?? '';
+    }, id);
+
+  // Skips, rather than fails, when the environment has no usable browser.
+  const urlView = (name: string, fn: () => Promise<void>) =>
+    it(name, async (t) => {
+      if (skipReason) return t.skip(skipReason);
+      pageErrors = [];
+      await fn();
+      assert.deepEqual(pageErrors, [], 'page errors');
+    });
+
+  before(async () => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'g2g-url-'));
+    const out = path.join(dir, 'viz.html');
+    const built = spawnSync(process.execPath, [VIEWER, 'examples/demo/okf', '--out', out], {
+      cwd: ROOT,
+      encoding: 'utf8',
+    });
+    assert.equal(built.status, 0, built.stdout + built.stderr);
+    fileUrl = 'file://' + out;
+
+    try {
+      const { chromium } = await import('playwright');
+      browser = await chromium.launch({ headless: true, executablePath: process.env.OKF_CHROMIUM || undefined });
+    } catch (e) {
+      skipReason = `no browser: ${e instanceof Error ? e.message.split('\n')[0] : e}`;
+      return;
+    }
+    page = await browser.newPage({ viewport: { width: 1400, height: 800 } });
+    page.on('pageerror', (e) => pageErrors.push(e.message));
+    await page.route(/^https:/, (route) => {
+      const body = localLib(route.request().url());
+      if (body) return route.fulfill({ contentType: 'text/javascript', body });
+      return route.continue();
+    });
+    try {
+      await loadAt(fileUrl);
+    } catch {
+      skipReason = 'the viewer libraries did not load (no network, and not installed in node_modules)';
+      return;
+    }
+
+    // Walk the concepts in the page (show() is the viewer's own entry point) to find the target.
+    const picked = await page.evaluate(() => {
+      const w = window as unknown as {
+        BUNDLE: { nodes: Array<{ data: { id: string; label: string } }> };
+        __OKF_VIEW__: { ids: string[]; show: (id: string) => void };
+      };
+      const pane = document.getElementById('detail')!;
+      for (const id of w.__OKF_VIEW__.ids) {
+        w.__OKF_VIEW__.show(id);
+        const headings = [...document.querySelectorAll<HTMLElement>('#detail-body h2, #detail-body h3')];
+        if (headings.length >= 3 && pane.scrollHeight > pane.clientHeight) {
+          const label = w.BUNDLE.nodes.find((n) => n.data.id === id)?.data.label ?? '';
+          const word = (label.match(/[A-Za-z]{4,}/) ?? [''])[0];
+          const types = [...document.querySelectorAll<HTMLOptionElement>('#filter-type option')]
+            .map((o) => o.value)
+            .filter(Boolean);
+          const modes = [...document.querySelectorAll<HTMLOptionElement>('#search-mode option')].map((o) => o.value);
+          const slug = headings[headings.length - 2]!.id;
+          return { id, label, slug, count: headings.length, word, type: types[0] ?? '', mode: modes[1] ?? '' };
+        }
+      }
+      return null;
+    });
+    if (!picked) {
+      skipReason = 'no demo concept has three headings and overflows the pane';
+      return;
+    }
+    target = picked;
+    assert.ok(target.word, 'the target label has a word to search for');
+    assert.ok(target.type, 'the type filter has a real option');
+    assert.ok(target.mode, 'the search mode has a second option');
+  });
+
+  after(async () => {
+    await browser?.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  urlView('loading #<id>?s=<slug> shows the concept with that heading at the top of the pane', async () => {
+    await loadAt(`${fileUrl}#${target.id}?s=${target.slug}`);
+    await page.waitForFunction(
+      (label) => document.getElementById('detail-title')?.textContent === label,
+      target.label,
+    );
+    await page.waitForFunction(
+      (slug) => {
+        const pane = document.getElementById('detail')!;
+        const heading = document.getElementById(slug);
+        if (!heading) return false;
+        // A heading near the end cannot reach the top: the pane is then scrolled as far as it goes.
+        const atEnd = pane.scrollTop + pane.clientHeight >= pane.scrollHeight - 2;
+        return atEnd || Math.abs(heading.getBoundingClientRect().top - pane.getBoundingClientRect().top) <= 40;
+      },
+      target.slug,
+      { timeout: 5_000 },
+    );
+  });
+
+  urlView('a contents entry puts s=<that heading id> in the URL', async () => {
+    await loadAt(`${fileUrl}#${target.id}`);
+    await page.waitForFunction(
+      (label) => document.getElementById('detail-title')?.textContent === label,
+      target.label,
+    );
+    if ((await page.getAttribute('#detail-toc-toggle', 'aria-expanded')) !== 'true') {
+      await page.click('#detail-toc-toggle');
+    }
+    await page.locator('.doc-toc-link').nth(target.count - 2).click();
+    await page.waitForFunction(
+      (slug) => location.hash.includes('s=' + slug),
+      target.slug,
+    );
+    assert.equal((await hashQuery(page)).get('s'), target.slug);
+  });
+
+  urlView('loading #<id>?search=1&q=<word> opens the modal with the query and results', async () => {
+    await loadAt(`${fileUrl}#${target.id}?search=1&q=${encodeURIComponent(target.word)}`);
+    await page.waitForFunction(() => !(document.getElementById('search-modal') as HTMLElement).hidden);
+    assert.equal(await page.inputValue('#sm-input'), target.word);
+    assert.equal(await page.inputValue('#search'), target.word);
+    assert.ok((await page.locator('.sr-item').count()) >= 1, 'at least one result');
+  });
+
+  urlView('loading with type=<value> sets the select and keeps it, also with search=1', async () => {
+    await loadAt(`${fileUrl}#${target.id}?type=${encodeURIComponent(target.type)}`);
+    assert.equal(await page.inputValue('#filter-type'), target.type);
+    assert.equal((await hashQuery(page)).get('type'), target.type);
+    await loadAt(`${fileUrl}#${target.id}?search=1&type=${encodeURIComponent(target.type)}`);
+    await page.waitForFunction(() => !(document.getElementById('search-modal') as HTMLElement).hidden);
+    assert.equal(await page.inputValue('#filter-type'), target.type, 'the filter is active in the modal');
+  });
+
+  urlView('a filter change rewrites the hash without a history entry, and clearing it removes the param', async () => {
+    await loadAt(`${fileUrl}#${target.id}`);
+    const before = await page.evaluate('history.length');
+    await inPanel(page, 'filters', () => page.selectOption('#filter-type', target.type));
+    await page.waitForFunction(() => location.hash.includes('type='));
+    assert.equal(await page.evaluate('history.length'), before, 'replaceState, not pushState');
+    await inPanel(page, 'filters', () => page.selectOption('#filter-type', ''));
+    await page.waitForFunction(() => !location.hash.includes('type='));
+    assert.equal(await page.evaluate('history.length'), before);
+  });
+
+  urlView('opening and closing search adds and removes search=1, and typing adds q', async () => {
+    await loadAt(`${fileUrl}#${target.id}`);
+    await page.keyboard.press('Control+k');
+    await page.waitForFunction(() => location.hash.includes('search=1'));
+    await closeSearch(page);
+    await page.waitForFunction(() => !location.hash.includes('search=1'));
+    await page.keyboard.press('Control+k');
+    await page.waitForFunction(() => location.hash.includes('search=1'));
+    await page.fill('#sm-input', target.word);
+    await page.waitForFunction((w) => location.hash.includes('q=' + w), target.word);
+    await closeSearch(page);
+  });
+
+  urlView('a bare #<id> opens the concept, an unknown id falls back without error, and Back returns', async () => {
+    await loadAt(`${fileUrl}#${target.id}`);
+    await page.waitForFunction(
+      (label) => document.getElementById('detail-title')?.textContent === label,
+      target.label,
+    );
+
+    await loadAt(`${fileUrl}#no-such-concept-anywhere`);
+    const fallback = await page.textContent('#detail-title');
+    assert.ok(fallback && fallback.length > 0, 'a default concept is shown');
+
+    await loadAt(`${fileUrl}#${target.id}`);
+    const other = await page.evaluate(
+      (current) =>
+        (window as unknown as { __OKF_VIEW__: { ids: string[] } }).__OKF_VIEW__.ids.find((i) => i !== current) ?? '',
+      target.id,
+    );
+    const otherLabel = await labelOf(other);
+    await page.evaluate((id) => {
+      location.hash = '#' + id;
+    }, other);
+    await page.waitForFunction(
+      (label) => document.getElementById('detail-title')?.textContent === label,
+      otherLabel,
+    );
+    await page.goBack();
+    await page.waitForFunction((id) => location.hash === '#' + id, target.id);
+    await page.waitForFunction(
+      (label) => document.getElementById('detail-title')?.textContent === label,
+      target.label,
+    );
   });
 });
