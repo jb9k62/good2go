@@ -73,5 +73,5 @@ writes its own widgets beside them.
 The viewer implements OKF v0.2. It reports the version a bundle declares and adds a note when
 the two differ. It does not refuse another version; it reads it as best it can.
 
-It pins Mermaid 11, and `g2g-mermaid.mts` must stay on the same major. That way a diagram one
+It pins Mermaid 12, and `g2g-mermaid.mts` must stay on the same major. That way a diagram one
 accepts is a diagram the other accepts.

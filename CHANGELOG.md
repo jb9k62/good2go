@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Dependencies brought to latest, installed with a cool-down.** The repository's `.npmrc` sets `min-release-age=2` (npm 11.10 or later will not install a version published in the last two days, so a malicious release has time to be noticed and pulled) and `ignore-scripts=true`. Mermaid and `mmdc` move to 12, marked to 18, Cytoscape to 3.34.3, highlight.js to 11.12.0, Playwright to 1.64; the GitHub Actions are pinned by SHA to checkout v7, setup-node v7, upload-artifact v7 and download-artifact v8. marked 18 no longer ships `marked.min.js`, so the viewer loads `lib/marked.umd.js`. The scaffolded `edukai-recheck.yml` uses checkout and setup-node v7.
+
 - **`good2go hooks --local`** writes the project hooks to `.claude/settings.local.json` (yours alone, uncommitted) for trying them in one repository; Claude Code only.
 
 - **The npm scripts are named `g2g:`** (`g2g:validate`, `g2g:view`, `g2g:search`, `g2g:recheck`, `g2g:mermaid`, `g2g:fix`, `g2g:widgets:*`), matching the `good2go` command and the `g2g-*` tools. `okf` stays the name of the format and the default design folder.
@@ -16,6 +18,7 @@
 - **Search is a modal**: a wide search with the results on the left and a preview on the right (contents, then the start of the concept); arrows and Tab move through results, Enter opens one, Escape closes. Works in Ranked and Contains modes.
 - **Keyboard shortcuts**: `/` or Ctrl+K searches; `1`, `2`, `3` switch view; `f` Filters, `d` Display, `r` Reading, `t` theme, `n` Neighbourhood, `x` Reset; `?` shows the keys on the buttons, and the buttons' tooltips name their key. They stay out of the way while you type. They work on German and AZERTY layouts too, and a bare `/` reopens search after Escape. On macOS, Ctrl+K in a text box is left to the box. A **?** button at the end of the bar lists every key on hover (click to pin the list), so the shortcuts are discoverable without knowing one first.
 - **Search and divider fixes**: clicking or tapping the search box keeps focus in the modal; Escape and Tab work from anywhere while it is open; the contents of a concept link to headings with links or emphasis in them; a drag that loses its pointer ends cleanly.
+- **A benchmark for edukai** (`npm run bench`, `npm run bench:report`, [docs/BENCHMARK.md](docs/BENCHMARK.md)) measures tokens, cost, turns and correctness with and without the memory bundle and its hooks. It is a maintainer tool that spends money on real model calls, so it is not part of `npm run check`.
 
 ## 0.6.0 - 2026-10-08
 

@@ -15,7 +15,7 @@ sources:
   - resource: test/views.e2e.mts
     digest: sha256:7ee714a7806d71c5
 check:
-  - { file: src/g2g-view.mts, contains: "cdn.jsdelivr.net/npm/mermaid@11.17.2" }
+  - { file: src/g2g-view.mts, contains: "cdn.jsdelivr.net/npm/mermaid@12.1.0" }
   - { file: src/g2g-view.mts, contains: 'integrity="sha384-' }
 ---
 

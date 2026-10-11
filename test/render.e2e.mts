@@ -64,7 +64,7 @@ describe('render gates', { timeout: 600_000 }, () => {
     const require = createRequire(import.meta.url);
     const libs: Record<string, [string, string]> = {
       'cytoscape@': ['cytoscape', 'dist/cytoscape.min.js'],
-      'marked@': ['marked', 'marked.min.js'],
+      'marked@': ['marked', 'lib/marked.umd.js'],
       'mermaid@': ['mermaid', 'dist/mermaid.min.js'],
     };
     const local = (url: string) => {

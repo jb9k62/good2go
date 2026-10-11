@@ -25,7 +25,7 @@ const require = createRequire(import.meta.url);
 // CDN host path fragment -> [npm package, browser build inside it].
 const LOCAL_LIBS: Record<string, [string, string]> = {
   'cytoscape@': ['cytoscape', 'dist/cytoscape.min.js'],
-  'marked@': ['marked', 'marked.min.js'],
+  'marked@': ['marked', 'lib/marked.umd.js'],
   'mermaid@': ['mermaid', 'dist/mermaid.min.js'],
 };
 

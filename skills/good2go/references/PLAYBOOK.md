@@ -306,8 +306,8 @@ Both gates share one exit-code contract, so a green run always means the same th
 
 Notes:
 
-- Both gates are on **Mermaid 11**: the viewer pins `mermaid@11.17.2` and `mmdc` 11.x
-  bundles its own 11.x, so a diagram that one accepts is a diagram the other accepts.
+- Both gates are on **Mermaid 12**: the viewer pins `mermaid@12.1.0` and `mmdc` 12.x
+  bundles its own 12.x, so a diagram that one accepts is a diagram the other accepts.
   Keep them on the same major when bumping either.
 - Chromium's sandbox does not start under root, and also does not start on distros
   that restrict unprivileged user namespaces (Ubuntu 23.10+ with AppArmor). The parse
