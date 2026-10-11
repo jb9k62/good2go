@@ -24,3 +24,12 @@ Benchmark session: five lessons added to tooling-good2go (the stream flag for ho
 headless Bash allow-list, why reports are copied to test/bench/reports, the hooks' cache, and the
 first benchmark result). The tooling overview was rewritten to cover them and the two-day
 dependency cool-down. No earlier lesson's claim changed.
+
+## 2026-10-11 viewer contents
+
+The reading pane gained a contents list for each concept, built in the browser from the rendered
+headings (by `claude-code/claude-haiku-5-5`). Three lessons record what its layout depends on: the
+viewer's script sits in a template literal, the rail is set from a ResizeObserver because an
+ancestor with containment or a transform clips an expanded diagram, and the entries come from the
+rendered headings. The codebase overview covers them, and the tooling overview lists a views test
+that failed once and is not traced. No earlier lesson's claim changed.

@@ -3,7 +3,7 @@ type: Overview
 title: Working in the good2go repository
 description: How to build, test and release the skill, and the traps that are easy to miss
 tags: [overview, tooling, ci]
-generated: { by: claude-code/sonnet-5.5, at: 2026-10-11T11:40:42Z }
+generated: { by: claude-code/claude-haiku-5-5, at: 2026-10-11T12:23:04Z }
 ---
 
 This repository is the source of the npm package `@jb9k62/good2go`: two agent skills, the
@@ -57,3 +57,4 @@ upstream has moved, and `npm run spec -- update` brings the new version in.
 - The first publish (by hand, then trusted publishing and the `npm` environment) has not happened.
 - Dependabot and `SECURITY.md` were added with the release workflow; not reviewed in memory.
 - The benchmark's budget-stop detection and the Stop hook's turns are unseen; see `test/bench/TODO.md`.
+- The views test for a divider drag that loses its pointer capture (`A: a drag whose capture is lost…`) failed in two of ten full `test:views` runs of the contents change, and passed in the other eight, in four runs of the untouched HEAD, and when run alone. It is not traced. Treat one failure of it as unproven until a run of the suite shows it again.

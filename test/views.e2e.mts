@@ -1178,6 +1178,124 @@ describe('viewer views', { timeout: 120_000 }, () => {
       await p.context().close();
     }
   });
+
+  // The page's title names a concept once show() has run for it.
+  const conceptShown = (p: Page, id: string) =>
+    p.waitForFunction(
+      (want) => {
+        const node = (window.BUNDLE as unknown as { nodes: Array<{ data: { id: string; label: string } }> }).nodes.find((n) => n.data.id === want);
+        return !!node && document.title.startsWith(node.data.label + ' | ');
+      },
+      id,
+      { timeout: 10_000 },
+    );
+
+  // The contents come from the open concept's rendered headings: one entry per level 2 or 3 heading, in
+  // order. An entry scrolls its heading to the top of the pane and leaves the URL hash alone.
+  view('contents: a narrow pane shows them collapsed, and a choice scrolls to its heading and closes the list', async () => {
+    const p = await openViewer({ viewport: { width: 390, height: 844 }, hasTouch: true, hash: '#parcel-tracker/agent-memory' });
+    try {
+      const headings = await p.$$eval('#detail-body h2, #detail-body h3', (els) => els.map((e) => e.textContent!.trim()));
+      assert.ok(headings.length >= 4, `the concept has several headings (${headings.length})`);
+      assert.equal(await p.isVisible('#detail-toc'), true, 'the contents show above the prose');
+      assert.equal(await p.isVisible('#detail-toc-list'), false, 'they start collapsed');
+      assert.equal(await p.getAttribute('#detail-toc-toggle', 'aria-expanded'), 'false');
+      await p.click('#detail-toc-toggle');
+      assert.equal(await p.isVisible('#detail-toc-list'), true, 'the toggle opens them');
+      const entries = await p.$$eval('#detail-toc-list .doc-toc-link', (els) => els.map((e) => e.textContent!.trim()));
+      assert.deepEqual(entries, headings, 'one entry per heading, in order');
+
+      const pick = Math.floor(headings.length / 2);
+      await p.locator('#detail-toc-list .doc-toc-link').nth(pick).click();
+      await p.waitForFunction(
+        (index) => {
+          const pane = document.getElementById('detail')!.getBoundingClientRect().top;
+          const top = document.querySelectorAll('#detail-body h2, #detail-body h3')[index]!.getBoundingClientRect().top;
+          return top - pane >= 0 && top - pane < 60;
+        },
+        pick,
+        { timeout: 10_000 },
+      );
+      assert.equal(await p.isVisible('#detail-toc-list'), false, 'a choice closes the list');
+      assert.equal(await p.evaluate(() => document.activeElement?.id), 'detail-toc-toggle', 'focus stays on the toggle');
+      assert.equal(await p.evaluate(() => location.hash), '#parcel-tracker/agent-memory', 'the URL hash still names the concept');
+    } finally {
+      await p.context().close();
+    }
+  });
+
+  // Beside the prose the contents are a sticky column that marks the section being read. The reading view
+  // gives the pane the window's width, which is wide enough for the column.
+  view('contents: a wide pane sets them beside the prose, where they stay in view and mark the section being read', async () => {
+    const p = await openViewer({ hash: '#parcel-tracker/agent-memory' });
+    try {
+      await p.click('#reading-toggle');
+      await p.waitForFunction(() => document.getElementById('detail-content')!.classList.contains('rail'), undefined, { timeout: 10_000 });
+      const toc = (await p.locator('#detail-toc').boundingBox())!;
+      const body = (await p.locator('#detail-body').boundingBox())!;
+      assert.ok(toc.x >= body.x + body.width, 'the contents sit to the right of the prose');
+      assert.equal(await p.isVisible('#detail-toc-list'), true, 'they are listed without opening');
+
+      await p.$eval('#detail', (el) => {
+        el.scrollTop = 600;
+      });
+      const offset = await p.evaluate(
+        () => document.getElementById('detail-toc')!.getBoundingClientRect().top - document.getElementById('detail')!.getBoundingClientRect().top,
+      );
+      assert.ok(Math.abs(offset - 24) < 2, `they stay 24px below the top of the pane as the concept scrolls (${offset}px)`);
+
+      const pick = 2;
+      await p.locator('#detail-toc-list .doc-toc-link').nth(pick).click();
+      await p.waitForFunction(
+        (index) => document.querySelectorAll('#detail-toc-list .doc-toc-link')[index]?.getAttribute('aria-current') === 'true',
+        pick,
+        { timeout: 10_000 },
+      );
+      assert.equal(await p.locator('#detail-toc-list [aria-current="true"]').count(), 1, 'one entry is marked');
+      assert.equal(await p.isVisible('#detail-toc-list'), true, 'the list stays beside the prose after a choice');
+
+      // The column fits the pane, not the window: in a short window under a taller top bar (it wraps on a
+      // narrower window, or with filter chips) its last entry still clears the status bar.
+      await p.setViewportSize({ width: 1400, height: 420 });
+      await p.addStyleTag({ content: '.topbar { padding-bottom: 70px; }' });
+      await p.$eval('#detail', (el) => {
+        el.scrollTop = 1500;
+      });
+      await p.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+      const clear = await p.$eval('#detail-toc', (el) => {
+        el.scrollTop = el.scrollHeight;
+        const last = el.querySelector('li:last-child .doc-toc-link')!;
+        // Where the status bar rests at the foot of the pane (it slides in, so its box may still be moving).
+        const bar = document.getElementById('detail')!.getBoundingClientRect().bottom - document.getElementById('statusbar')!.offsetHeight;
+        return bar - last.getBoundingClientRect().bottom;
+      });
+      assert.ok(clear >= 0, `the last entry stays above the status bar (${clear}px clear)`);
+    } finally {
+      await p.context().close();
+    }
+  });
+
+  view('contents: each concept gets its own list, and a concept without headings has none', async () => {
+    const p = await openViewer({ hash: '#parcel-tracker/agent-memory' });
+    try {
+      const entries = () => p.locator('#detail-toc-list .doc-toc-link').count();
+      const first = await entries();
+      assert.ok(first > 0, 'the concept lists its headings');
+      await p.evaluate(() => {
+        location.hash = '#parcel-tracker/api';
+      });
+      await conceptShown(p, 'parcel-tracker/api');
+      assert.equal(await p.isVisible('#detail-toc'), false, 'no headings, no contents');
+      assert.equal(await entries(), 0, "the previous concept's entries are gone");
+      await p.evaluate(() => {
+        location.hash = '#parcel-tracker/agent-memory';
+      });
+      await conceptShown(p, 'parcel-tracker/agent-memory');
+      assert.equal(await entries(), first, 'coming back builds the list again, once');
+    } finally {
+      await p.context().close();
+    }
+  });
 });
 
 // B: keyboard shortcuts. A plain key drives the toolbar when focus is not in a field; Ctrl+K also works from one.

@@ -365,6 +365,10 @@ version adds:
 - an IDE-style status bar pinned to the bottom of the reading pane: it slides in once
   the concept header scrolls out of view and shows the concept type, its title, the
   section you are in, reading progress, and a "Top" button
+- a contents list for each concept, built in the browser from its rendered level 2 and 3 headings,
+  so nothing is stored in the Markdown: a sticky column beside the prose when the reading pane is at
+  least 1056px wide, otherwise a "Contents" row above the prose that starts collapsed; the section
+  you are in is marked, and an entry scrolls its heading to the top
 - `--check-render`: after writing the viewer, open it in headless Chromium and audit that
   every Mermaid diagram settles into `rendered` with its pan/zoom controls attached, and
   that a zoom-in click actually moves the diagram (see [Mermaid (two gates)](#mermaid-two-gates))

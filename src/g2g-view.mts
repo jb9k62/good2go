@@ -906,6 +906,11 @@ ${CSS}
           <dl id="detail-meta"></dl>
         </details>
       </header>
+      <nav id="detail-toc" class="doc-toc" aria-label="Contents of this concept" hidden>
+        <p class="doc-toc-title">Contents</p>
+        <button id="detail-toc-toggle" class="doc-toc-toggle" type="button" aria-expanded="false" aria-controls="detail-toc-list"><span class="doc-toc-chevron" aria-hidden="true">&#9656;</span>Contents</button>
+        <ul id="detail-toc-list"></ul>
+      </nav>
       <div id="detail-body" class="prose"></div>
       <nav id="detail-backlinks" hidden>
         <h2>Linked from</h2>
@@ -1403,6 +1408,8 @@ body[data-view="tree"] #legend {
 .prose > :first-child { margin-top: 0; }
 .prose h2 { margin: 2.2em 0 0.6em; font-size: 22px; line-height: 1.3; color: var(--heading); }
 .prose h3 { margin: 1.8em 0 0.5em; font-size: 17px; color: var(--heading); }
+/* A contents entry, an in-page link or a search contents link leaves room above the heading it scrolls to. */
+.prose h2, .prose h3 { scroll-margin-top: 24px; }
 .prose p, .prose ul, .prose ol { margin: 0 0 1em; }
 .prose ul, .prose ol { padding-left: 1.4em; }
 .prose li + li { margin-top: 0.35em; }
@@ -1648,6 +1655,89 @@ code { font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospac
 #detail-backlinks ul { margin: 0; padding-left: 1.2em; }
 #detail-backlinks a { color: var(--accent); text-decoration: none; }
 #detail-backlinks a:hover { text-decoration: underline; }
+
+/* Contents: the headings of the open concept (renderToc). Beside the prose when the pane is wide
+   enough (#detail-content.rail, set by the script), otherwise a block above the prose that starts
+   collapsed. The toggle and the list are the narrow layout; the title and the sticky column are the wide. */
+#detail-toc { margin: 0 0 28px; }
+.doc-toc-title {
+  display: none;
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.doc-toc-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: left;
+}
+.doc-toc-toggle:hover { background: none; color: var(--accent); }
+.doc-toc-chevron { display: inline-block; font-size: 11px; transition: transform 120ms ease; }
+#detail-toc.open .doc-toc-chevron { transform: rotate(90deg); }
+#detail-toc-list {
+  display: none;
+  margin: 0;
+  padding: 4px 0 0;
+  list-style: none;
+  max-height: 50vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+#detail-toc.open #detail-toc-list { display: block; }
+.doc-toc-link {
+  display: block;
+  width: 100%;
+  padding: 3px 8px;
+  border: 0;
+  border-left: 2px solid transparent;
+  border-radius: 0 4px 4px 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13.5px;
+  line-height: 1.45;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.doc-toc-link:hover, .doc-toc-link:focus-visible { background: var(--surface-2); color: var(--accent); }
+/* Inset, so the list or the column, which scroll, do not clip the ring at its sides. */
+.doc-toc-link:focus-visible { outline-offset: -2px; }
+.doc-toc-link[aria-current="true"] { color: var(--accent); border-left-color: var(--accent); }
+/* The rail: 46rem of prose, a 2.5rem gap and a 13rem column, with the article's 36px side padding. */
+#detail-content.rail {
+  display: grid;
+  grid-template-columns: minmax(0, 46rem) 13rem;
+  column-gap: 2.5rem;
+  align-items: start;
+  max-width: 66rem;
+}
+#detail-content.rail > .concept-header { grid-column: 1; grid-row: 1; }
+#detail-content.rail > #detail-body { grid-column: 1; grid-row: 2; min-width: 0; }
+#detail-content.rail > #detail-backlinks { grid-column: 1; grid-row: 3; }
+#detail-content.rail > #detail-toc {
+  grid-column: 2;
+  grid-row: 2;
+  position: sticky;
+  top: 24px;
+  /* --pane-height is set by the script with the rail class. 24px above, the status bar (38px) and 10px below. */
+  max-height: calc(var(--pane-height, 100vh) - 72px);
+  margin: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+#detail-content.rail .doc-toc-title { display: block; }
+#detail-content.rail .doc-toc-toggle { display: none; }
+#detail-content.rail #detail-toc-list { display: block; max-height: none; overflow: visible; }
 
 /* IDE-style status bar, pinned to the bottom of the reading pane and only lifted
    into view once the concept header has scrolled away. */
@@ -2025,6 +2115,8 @@ const JS = `
       }
     }
 
+    // After the links are rewritten, so an entry reads as its heading does.
+    renderToc(body);
     highlightCode(body);
     renderMermaid(body, ++renderToken);
   }
@@ -2061,11 +2153,16 @@ const JS = `
     const detail = $("detail");
     const paneTop = detail.getBoundingClientRect().top;
     let section = "";
+    let active = -1;
     for (const heading of $("detail-body").querySelectorAll("h2, h3")) {
       if (heading.getBoundingClientRect().top - paneTop > 28) break;
       section = heading.textContent.trim();
+      // Found by element: a widget can render a heading after the contents were built.
+      const entry = tocHeadings.indexOf(heading);
+      if (entry >= 0) active = entry;
     }
     $("status-section").textContent = section;
+    markTocActive(active);
     const scrollable = detail.scrollHeight - detail.clientHeight;
     $("status-progress").textContent = scrollable > 8 ? Math.round((detail.scrollTop / scrollable) * 100) + "%" : "";
   }
@@ -2076,6 +2173,76 @@ const JS = `
   }, { passive: true });
 
   $("status-top").addEventListener("click", () => $("detail").scrollTo({ top: 0, behavior: "smooth" }));
+
+  // --- Contents -------------------------------------------------------------
+  // A list of the open concept's level 2 and 3 headings, built in the browser from the rendered body
+  // (after addHeadingIds), so each entry scrolls to the element the body's own anchors point at. The
+  // Markdown stores none of it. Beside the prose when the pane has room for both (.rail); otherwise a
+  // block above the prose that starts collapsed.
+  const RAIL_REM = 66; // the rail layout's width in rem, see #detail-content.rail
+  let tocHeadings = [];
+  let tocLinks = [];
+  let tocActive = -1;
+
+  // Measured here rather than with a container query. An ancestor with a containment or a transform clips
+  // an expanded diagram, which is position: fixed, to that ancestor (Chromium does this for layout
+  // containment and transforms; other browsers are not checked).
+  if ("ResizeObserver" in window) {
+    const railWidth = RAIL_REM * parseFloat(getComputedStyle(document.documentElement).fontSize);
+    new ResizeObserver(([entry]) => {
+      $("detail-content").classList.toggle("rail", entry.contentRect.width >= railWidth);
+      // The column fits the pane, which is shorter than the window by the top bar (taller when it wraps).
+      $("detail-content").style.setProperty("--pane-height", entry.contentRect.height + "px");
+    }).observe($("detail"));
+  }
+
+  function setTocOpen(open) {
+    $("detail-toc").classList.toggle("open", open);
+    $("detail-toc-toggle").setAttribute("aria-expanded", String(open));
+    // A hidden list keeps the scroll position it had, perhaps for another concept: it opens at its top.
+    if (open) $("detail-toc-list").scrollTop = 0;
+  }
+  $("detail-toc-toggle").addEventListener("click", () => setTocOpen(!$("detail-toc").classList.contains("open")));
+
+  function renderToc(root) {
+    const headings = [...root.querySelectorAll("h2, h3")];
+    tocHeadings = headings;
+    tocLinks = headings.map((heading) => {
+      const link = document.createElement("button");
+      link.type = "button";
+      link.className = "doc-toc-link";
+      link.style.paddingLeft = (heading.tagName === "H3" ? 22 : 8) + "px";
+      link.textContent = heading.textContent.trim() || "Untitled section";
+      link.addEventListener("click", () => {
+        // Above the prose the list is a menu: it closes on a choice, and focus goes to its toggle rather
+        // than to a link that has just been hidden. Beside the prose the list stays where it is.
+        if (!$("detail-content").classList.contains("rail")) {
+          setTocOpen(false);
+          $("detail-toc-toggle").focus({ preventScroll: true });
+        }
+        heading.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+      return link;
+    });
+    $("detail-toc-list").replaceChildren(...tocLinks.map((link) => {
+      const item = document.createElement("li");
+      item.append(link);
+      return item;
+    }));
+    tocActive = -1;
+    setTocOpen(false);
+    $("detail-toc").hidden = headings.length === 0;
+    $("detail-toc").scrollTop = 0; // the column beside the prose starts at its top too
+  }
+
+  // The entry for the section the reader is in (the status bar's section) gets aria-current. The index
+  // refers to the same headings as tocLinks.
+  function markTocActive(active) {
+    if (active === tocActive) return;
+    tocLinks[tocActive]?.removeAttribute("aria-current");
+    tocLinks[active]?.setAttribute("aria-current", "true");
+    tocActive = active;
+  }
 
   // --- Callouts -------------------------------------------------------------
   // A blockquote whose first line is [!type] becomes a styled callout. The set
