@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.0.0 - 2026-10-11
+
 - **The viewer's URL carries its state.** The hash is `#<concept-id>[?<params>]`: `s` names a level 2 or 3 heading, and `search`, `q`, `mode`, `type`, `trust` and `fresh` restore the search modal, its query and the three filters. Loading such a link opens the concept (tours included) and scrolls to the section, and Contents entries write the section into the URL. Opening a concept or a search result adds a history entry, while filter and query changes replace it, so Back moves between concepts; the bare `#<concept-id>` form still works.
 
 - **Contents for every concept.** The reading pane lists the concept's level 2 and 3 headings as links. The list is built in the browser from the rendered page, so the Markdown stores none of it, and each entry scrolls its heading to the top of the pane. Beside the prose when the reading pane is at least 1056px wide, otherwise a Contents row above the prose that starts collapsed. The section you are in is marked, and headings now scroll to with a little room above them.
