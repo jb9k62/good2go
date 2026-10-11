@@ -28,7 +28,7 @@ npm run typecheck        # tsc for the tools and the extension, then the widget 
 npm run build            # compile the package to dist/
 npm test                 # node --test test/*.test.mts, plus the widget workspace's tests
 npm run test:views       # Chromium: layouts, Graph/Tree/Table, neighbourhood, colour modes
-npm run okf:validate     # this repository's design/ bundle
+npm run g2g:validate     # this repository's design/ bundle
 npm run edukai:validate  # this repository's edukai/ bundle
 ```
 
@@ -70,8 +70,8 @@ or the pinned report in the same change.
   tarball, installs it in a fresh folder and runs it, because the compiled package can differ
   from the sources the tests ran.
 - **`render`**: installs Chromium, then runs `npm run test:render` and `npm run test:views`,
-  then puts this repository's own bundle through both Mermaid gates (`npm run okf:mermaid` and
-  `npm run okf:mermaid:render`). It needs network for the viewer's CDN.
+  then puts this repository's own bundle through both Mermaid gates (`npm run g2g:mermaid` and
+  `npm run g2g:mermaid:render`). It needs network for the viewer's CDN.
 - **`spec`**: runs `npm run spec -- status` weekly (and on push) and fails when the vendored
   OKF spec has moved upstream. `npm run spec -- update` copies the new spec in and moves the
   submodule.

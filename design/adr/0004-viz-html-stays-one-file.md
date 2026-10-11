@@ -53,8 +53,8 @@ The viewer gets no bundler, and no network fetch beyond those four script tags.
 
 - The page needs the network to load its libraries, so the render gate cannot run
   air-gapped. The parse gate can. Exit code 2 means "could not run", never "passed".
-- The widget bundle has to be built before the viewer can inline it, so `okf:view` and
-  `okf:mermaid:render` build the workspace first.
+- The widget bundle has to be built before the viewer can inline it, so `g2g:view` and
+  `g2g:mermaid:render` build the workspace first.
 - The page is large, because it carries the ranking and the widgets.
 
 ## Alternatives considered

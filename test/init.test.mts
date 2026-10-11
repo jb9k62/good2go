@@ -54,12 +54,12 @@ describe('bootstrap', () => {
     assert.ok(!fs.existsSync(path.join(dir, 'scripts')), 'no scripts/: the tools live in the package');
     assert.ok(!fs.existsSync(path.join(dir, 'packages')), 'no widgets without --widgets');
     const pkg = pkgOf(dir);
-    assert.equal(pkg.scripts['okf:validate'], 'good2go validate okf');
-    assert.equal(pkg.scripts['okf:view'], 'good2go view okf');
-    assert.equal(pkg.scripts['okf:fix'], 'good2go fix okf');
-    assert.equal(pkg.scripts['okf:search'], 'good2go search --bundle okf');
+    assert.equal(pkg.scripts['g2g:validate'], 'good2go validate okf');
+    assert.equal(pkg.scripts['g2g:view'], 'good2go view okf');
+    assert.equal(pkg.scripts['g2g:fix'], 'good2go fix okf');
+    assert.equal(pkg.scripts['g2g:search'], 'good2go search --bundle okf');
     assert.equal(pkg.scripts['okf:update'], undefined, 'there is no updater: upgrades are npm update');
-    assert.equal(pkg.scripts['okf:widgets:build'], undefined);
+    assert.equal(pkg.scripts['g2g:widgets:build'], undefined);
     assert.equal(pkg.devDependencies['@jb9k62/good2go'], `^${pkgOf(ROOT).version}`);
     assert.equal(pkg.devDependencies.yaml, undefined, 'yaml comes with the package');
     assert.equal(pkg.type, undefined, 'package.json "type" stays alone');
@@ -211,8 +211,8 @@ describe('bootstrap', () => {
     assert.ok(!fs.existsSync(path.join(widgets, 'dist')), 'no build output copied');
     const pkg = pkgOf(dir);
     assert.deepEqual(pkg.workspaces, ['apps/*', 'packages/okf-widgets']);
-    assert.equal(pkg.scripts['okf:view'], 'npm run okf:widgets:build && good2go view okf');
-    assert.equal(pkg.scripts['okf:widgets:build'], 'npm run build -w okf-widgets');
+    assert.equal(pkg.scripts['g2g:view'], 'npm run g2g:widgets:build && good2go view okf');
+    assert.equal(pkg.scripts['g2g:widgets:build'], 'npm run build -w okf-widgets');
 
     fs.writeFileSync(path.join(widgets, 'src', 'mine.ts'), 'export {};\n');
     const again = run(BOOTSTRAP, [dir, '--widgets', '--force']);
@@ -234,7 +234,7 @@ describe('templates', () => {
       if (file.endsWith('package.json')) continue;
       assert.doesNotMatch(read(file), /scripts\/(g2g|okf)-|\b(g2g|okf)-[a-z]+\.m[tj]s\b/, file);
     }
-    assert.match(read(path.join(ROOT, 'src', 'templates', 'edukai-recheck.yml')), /npm run --silent okf:recheck/);
+    assert.match(read(path.join(ROOT, 'src', 'templates', 'edukai-recheck.yml')), /npm run --silent g2g:recheck/);
   });
 
   it('stores the widgets .gitignore as gitignore (npm drops dotfiles of that name) and restores it', () => {
@@ -256,11 +256,11 @@ describe('bootstrap --design-dir', () => {
     assert.ok(fs.existsSync(path.join(dir, 'docs-bundle', 'adr', 'readme.md')));
     assert.ok(!fs.existsSync(path.join(dir, 'okf')), 'the default folder is not created');
     const s = pkgOf(dir).scripts;
-    assert.equal(s['okf:validate'], 'good2go validate docs-bundle');
-    assert.equal(s['okf:fix'], 'good2go fix docs-bundle');
-    assert.equal(s['okf:view'], 'good2go view docs-bundle');
-    assert.equal(s['okf:mermaid'], 'good2go mermaid docs-bundle');
-    assert.equal(s['okf:recheck'], 'good2go recheck --bundle docs-bundle');
+    assert.equal(s['g2g:validate'], 'good2go validate docs-bundle');
+    assert.equal(s['g2g:fix'], 'good2go fix docs-bundle');
+    assert.equal(s['g2g:view'], 'good2go view docs-bundle');
+    assert.equal(s['g2g:mermaid'], 'good2go mermaid docs-bundle');
+    assert.equal(s['g2g:recheck'], 'good2go recheck --bundle docs-bundle');
     assert.equal(JSON.parse(read(path.join(dir, '.good2go.json'))).designDir, 'docs-bundle');
     assert.equal(run(GOOD2GO, ['validate', 'docs-bundle', '--strict'], dir).code, 0);
 
@@ -268,7 +268,7 @@ describe('bootstrap --design-dir', () => {
     const again = run(BOOTSTRAP, [dir]);
     assert.equal(again.code, 0, again.out);
     assert.ok(!fs.existsSync(path.join(dir, 'okf')));
-    assert.equal(pkgOf(dir).scripts['okf:validate'], 'good2go validate docs-bundle');
+    assert.equal(pkgOf(dir).scripts['g2g:validate'], 'good2go validate docs-bundle');
     assert.equal(JSON.parse(read(path.join(dir, '.good2go.json'))).designDir, 'docs-bundle');
   });
 
@@ -279,7 +279,7 @@ describe('bootstrap --design-dir', () => {
     assert.ok(!fs.existsSync(path.join(dir, 'design', 'design')));
     assert.ok(fs.existsSync(path.join(dir, 'design', 'architecture', '.gitkeep')));
     assert.ok(fs.existsSync(path.join(dir, 'design', 'thing', '.gitkeep')));
-    assert.equal(pkgOf(dir).scripts['okf:validate'], 'good2go validate design');
+    assert.equal(pkgOf(dir).scripts['g2g:validate'], 'good2go validate design');
     assert.equal(run(GOOD2GO, ['validate', 'design', '--strict'], dir).code, 0);
   });
 
@@ -295,7 +295,7 @@ describe('bootstrap --design-dir', () => {
   it('accepts a nested folder of plain names', () => {
     const dir = project('nested-design');
     assert.equal(run(BOOTSTRAP, [dir, '--design-dir', 'docs/design.v2']).code, 0);
-    assert.equal(pkgOf(dir).scripts['okf:validate'], 'good2go validate docs/design.v2');
+    assert.equal(pkgOf(dir).scripts['g2g:validate'], 'good2go validate docs/design.v2');
   });
 
   it('rejects a poisoned design folder in a committed manifest', () => {

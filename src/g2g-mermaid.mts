@@ -424,7 +424,7 @@ async function main() {
       '\n' +
       'That is a setup problem, not a content problem. Usual fixes:\n' +
       '  npx playwright install-deps chromium   # Chromium system libraries\n' +
-      '  PUPPETEER_EXECUTABLE_PATH=/path/to/chrome npm run okf:mermaid';
+      '  PUPPETEER_EXECUTABLE_PATH=/path/to/chrome npm run g2g:mermaid';
     if (opts.json)
       console.log(JSON.stringify({ ...report, error: msg }, null, 2));
     else console.error(`Mermaid parse check: ${bundleRoot}\n\n${msg}`);

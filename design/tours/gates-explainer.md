@@ -27,7 +27,7 @@ why that difference deserves an exit code of its own. A [quiz](#quiz) closes it.
 
 > [!definition] Gate
 > A command that checks one property of a bundle or a page and reports the result through its
-> exit code. The check scripts here are gates. `okf:fix` and `okf:search` are not: they change
+> exit code. The check scripts here are gates. `g2g:fix` and `g2g:search` are not: they change
 > or read a bundle, they do not judge it.
 
 A check has three possible outcomes, not two. It can pass. It can find something wrong. Or it
@@ -55,7 +55,7 @@ flowchart LR
 
 ## The problem, one step at a time
 
-1. **A diagram does not parse.** `npm run okf:mermaid` exits 1 and names the file and line.
+1. **A diagram does not parse.** `npm run g2g:mermaid` exits 1 and names the file and line.
    Fix the markdown. Nothing about the setup is in question.
 2. **The browser is missing.** The same command exits 2: it could not run the parser at all.
    The diagrams are neither fine nor broken. They are unproven.

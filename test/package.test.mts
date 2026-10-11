@@ -89,7 +89,7 @@ describe('the built package', () => {
     assert.ok(!fs.existsSync(path.join(project, 'scripts')), 'no tools copied');
     assert.equal(JSON.parse(read(path.join(project, '.good2go.json'))).name, 'Consumer');
     const pkg = JSON.parse(read(path.join(project, 'package.json')));
-    assert.equal(pkg.scripts['okf:validate'], 'good2go validate okf');
+    assert.equal(pkg.scripts['g2g:validate'], 'good2go validate okf');
     assert.ok(pkg.devDependencies['@jb9k62/good2go']);
   });
 

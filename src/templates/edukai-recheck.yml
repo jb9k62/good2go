@@ -30,7 +30,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Design bundle
-        run: npm run --silent okf:recheck -- $STRICT | tee -a "$GITHUB_STEP_SUMMARY"
+        run: npm run --silent g2g:recheck -- $STRICT | tee -a "$GITHUB_STEP_SUMMARY"
         shell: bash -eo pipefail {0}
       - name: Memory bundle (edukai/)
         if: ${{ !cancelled() && hashFiles('edukai/index.md') != '' }}

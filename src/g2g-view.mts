@@ -111,7 +111,7 @@ declare global {
 const OKF_VERSION = '0.2';
 
 // The interactive React widgets (packages/okf-widgets), inlined so the viewer stays one file.
-// Build them first with `npm run okf:widgets:build`; without the bundle the viewer still
+// Build them first with `npm run g2g:widgets:build`; without the bundle the viewer still
 // works and each widget block shows how to build it. The project's own is found from the working directory.
 const PROJECT_WIDGETS_BUNDLE = path.resolve('packages/okf-widgets/dist/okf-widgets.js');
 
@@ -924,7 +924,7 @@ ${CSS}
 </main>
 
 <script>
-${widgetsJs ?? '/* The widget bundle is not built: npm run okf:widgets:build */'}
+${widgetsJs ?? '/* The widget bundle is not built: npm run g2g:widgets:build */'}
 </script>
 <script>
 ${rankScript()}
@@ -2241,7 +2241,7 @@ const JS = `
       const api = window.OkfWidgets;
       let problem = null;
       if (!api) {
-        problem = "The interactive widget " + name + " is not built. Run npm run okf:view, which builds the widgets first (npm run okf:widgets:build).";
+        problem = "The interactive widget " + name + " is not built. Run npm run g2g:view, which builds the widgets first (npm run g2g:widgets:build).";
       } else if (!api.mount(mountPoint, name, source)) {
         problem = "Unknown widget " + name + ". Known widgets: " + api.names.join(", ") + ".";
       }
@@ -4462,7 +4462,7 @@ async function main() {
     if (widgetsJs === null && usesWidgets) {
       console.log(
         `\nNote: no widget bundle at ${widgetsFile}, so widget blocks show a build hint.` +
-          '\n  fix: npm run okf:widgets:build (or scaffold one: good2go init --widgets)',
+          '\n  fix: npm run g2g:widgets:build (or scaffold one: good2go init --widgets)',
       );
     }
     const html = buildHTML(readBundleTitle(bundleRoot), graph, widgetsJs);

@@ -31,10 +31,10 @@ repeating its content.
   Playbook); anything else still works but renders in a neutral grey.
 - `generated.by` names the producer as `<agent>/<version>` (or `human:<id>`), and every
   timestamp is an ISO 8601 datetime with an offset, such as `2026-06-30T14:00:00Z`. A bare
-  date is reported by `okf:validate`.
+  date is reported by `g2g:validate`.
 - `sources` should point at the code or document this concept describes, not at a summary
   document the text was copied from. A path from the project root also feeds
-  `npm run okf:recheck`: after `npx good2go edukai verify <concept> --bundle okf
+  `npm run g2g:recheck`: after `npx good2go edukai verify <concept> --bundle okf
   --by <actor>` pins it, the re-check reports when that file changes.
 - Leave `status` out. It defaults to `stable`. Set it to `draft` while still writing, or
   `deprecated` once the concept no longer applies.

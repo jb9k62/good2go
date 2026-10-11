@@ -70,8 +70,8 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run test:render
       - run: npm run test:views
-      - run: npm run okf:mermaid
-      - run: npm run okf:mermaid:render
+      - run: npm run g2g:mermaid
+      - run: npm run g2g:mermaid:render
 
   spec:
     runs-on: ubuntu-latest

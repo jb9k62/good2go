@@ -52,7 +52,7 @@ tooling will be recorded here, and not only in commit messages.
 
 - The bundle is one more thing to keep current when the tools change, and a stale concept is
   worse than none. Validation checks a concept's shape, not whether it is still true.
-  `npm run okf:recheck` can report a concept whose pinned sources have changed, but no concept
+  `npm run g2g:recheck` can report a concept whose pinned sources have changed, but no concept
   here is pinned yet. Until one is, catching a stale concept is a reviewer's job.
 - The commands here differ from a scaffolded project's. The tools run from
   `src/`, not from copies under `scripts/`

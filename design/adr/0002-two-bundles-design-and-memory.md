@@ -47,7 +47,7 @@ format and some machinery. They never share a folder.
 - Each reader gets only what is theirs. The hooks read the memory bundle without pulling the
   design bundle into every tool result, and `okf/` renders for a person with no lesson noise.
 - The shared machinery still works on both. A concept can carry `supersedes` and
-  `superseded_by`, and `okf:recheck` reports a concept whose pinned `sources` changed.
+  `superseded_by`, and `g2g:recheck` reports a concept whose pinned `sources` changed.
 
 ### Trade-offs
 

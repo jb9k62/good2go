@@ -77,7 +77,7 @@ never "keep the older entry".
 
 ```mermaid
 flowchart LR
-    start["npm run okf:search"] --> load["load g2g-start.mjs"]
+    start["npm run g2g:search"] --> load["load g2g-start.mjs"]
     load --> on["enable compile cache"]
     on --> tool["run the tool"]
     tool --> idx{"index cache<br/>key matches?"}

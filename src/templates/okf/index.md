@@ -18,7 +18,7 @@ Write these first, then link each one here as it lands:
 * `{{PROJECT_SLUG}}/api.md` - the routes or interfaces exposed
 
 Use a bundle-root link with descriptive text, as the entries below do. They start as
-plain paths because `npm run okf:validate` reports a link whose target file does not
+plain paths because `npm run g2g:validate` reports a link whose target file does not
 exist yet, and a fresh bundle should validate clean.
 
 ## Decisions
@@ -28,7 +28,7 @@ exist yet, and a fresh bundle should validate clean.
 
 ## Viewer
 
-`npm run okf:validate` checks the bundle against the spec (frontmatter and links). `npm run okf:view` also writes `okf/viz.html`
+`npm run g2g:validate` checks the bundle against the spec (frontmatter and links). `npm run g2g:view` also writes `okf/viz.html`
 (gitignored): a concept graph beside a reading pane. Open it in a browser; its libraries load
 from a CDN.
 

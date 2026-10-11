@@ -165,7 +165,7 @@ package belongs to the project once scaffolded, and its widgets should be about 
 A Mermaid `erDiagram` shows the shape; it cannot say whether the design is any good, how two
 tables join, or what a delete does. For a schema that is complicated (more than a handful of
 tables, or several relationships per table), or whenever the reader asks, put the schema's SQL
-under the widget name. Every ER diagram still gets its generated key (`okf:fix`); the widget is
+under the widget name. Every ER diagram still gets its generated key (`g2g:fix`); the widget is
 in addition, not instead.
 
 ````markdown
@@ -202,9 +202,9 @@ If the schema in the SQL and the diagram above it can disagree, say which one is
 
 ### Checks
 
-- `npm run okf:widgets:typecheck`, `npm run okf:widgets:test`: the models and each widget's
+- `npm run g2g:widgets:typecheck`, `npm run g2g:widgets:test`: the models and each widget's
   key interaction (Testing Library).
-- `npm run okf:mermaid:render`: builds the widgets, then mounts every widget block in the
+- `npm run g2g:mermaid:render`: builds the widgets, then mounts every widget block in the
   bundle, clicks each probe, and fails on an unknown name, a crash, a missing probe, or a
   probe that changes nothing.
 - Screenshot each widget in light and dark and look at it. The gates prove it works, not that
@@ -222,4 +222,4 @@ If the schema in the SQL and the diagram above it can disagree, say which one is
 - [ ] The quiz has one correct option per question, plausible wrong options, and feedback on
       every option.
 - [ ] Linked from `index.md`, and links out to the reference concepts instead of repeating them.
-- [ ] `okf:validate`, `okf:mermaid` and `okf:mermaid:render` pass.
+- [ ] `g2g:validate`, `g2g:mermaid` and `g2g:mermaid:render` pass.

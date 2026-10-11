@@ -18,7 +18,7 @@ it, and the wiki had drifted from the code.
 ## Decision
 
 Design knowledge lives in `okf/`, reviewed in the same pull requests as the code, and checked
-by `okf:validate` and the render gates in CI. Tours with quizzes explain the parts people
+by `g2g:validate` and the render gates in CI. Tours with quizzes explain the parts people
 keep getting wrong.
 
 ## Alternatives considered

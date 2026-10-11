@@ -73,7 +73,7 @@ In detail:
   TypeScript sources directly ([ADR-0003](/adr/0003-run-the-tools-from-the-skill-assets.md)).
 - **One command, with subcommands** for what the copied scripts do now: `good2go init`,
   `validate`, `view`, `mermaid`, `search`, `recheck`, and the memory tool's commands. The
-  generated npm scripts call it, for example `"okf:validate": "good2go validate design"`.
+  generated npm scripts call it, for example `"g2g:validate": "good2go validate design"`.
 - **`yaml` becomes the package's dependency.** The scaffolder stops editing the project's
   dependencies for it. `@mermaid-js/mermaid-cli` stays optional and is still found on `PATH`
   or in `node_modules/.bin`.

@@ -145,14 +145,14 @@ describe('render gates', { timeout: 600_000 }, () => {
       sh('npx good2go init . --name Consumer --widgets');
       sh('npm install --no-audit --no-fund');
       sh('npm install -D --no-audit --no-fund playwright');
-      sh('npm run okf:widgets:typecheck');
-      sh('npm run okf:widgets:test');
-      sh('npm run okf:validate');
+      sh('npm run g2g:widgets:typecheck');
+      sh('npm run g2g:widgets:test');
+      sh('npm run g2g:validate');
       fs.writeFileSync(
         path.join(dir, 'okf', 'consumer', 'tour.md'),
         '---\ntype: Explainer\ntitle: Tour\n---\n\n```widget\nretry-backoff\n```\n',
       );
-      assert.match(sh('npm run okf:mermaid:render'), /widgets respond\s+: 1 of 1/);
+      assert.match(sh('npm run g2g:mermaid:render'), /widgets respond\s+: 1 of 1/);
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }

@@ -41,8 +41,8 @@ scaffolds the design bundle, adds the `okf:*` npm scripts and copies these skill
 
 Run `good2go --help` for every command and `good2go init --help`, `good2go new --help`,
 `good2go search --help` and `good2go edukai --help` for their flags.
-The scaffolded scripts are the checks: `npm run okf:fix`, `okf:validate`, `okf:view`,
-`okf:mermaid`, `okf:mermaid:render`, `okf:search`, `okf:recheck`. The Mermaid
+The scaffolded scripts are the checks: `npm run g2g:fix`, `g2g:validate`, `g2g:view`,
+`g2g:mermaid`, `g2g:mermaid:render`, `g2g:search`, `g2g:recheck`. The Mermaid
 gates need `npm i -D @mermaid-js/mermaid-cli@11 playwright && npx playwright install chromium`;
 without them they exit 2 ("could not run"). A plain re-run of `init` keeps authored files and refreshes the skills copies you have not edited.
 
@@ -60,8 +60,8 @@ an okf for this project", "write an explainer for this change with a quiz".
    - Explainers: from `okf-explainer-template.md`, following EXPLAINERS.md: background,
      intuition, details, then a quiz.
    - **Check every claim against the code before it goes in** (the playbook's checklist).
-3. **Verify.** Run `okf:fix`, `okf:validate` (expect 0 issues), `okf:view`, `okf:mermaid` and
-   `okf:mermaid:render` (and `okf:widgets:typecheck` and `okf:widgets:test` with widgets). Exit
+3. **Verify.** Run `g2g:fix`, `g2g:validate` (expect 0 issues), `g2g:view`, `g2g:mermaid` and
+   `g2g:mermaid:render` (and `g2g:widgets:typecheck` and `g2g:widgets:test` with widgets). Exit
    codes: **0** pass, **1** broken (file and line named), **2** could not run. Read 2 as
    "unproven", never as "fine". Then open `viz.html` in light and dark: the gates prove it
    works, not that it reads well.
@@ -78,18 +78,18 @@ the team), memory (`edukai/`, the agent; `init --edukai`), and any other such as
 This skill covers the design bundle and other people-written bundles. Lessons are the
 **`edukai` skill's**. Never put lessons in the design bundle, or design docs in `edukai/`. Two
 memory-side features work on a design bundle: `supersedes` / `superseded_by` (an ADR that
-replaces another; the validator checks the pair) and `okf:recheck`, which reports concepts whose
+replaces another; the validator checks the pair) and `g2g:recheck`, which reports concepts whose
 pinned `sources` changed (pin them with `good2go edukai verify <concept> --bundle okf --by human:<id>`,
 and only after a person has reviewed them).
 
 ## Updating
 
 Raise the package version (`npm i -D @jb9k62/good2go@latest`); the tools come with it. There is
-no updater command, and authored files are never touched. Finish with `npm run okf:validate`.
+no updater command, and authored files are never touched. Finish with `npm run g2g:validate`.
 
 ## Finding things in a bundle
 
-Do not read a whole bundle to answer a question. `npm run okf:search -- <command>` ranks
+Do not read a whole bundle to answer a question. `npm run g2g:search -- <command>` ranks
 concepts by text and by what the spec says about them (trust tier, stale, deprecated, links):
 `facets`, `search "query"`, `show <id> --outline` then `--section`, `related`, `stale`. Treat a
 `stale` or `unverified` hit as a lead to check, not a fact. See the playbook's "Finding concepts".
@@ -106,7 +106,7 @@ concepts by text and by what the spec says about them (trust tier, stale, deprec
   (`[text](/path/concept.md)`) or relative ones; a link to a missing file is an issue.
 - Mermaid: `fill`, `stroke` and `color` on every `classDef`; any `%%{init}%%` on one line.
 - Every `erDiagram` is followed by the generated key that reads each relationship in words.
-  Never write it by hand: `npm run okf:fix`. For a complicated schema, or when asked, add a
+  Never write it by hand: `npm run g2g:fix`. For a complicated schema, or when asked, add a
   ` ```widget ` with `sql-erd` and the schema's SQL.
 - Callouts `> [!definition] Term`; quizzes in a ` ```quiz ` block (exactly one `- [x]` per
   question); widgets in a ` ```widget ` block naming a registered widget.

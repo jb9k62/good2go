@@ -26,7 +26,7 @@ with 22 concepts. Every internal link is an edge; the selected concept's neighbo
 | | |
 | --- | --- |
 | **A doc pack** | `okf/` with an index, a dated log, decision records (ADRs) and concept folders, plus templates for concepts and guided tours |
-| **A validator** | Every concept has a type, every internal link resolves, every timestamp is a real datetime; every ER diagram has its relationship key (`okf:fix` writes it); trust tiers (unverified, human-reviewed) and staleness derived from frontmatter |
+| **A validator** | Every concept has a type, every internal link resolves, every timestamp is a real datetime; every ER diagram has its relationship key (`g2g:fix` writes it); trust tiers (unverified, human-reviewed) and staleness derived from frontmatter |
 | **A viewer** | One `viz.html` with no build step: searchable graph with switchable layouts, tree and table views, a neighbourhood focus, colouring by type, trust or freshness, reading pane, Mermaid diagrams with pan and zoom, light and dark themes, deep links |
 | **Quality gates** | Diagrams parsed by the real Mermaid parser, then rendered in headless Chromium, with quizzes and widgets clicked; one exit-code contract (0 pass, 1 broken, 2 could not run) |
 | **Interactive explainers** | Callouts, click-to-check quizzes, and React widgets that let a reader change the inputs and watch the system respond |
@@ -87,7 +87,7 @@ A hundred clients use exponential backoff with no jitter. What does the server s
 
 **Database schemas** get two things. Every Mermaid `erDiagram` is followed by a generated key that
 reads each relationship out in words and says what `||--o{` and its relatives mean, enforced by the validator and written by `npm run
-okf:fix`. A complicated schema can also carry the `sql-erd` widget: paste the `CREATE TABLE`
+g2g:fix`. A complicated schema can also carry the `sql-erd` widget: paste the `CREATE TABLE`
 statements under its name and the reader gets a small and a large scenario, a design review of
 what is well designed and what is not, the join path between two tables, and what deleting a row
 would cascade into. Switching off the foreign keys, or editing the SQL, shows the review fail.
@@ -177,11 +177,11 @@ npx @jb9k62/good2go init . --name "My App" --widgets --edukai   # --design-dir d
 npm install
 npm install -D @mermaid-js/mermaid-cli@11 playwright && npx playwright install chromium
 
-npm run okf:validate        # types, links, timestamps: expect 0 issues
-npm run okf:view            # writes okf/viz.html (your design folder); open it in a browser
-npm run okf:mermaid         # every diagram parses
-npm run okf:mermaid:render  # every diagram renders, every quiz and widget works
-npm run okf:search -- search "retry policy" --fresh   # ranked, freshness-aware lookup for agents
+npm run g2g:validate        # types, links, timestamps: expect 0 issues
+npm run g2g:view            # writes okf/viz.html (your design folder); open it in a browser
+npm run g2g:mermaid         # every diagram parses
+npm run g2g:mermaid:render  # every diagram renders, every quiz and widget works
+npm run g2g:search -- search "retry policy" --fresh   # ranked, freshness-aware lookup for agents
 
 npm run edukai:index        # with --edukai: the syllabus, and the cache the hooks read
 npm run edukai:recheck      # lessons that need an agent: broken, failed, suspect, stale
@@ -274,8 +274,8 @@ design bundle and [`edukai/`](edukai/index.md) is its own agent memory. The tool
 ([ADR-0003](design/adr/0003-run-the-tools-from-the-skill-assets.md)).
 
 ```bash
-npm run okf:validate        # this repository's own design/ bundle
-npm run okf:view            # render it to design/viz.html (builds the widgets first)
+npm run g2g:validate        # this repository's own design/ bundle
+npm run g2g:view            # render it to design/viz.html (builds the widgets first)
 npm run edukai:brief        # what an agent is told when a session opens
 npm run edukai:recheck      # lessons whose sources changed, or whose checks no longer hold
 ```

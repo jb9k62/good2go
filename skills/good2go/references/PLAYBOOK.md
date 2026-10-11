@@ -52,9 +52,9 @@ snippet in `AGENTS.md`. No tool is copied. A re-run keeps every authored file (a
 it kept); only `--force` replaces them, and `packages/okf-widgets` never is: it is the project's
 code once scaffolded.
 
-Then the gates, all expected to pass: `npm run okf:validate` (0 issues: types, links,
-timestamps), `okf:view` (writes `viz.html`), `okf:mermaid` (every block parses), and
-`okf:mermaid:render` (every diagram, quiz and widget works in headless Chromium).
+Then the gates, all expected to pass: `npm run g2g:validate` (0 issues: types, links,
+timestamps), `g2g:view` (writes `viz.html`), `g2g:mermaid` (every block parses), and
+`g2g:mermaid:render` (every diagram, quiz and widget works in headless Chromium).
 
 Author the first concepts in `<design dir>/<slug>/` (overview, architecture, domain model,
 API) and the first ADR, including the one for using OKF itself (see the checklist below).
@@ -97,10 +97,10 @@ concept done, and before adding a `verified` entry to it.
   reviewable like any other: the context (docs scattered or missing, agents writing much of
   the code), the decision (one OKF bundle in the repo, validated in CI), and the alternatives
   rejected (a wiki, a docs site, READMEs alone) with why.
-- **After writing, run `okf:view`, open `viz.html`, and confirm every Mermaid diagram
+- **After writing, run `g2g:view`, open `viz.html`, and confirm every Mermaid diagram
   renders.** A diagram can look fine in the source and still fail to render (a bad `%%{init}%%`
   line, a stray character) and the viewer shows a visible error for that case, but only if you
-  look. The scaffolded `npm run okf:mermaid:render` does this automatically: it opens the
+  look. The scaffolded `npm run g2g:mermaid:render` does this automatically: it opens the
   generated `viz.html` in headless Chromium and walks every concept, failing if any diagram
   ends in an error state, times out, or a concept renders a different number of figures than
   its markdown parses to. Add `--strict` when you also want conformance issues to fail the
@@ -199,7 +199,7 @@ The viewer derives per concept:
 
 ### Finding concepts (`good2go search`)
 
-Before reading files, ask the bundle. `npm run okf:search -- <command>` (default bundle
+Before reading files, ask the bundle. `npm run g2g:search -- <command>` (default bundle
 the design bundle; `--bundle <dir>` for another) ranks concepts by BM25F over title, tags, path,
 description, headings, cited files (`sources`, `check`) and body, then applies the spec: stale (§5.5) and `deprecated` (§5.4)
 concepts are demoted and flagged, never hidden; `human-reviewed` outranks `machine-confirmed`
@@ -238,12 +238,12 @@ What the design bundle shares with it:
 - **Supersede pointers.** When one concept replaces another (an ADR, most often), the new one
   gets `supersedes: /adr/0002-old.md`, and the old one `status: deprecated` and
   `superseded_by: /adr/0007-new.md`. Both are bundle-root paths ending `.md`.
-  `okf:validate` reports a `supersede` issue when the two do not name each other, the old one
+  `g2g:validate` reports a `supersede` issue when the two do not name each other, the old one
   is not deprecated, a target is missing, or the chain loops. Search flags the old concept as
   replaced. Never delete the old concept.
-- **`okf:recheck`.** `good2go edukai verify <concept> --bundle okf --by human:<id>`
+- **`g2g:recheck`.** `good2go edukai verify <concept> --bundle okf --by human:<id>`
   pins a digest of each file in the concept's `sources` and sets `verified` and `stale_after`.
-  After that, `npm run okf:recheck` lists the concept as `suspect` when a pinned file changes
+  After that, `npm run g2g:recheck` lists the concept as `suspect` when a pinned file changes
   and `broken` when one disappears (`-- --strict` exits 1 on those, never on `stale`). Only
   pin what a person has reviewed: `verify` writes a `verified` entry.
 - **The validator** reads both bundles: `lesson`, `supersede` and `budget` issues apply to any
@@ -262,8 +262,8 @@ from both sides (up to six; a bigger diagram gets the first few and a count), th
 that diagram uses and what they mean, `PK`/`FK`, and the line style when it mixes solid and
 dashed. The viewer shows it under the diagram and draws each symbol as the diagram does; the
 `sql-erd` widget says the same things in the same words. It is markdown (between `<!-- okf:erd-legend -->` markers), so GitHub and editors show
-it too. Do not write it by hand: `okf:validate` reports a missing or out-of-date key as an
-`erd-legend` issue, and `npm run okf:fix` writes or refreshes every one. A complicated schema
+it too. Do not write it by hand: `g2g:validate` reports a missing or out-of-date key as an
+`erd-legend` issue, and `npm run g2g:fix` writes or refreshes every one. A complicated schema
 (more than a handful of tables), or a reader who asks, also gets the `sql-erd` widget: see
 [EXPLAINERS.md](EXPLAINERS.md#sql-schemas-the-sql-erd-widget).
 
@@ -277,7 +277,7 @@ Both gates share one exit-code contract, so a green run always means the same th
 | 1 | a diagram is broken | fix the markdown; the output names file and line, or file and concept (the render gate also fails here when a diagram's pan/zoom controls are missing or dead) |
 | 2 | the gate could not run | fix the setup; **nothing is proven about the diagrams** |
 
-1. **Parse gate** - `npm run okf:mermaid` (`good2go mermaid`) extracts every
+1. **Parse gate** - `npm run g2g:mermaid` (`good2go mermaid`) extracts every
    top-level ```mermaid fenced block (with file + line) and runs each one through
    mermaid-cli (`mmdc`), so only diagrams the real Mermaid parser accepts pass.
    Unclosed fences fail without ever invoking `mmdc`. A fence nested inside a wider
@@ -288,7 +288,7 @@ Both gates share one exit-code contract, so a green run always means the same th
    well as `npm run`. Flags: `--json` for machine output, `--timeout <s>` of wall clock
    per diagram (default 60), `--jobs <n>` parallel `mmdc` runs (default 2 - each one
    spawns a browser, so keep this low in constrained CI).
-2. **Render gate** - `npm run okf:mermaid:render` (`good2go view --check-render`)
+2. **Render gate** - `npm run g2g:mermaid:render` (`good2go view --check-render`)
    builds the widgets (when the project has them), writes `viz.html`, opens it in headless Chromium via the project-local `playwright`
    (falling back to `playwright-core`), walks every concept, and fails if any diagram
    ends in `error`, never leaves `pending` (20s per concept), or a concept renders a
@@ -429,12 +429,12 @@ owners choose to.
 **In a project** (what an agent does when asked to "move the bundle to OKF vX"):
 
 1. Refresh the tools: `npm i -D @jb9k62/good2go@latest`.
-   `npm run okf:validate` now prints the bundle's declared `okf_version` next to the version
+   `npm run g2g:validate` now prints the bundle's declared `okf_version` next to the version
    the tool implements.
 2. Read the new spec's "Changes from v<old>" section in
    [okf-spec/SPEC.md](okf-spec/SPEC.md). Make a list of every rule that changed and what each
    means for this bundle (renamed fields, new required fields, changed formats).
-3. Apply the changes concept by concept, with `npm run okf:validate` after each batch. Keep
+3. Apply the changes concept by concept, with `npm run g2g:validate` after each batch. Keep
    the edits mechanical; do not rewrite content in the same pass.
 4. Set `okf_version` in the root `index.md` to the new version, and add a dated `log.md` entry
    naming the version change and anything that needed judgement.

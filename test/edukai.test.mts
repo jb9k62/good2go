@@ -1294,23 +1294,23 @@ describe('bootstrap --edukai', () => {
     }
     assert.ok(!fs.existsSync(path.join(dir, 'scripts')), 'no scripts/ folder');
     assert.equal(npmRun(dir, 'edukai:index').code, 0);
-    const r = npmRun(dir, 'okf:search', ['facets']);
+    const r = npmRun(dir, 'g2g:search', ['facets']);
     assert.equal(r.code, 0, r.all);
   });
 
-  it('adds okf:recheck, but no memory bundle unless asked', () => {
+  it('adds g2g:recheck, but no memory bundle unless asked', () => {
     const dir = target('plain');
     const r = run(BOOTSTRAP, [dir], ROOT);
     assert.equal(r.code, 0, r.all);
     assert.ok(!fs.existsSync(path.join(dir, 'scripts')), 'no tools copied');
-    assert.equal(scripts(dir)['okf:recheck'], 'good2go recheck --bundle okf');
+    assert.equal(scripts(dir)['g2g:recheck'], 'good2go recheck --bundle okf');
     assert.equal(scripts(dir)['edukai:index'], undefined);
     assert.ok(!fs.existsSync(path.join(dir, 'edukai')));
     assert.ok(!fs.existsSync(path.join(dir, 'AGENTS.md')));
-    const recheck = npmRun(dir, 'okf:recheck', ['--strict']);
+    const recheck = npmRun(dir, 'g2g:recheck', ['--strict']);
     assert.equal(recheck.code, 0, recheck.all);
     assert.match(recheck.out, /edukai recheck: okf/);
-    assert.equal(npmRun(dir, 'okf:validate', ['--strict']).code, 0, 'the ADR templates still validate');
+    assert.equal(npmRun(dir, 'g2g:validate', ['--strict']).code, 0, 'the ADR templates still validate');
   });
 
   it('scaffolds a memory bundle in which new, verify and edukai:validate all pass', () => {
@@ -1398,7 +1398,7 @@ describe('bootstrap --edukai', () => {
     assert.match(yml, /pull_request:/);
     assert.match(yml, /schedule:/);
     assert.match(yml, /contents: read/);
-    assert.match(yml, /okf:recheck -- \$STRICT/);
+    assert.match(yml, /g2g:recheck -- \$STRICT/);
     assert.doesNotMatch(yml, /--write|git (commit|push)|contents: write/);
   });
 });

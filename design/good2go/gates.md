@@ -45,15 +45,15 @@ flowchart LR
 
 | Command | Checks | Needs |
 | --- | --- | --- |
-| `npm run okf:validate` | Frontmatter `type`, resolvable internal links, ISO timestamps with an offset, supersede pairs, ER-diagram keys | nothing beyond the bundle |
-| `npm run okf:mermaid` | Every fenced `mermaid` block parses in `mmdc`, the real Mermaid parser | `@mermaid-js/mermaid-cli` (and a browser it can start) |
-| `npm run okf:mermaid:render` | Writes `viz.html`, then opens it in headless Chromium and walks every concept: diagrams settle and their pan/zoom is wired, quizzes answer, widgets mount and their probe control responds | `playwright` with Chromium, and network for the CDN |
+| `npm run g2g:validate` | Frontmatter `type`, resolvable internal links, ISO timestamps with an offset, supersede pairs, ER-diagram keys | nothing beyond the bundle |
+| `npm run g2g:mermaid` | Every fenced `mermaid` block parses in `mmdc`, the real Mermaid parser | `@mermaid-js/mermaid-cli` (and a browser it can start) |
+| `npm run g2g:mermaid:render` | Writes `viz.html`, then opens it in headless Chromium and walks every concept: diagrams settle and their pan/zoom is wired, quizzes answer, widgets mount and their probe control responds | `playwright` with Chromium, and network for the CDN |
 | `npm run edukai:validate` | Lesson rules, supersede pointers, budgets, and that the syllabus in `index.md` is current | nothing beyond the bundle |
 | `npm run edukai:recheck` | Reports lessons whose sources changed or went missing, or that are past `stale_after`; `-- --strict` exits 1 on broken, failed or suspect | nothing beyond the bundle |
-| `npm run okf:search -- stale` | The review queue: concepts past `stale_after` | nothing; not a gate |
+| `npm run g2g:search -- stale` | The review queue: concepts past `stale_after` | nothing; not a gate |
 
-`npm run okf:fix` is not a gate. It rewrites the markdown so every `erDiagram` has its
-generated relationship key below it. `okf:validate` fails until it has been run, and that is
+`npm run g2g:fix` is not a gate. It rewrites the markdown so every `erDiagram` has its
+generated relationship key below it. `g2g:validate` fails until it has been run, and that is
 the intended order: fix, then validate.
 
 ## What the gates cannot prove
@@ -76,10 +76,10 @@ A green gate proves less than it seems to. Know where each one stops.
 CI has three jobs:
 
 - **`check`** (Node 24 and 26) runs `npm run check`: the typecheck, the unit tests, the
-  Chromium view tests (which skip when no browser is installed), then `okf:validate` and
+  Chromium view tests (which skip when no browser is installed), then `g2g:validate` and
   `edukai:validate` on this repository's own bundles.
 - **`render`** installs Chromium and runs the diagram and view end-to-end tests, then both
-  Mermaid gates (`okf:mermaid` and `okf:mermaid:render`) on this repository's own bundle.
+  Mermaid gates (`g2g:mermaid` and `g2g:mermaid:render`) on this repository's own bundle.
 - **`spec`** runs `npm run spec -- status` weekly and fails when the vendored OKF spec has
   moved upstream.
 

@@ -42,7 +42,7 @@
  *                 digits, . _ - and / between segments (default: okf, or the one the manifest
  *                 records). Choose it on the first run; a re-run never renames a folder.
  *   --widgets     Also scaffold packages/okf-widgets (React widgets for explainers), add it
- *                 to the npm workspaces, and build it before okf:view and the render gate.
+ *                 to the npm workspaces, and build it before g2g:view and the render gate.
  *   --edukai      Also scaffold edukai/, the agent memory bundle, add the edukai: scripts, and
  *                 write a short snippet into AGENTS.md (once; a marker guards it).
  *   --no-scripts  Do not add the `okf:` scripts to package.json.
@@ -397,15 +397,15 @@ if (opts.scripts) {
     try {
       const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
       pkg.scripts = pkg.scripts || {};
-      const build = hasWidgets ? 'npm run okf:widgets:build && ' : '';
+      const build = hasWidgets ? 'npm run g2g:widgets:build && ' : '';
       const d = designDir;
-      pkg.scripts['okf:validate'] = `good2go validate ${d}`;
-      pkg.scripts['okf:fix'] = `good2go fix ${d}`;
-      pkg.scripts['okf:view'] = build + `good2go view ${d}`;
-      pkg.scripts['okf:mermaid'] = `good2go mermaid ${d}`;
-      pkg.scripts['okf:search'] = `good2go search --bundle ${d}`;
-      pkg.scripts['okf:mermaid:render'] = build + `good2go view ${d} --check-render`;
-      pkg.scripts['okf:recheck'] = `good2go recheck --bundle ${d}`;
+      pkg.scripts['g2g:validate'] = `good2go validate ${d}`;
+      pkg.scripts['g2g:fix'] = `good2go fix ${d}`;
+      pkg.scripts['g2g:view'] = build + `good2go view ${d}`;
+      pkg.scripts['g2g:mermaid'] = `good2go mermaid ${d}`;
+      pkg.scripts['g2g:search'] = `good2go search --bundle ${d}`;
+      pkg.scripts['g2g:mermaid:render'] = build + `good2go view ${d} --check-render`;
+      pkg.scripts['g2g:recheck'] = `good2go recheck --bundle ${d}`;
       if (hasEdukai) {
         pkg.scripts['edukai:validate'] = 'good2go validate edukai --strict && good2go edukai index --check';
         pkg.scripts['edukai:index'] = 'good2go edukai index';
@@ -415,9 +415,9 @@ if (opts.scripts) {
         pkg.scripts['edukai:view'] = 'good2go view edukai';
       }
       if (hasWidgets) {
-        pkg.scripts['okf:widgets:build'] = `npm run build -w ${WIDGETS_PKG}`;
-        pkg.scripts['okf:widgets:test'] = `npm test -w ${WIDGETS_PKG}`;
-        pkg.scripts['okf:widgets:typecheck'] = `npm run typecheck -w ${WIDGETS_PKG}`;
+        pkg.scripts['g2g:widgets:build'] = `npm run build -w ${WIDGETS_PKG}`;
+        pkg.scripts['g2g:widgets:test'] = `npm test -w ${WIDGETS_PKG}`;
+        pkg.scripts['g2g:widgets:typecheck'] = `npm run typecheck -w ${WIDGETS_PKG}`;
         // npm workspaces: the widget package's devDependencies install with the project's.
         const workspaces: unknown = pkg.workspaces;
         if (workspaces !== undefined && !Array.isArray(workspaces)) {
@@ -472,13 +472,13 @@ console.log('\nSet up (once):');
 console.log('  npm install');
 console.log('  npm i -D @mermaid-js/mermaid-cli@11 playwright && npx playwright install chromium');
 console.log('\nChecks (expect all to pass before you commit):');
-console.log('  npm run okf:validate        # frontmatter + link conformance');
-console.log('  npm run okf:fix             # write the relationship key under every ER diagram');
-console.log('  npm run okf:view            # validate + write viz.html');
-console.log('  npm run okf:mermaid         # every mermaid block parses (needs mmdc)');
-console.log('  npm run okf:mermaid:render  # every diagram, quiz and widget works in the viewer');
-console.log('  npm run okf:search -- search "query"   # find concepts before reading them');
-console.log('  npm run okf:recheck         # do the files that concepts cite still say what was pinned?');
+console.log('  npm run g2g:validate        # frontmatter + link conformance');
+console.log('  npm run g2g:fix             # write the relationship key under every ER diagram');
+console.log('  npm run g2g:view            # validate + write viz.html');
+console.log('  npm run g2g:mermaid         # every mermaid block parses (needs mmdc)');
+console.log('  npm run g2g:mermaid:render  # every diagram, quiz and widget works in the viewer');
+console.log('  npm run g2g:search -- search "query"   # find concepts before reading them');
+console.log('  npm run g2g:recheck         # do the files that concepts cite still say what was pinned?');
 if (hasEdukai) {
   console.log('\nMemory bundle (edukai/):');
   console.log('  npm run edukai:index        # rebuild the syllabus and the cache the hooks read (run once after a clone)');
@@ -489,7 +489,7 @@ if (hasEdukai) {
   console.log('  CI: copy ' + path.join(TEMPLATES, 'edukai-recheck.yml') + ' to .github/workflows/ (not installed for you)');
 }
 if (hasWidgets) {
-  console.log('  npm run okf:widgets:typecheck && npm run okf:widgets:test');
+  console.log('  npm run g2g:widgets:typecheck && npm run g2g:widgets:test');
 }
 console.log('\nUpgrade with `npm update ' + PACKAGE + '`, then re-run `good2go init` to refresh the skills');
 console.log('(edited ones are kept). Next: author the first concepts, then commit. The skill\'s PLAYBOOK.md');

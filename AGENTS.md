@@ -57,8 +57,8 @@ npm run typecheck     # tsc for the tools, then the widget workspace
 npm test              # node --test test/*.test.mts, plus the widget workspace's tests
 npm run test:render   # Chromium: diagrams, quizzes, widgets (needs `npx playwright install chromium`)
 npm run test:views    # Chromium: layouts, Graph/Tree/Table views, neighbourhood, colour modes
-npm run okf:validate  # this repository's own design/ bundle (types, links, timestamps)
-npm run okf:view      # build widgets, validate, write design/viz.html
+npm run g2g:validate  # this repository's own design/ bundle (types, links, timestamps)
+npm run g2g:view      # build widgets, validate, write design/viz.html
 npm run edukai:validate && npm run edukai:recheck   # the memory bundle: rules, then the queue
 npm run edukai:brief  # what an agent is told when a session opens
 npm run demo          # build widgets, then render examples/demo/okf to viz.html

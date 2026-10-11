@@ -13,7 +13,7 @@ it to [Decision records](/adr/readme.md), and delete this paragraph and the next
 
 When this record replaces an earlier one, say so in the frontmatter of both, not in prose:
 `supersedes: /adr/NNNN-old-title.md` here, and `status: deprecated` with
-`superseded_by: /adr/NNNN-this-title.md` on the old one. `npm run okf:validate` checks that
+`superseded_by: /adr/NNNN-this-title.md` on the old one. `npm run g2g:validate` checks that
 the two name each other.
 
 - **Status:** proposed | accepted | deprecated

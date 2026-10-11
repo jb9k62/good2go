@@ -27,4 +27,4 @@ generated: { by: good2go/0.6.0, at: 2026-10-08T20:00:00Z }
 - Statuses are **proposed**, **accepted**, **superseded** or **deprecated**. To supersede a
   record, point the two at each other in frontmatter: `supersedes: /adr/NNNN-old.md` on the
   new one, and `status: deprecated` with `superseded_by: /adr/NNNN-new.md` on the old.
-  `npm run okf:validate` reports a pair that does not match, and never delete the old record.
+  `npm run g2g:validate` reports a pair that does not match, and never delete the old record.

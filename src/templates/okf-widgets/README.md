@@ -15,7 +15,7 @@ A widget that takes data (`sql-erd` reads a schema's SQL, `http-concurrency` its
 passes it through `mount(element, name, source)`. Data-driven widgets share one line convention
 (`models/source.ts`): one record per line, and a line starting with `--` is a comment.
 
-`npm run okf:view` builds this package to one IIFE file (`dist/okf-widgets.js`) and inlines it
+`npm run g2g:view` builds this package to one IIFE file (`dist/okf-widgets.js`) and inlines it
 into `okf/viz.html`, so the viewer stays a single self-contained page. The package is
 documentation tooling: it is not imported by the product and ships nothing to users.
 
@@ -61,7 +61,7 @@ ideas.
    carrying its state and note), direct controls for free play, a result derived from the
    model on every render, and a `ModelNote` that says what is real code and what is a model.
 4. **Mark one control `data-probe`** (the `probe` prop of `Presets` does it). The viewer's
-   render gate (`npm run okf:mermaid:render`) clicks it and fails if the widget's text does
+   render gate (`npm run g2g:mermaid:render`) clicks it and fails if the widget's text does
    not change.
 5. **Register it** in `WIDGETS` in `src/index.tsx`, with the name concepts will use and a
    "Try it: ..." caption.
@@ -73,7 +73,7 @@ ideas.
 ```bash
 npm run typecheck -w okf-widgets
 npm test -w okf-widgets
-npm run okf:mermaid:render   # builds, then mounts every widget and clicks its probe
+npm run g2g:mermaid:render   # builds, then mounts every widget and clicks its probe
 ```
 
 The viewer still renders when this package is not built: each widget block shows a build hint

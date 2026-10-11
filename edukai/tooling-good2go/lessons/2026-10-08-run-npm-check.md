@@ -14,13 +14,13 @@ sources:
   - resource: package.json
     digest: sha256:c8a3b5ec8cc3d1de
 check:
-  - { file: package.json, contains: "npm run test:views && npm run okf:validate && npm run edukai:validate" }
+  - { file: package.json, contains: "npm run test:views && npm run g2g:validate && npm run edukai:validate" }
 ---
 
 Run `npm run check` before you call a change finished. It is one command that chains the
 rest, in this order: `npm run typecheck` (the tools and the widget workspace), `npm test`
 (`node --test test/*.test.mts`, plus the widget workspace's tests), `npm run build` (compiles
-`src/` to `dist/`, as the published package is), `npm run test:views` (the Chromium view tests), then `okf:validate` and `edukai:validate` on this repository's own
+`src/` to `dist/`, as the published package is), `npm run test:views` (the Chromium view tests), then `g2g:validate` and `edukai:validate` on this repository's own
 `design/` and `edukai/` bundles.
 
 ## Caveats

@@ -32,5 +32,5 @@ Architecture Decisions*.
   instead of rewriting history.
 - To supersede a record, write the new one and point the two at each other in their
   frontmatter: `supersedes: /adr/NNNN-old.md` on the new record, and `status: deprecated` with
-  `superseded_by: /adr/NNNN-new.md` on the old. `npm run okf:validate` reports a pair that does
+  `superseded_by: /adr/NNNN-new.md` on the old. `npm run g2g:validate` reports a pair that does
   not match, and the search flags the old record as replaced.
