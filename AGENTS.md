@@ -95,7 +95,7 @@ do not prove it reads well.
   that already scaffolded; a plain re-run keeps authored files and the manifest is rewritten. Don't make a re-run overwrite authored content (only `--force` does).
 - **Widgets**: `templates/okf-widgets` is an npm workspace with its own tests and typecheck.
   Keep models pure and separately tested from the React components.
-- **Dependencies install with a cool-down.** `.npmrc` sets `min-release-age=2` (needs npm >= 11.10; older npm warns and ignores it) and `ignore-scripts=true`. Don't add a version younger than two days. Actions are pinned by commit SHA with the tag in a comment. Library pins in `g2g-view.mts` must match the devDependency and carry a freshly computed SRI hash; marked is loaded from `lib/marked.umd.js`.
+- **Dependencies install with a cool-down.** `.npmrc` sets `min-release-age=2` (needs npm >= 11.10; older npm warns and ignores it). Don't add a version younger than two days. Actions are pinned by commit SHA with the tag in a comment. Library pins in `g2g-view.mts` must match the devDependency and carry a freshly computed SRI hash; marked is loaded from `lib/marked.umd.js`.
 - **Spelling**: British ("colour", "licence", "neighbourhood"), matching the README and
   changelog.
 

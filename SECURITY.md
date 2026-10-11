@@ -19,7 +19,7 @@ release rather than backporting a fix to an older line.
 
 - **No install scripts.** The package declares no `preinstall`, `install` or `postinstall` script,
   so installing it runs no code of its own. Keep it that way when changing `package.json`.
-- **Dependency cool-down.** This repository's `.npmrc` sets `min-release-age=2` (npm 11.10 or later refuses versions published in the last two days) and `ignore-scripts=true`; GitHub Actions are pinned by commit SHA.
+- **Dependency cool-down.** This repository's `.npmrc` sets `min-release-age=2` (npm 11.10 or later refuses versions published in the last two days); GitHub Actions are pinned by commit SHA.
 - **Runtime network.** The `good2go` command and its tools make no network requests and never check
   for updates. The viewer page it writes (`viz.html`) loads a few libraries from public CDNs
   (jsDelivr and cdnjs) when opened in a browser, each pinned to an exact version with a
