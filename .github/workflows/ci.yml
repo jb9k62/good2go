@@ -45,7 +45,7 @@ jobs:
           set -euo pipefail
           PACK_DIR="$RUNNER_TEMP/pack"
           mkdir -p "$PACK_DIR"
-          TARBALL="$PACK_DIR/$(npm pack --silent --pack-destination "$PACK_DIR")"
+          TARBALL="$PACK_DIR/$(npm pack --silent --pack-destination "$PACK_DIR" | tail -n 1)"
           SMOKE="$RUNNER_TEMP/smoke"
           mkdir -p "$SMOKE"
           cd "$SMOKE"
