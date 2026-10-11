@@ -3,12 +3,14 @@
  * Install the memory hooks for an agent harness, so `good2go hook run` answers at session start,
  * after reads and edits, and when the agent stops.
  *
- *   good2go hooks [--user|--project] [--claude] [--pi] [--dry-run] [--remove] [--check] [--force] [--home <dir>]
+ *   good2go hooks [--user|--project|--local] [--claude] [--pi] [--dry-run] [--remove] [--check] [--force] [--home <dir>]
  *
  *   --user      (default) the person's own configuration: ~/.claude/settings.json and pi's
  *               extensions folder. CLAUDE_CONFIG_DIR and PI_CODING_AGENT_DIR are honoured. The hook
  *               calls `good2go` from PATH, so it needs `npm i -g @jb9k62/good2go`; without it on
  *               PATH nothing is written (unless --force).
+ *   --local     like --project, but written to .claude/settings.local.json, which is yours alone and
+ *               stays out of version control. Claude Code only: pi has no uncommitted scope.
  *   --project   this folder's .claude/settings.json and .pi/extensions/. The hook then runs the
  *               project's own node_modules/@jb9k62/good2go (only if that file exists), so a
  *               repository can run its own code at session start (the harness's trust prompt only
@@ -77,6 +79,7 @@ function onPath(): boolean {
 
 interface Options {
   project: boolean;
+  local: boolean;
   claude: boolean;
   pi: boolean;
   dryRun: boolean;
@@ -87,11 +90,12 @@ interface Options {
 }
 
 function parse(argv: string[]): Options {
-  const o: Options = { project: false, claude: false, pi: false, dryRun: false, remove: false, check: false, force: false, home: null };
+  const o: Options = { project: false, local: false, claude: false, pi: false, dryRun: false, remove: false, check: false, force: false, home: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
-    if (a === '--user') o.project = false;
+    if (a === '--user') o.project = o.local = false;
     else if (a === '--project') o.project = true;
+    else if (a === '--local') o.project = o.local = true;
     else if (a === '--claude') o.claude = true;
     else if (a === '--pi') o.pi = true;
     else if (a === '--dry-run') o.dryRun = true;
@@ -120,7 +124,7 @@ function places(o: Options): Places {
     const cwd = process.cwd();
     return {
       claudeDir: path.join(cwd, '.claude'),
-      claudeSettings: path.join(cwd, '.claude', 'settings.json'),
+      claudeSettings: path.join(cwd, '.claude', o.local ? 'settings.local.json' : 'settings.json'),
       piDir: path.join(cwd, '.pi'),
       piExtension: path.join(cwd, '.pi', 'extensions', 'edukai.ts'),
     };
@@ -279,9 +283,10 @@ export function run(argv: string[], out: (s: string) => void = (s) => console.lo
   const o = parse(argv);
   const version = packageVersion(import.meta.url);
   const where = places(o);
+  if (o.local && o.pi) throw new CannotRun('--local is for Claude Code only: pi has no uncommitted scope (use --project, or --user)');
   const explicit = o.claude || o.pi;
-  const wantClaude = explicit ? o.claude : fs.existsSync(where.claudeDir) || (o.project && !fs.existsSync(where.piDir));
-  const wantPi = explicit ? o.pi : fs.existsSync(where.piDir);
+  const wantClaude = explicit ? o.claude : fs.existsSync(where.claudeDir) || ((o.project && !fs.existsSync(where.piDir)) || o.local);
+  const wantPi = explicit ? o.pi : !o.local && fs.existsSync(where.piDir);
   if (!wantClaude && !wantPi) {
     out('good2go hooks: neither Claude Code nor pi has a home folder here; pass --claude or --pi to create one.');
     return o.check ? 2 : 1;
@@ -363,7 +368,9 @@ export function run(argv: string[], out: (s: string) => void = (s) => console.lo
     }
   }
 
-  if (o.project && !o.remove) {
+  if (o.local && !o.remove) {
+    out(`note: --local wrote ${where.claudeSettings}: only you, only this folder. Like --project it runs ${PROJECT_BIN} from the project, so a repository can still supply that code.`);
+  } else if (o.project && !o.remove) {
     out(`caveat: with --project a repository can run its own code (${PROJECT_BIN}) at session start; the harness's trust prompt only partly covers that. Commit this only for a team that wants it.`);
   }
   if (!o.dryRun && code === 0) out('Restart the agent (Claude Code, pi) so it reads the new configuration.');

@@ -55,6 +55,9 @@ documents of judgement.
   runs the project's own `node_modules/@jb9k62/good2go` (see the 2026-10-10 note). It prints the caveat that a repository
   can then run its own code at session start, which the harness's trust prompt only partly
   covers. A team that wants every clone covered can choose it.
+- **`--local` is the uncommitted variant** of `--project`: the same project command, written to
+  Claude Code's `.claude/settings.local.json` so it is yours alone. pi has no such scope, so
+  `--local --pi` is refused.
 - **`good2go hook run` is in-process and silent.** It answers from the cache `edukai:index`
   writes, exits 0 on any error or an old Node, and does not spawn a second process.
 - **The skills shrink.** `SKILL.md` keeps triggers, authoring and review rules, and the lesson

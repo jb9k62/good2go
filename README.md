@@ -143,7 +143,9 @@ and the npm scripts for you) holds no copies of the tools. To have the hooks com
 repository, run `good2go hooks --project` and commit the result: the hooks then run the
 project's own `node_modules/@jb9k62/good2go` (silent if it is not installed). That lets a
 repository run its own code at session start, so use it only for a team that wants it; the
-default, user scope, runs only the `good2go` you installed yourself. The project command is POSIX
+default, user scope, runs only the `good2go` you installed yourself. To try the project form
+without committing it, `good2go hooks --local` writes `.claude/settings.local.json` instead (Claude
+Code only; pi has no uncommitted scope). The project command is POSIX
 shell, so on Windows it needs Git Bash or WSL. With no `package.json`, use
 `npx @jb9k62/good2go@0.7.0 <command>`.
 

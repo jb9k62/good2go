@@ -116,6 +116,30 @@ describe('good2go hooks (Claude Code)', () => {
     assert.match(cmds[0]!, /node_modules\/@jb9k62\/good2go\/dist\/good2go\.mjs/);
   });
 
+  it('--local writes the uncommitted settings file, Claude only, and leaves settings.json alone', () => {
+    const cwd = path.join(scratch, 'local');
+    fs.mkdirSync(path.join(cwd, '.pi'), { recursive: true });
+    const r = g2g(['hooks', '--local'], { cwd });
+    assert.equal(r.code, 0, r.out);
+    assert.match(r.out, /only you, only this folder/);
+    const cmds = commands(read(path.join(cwd, '.claude', 'settings.local.json')));
+    assert.equal(cmds.length, 4);
+    assert.match(cmds[0]!, /node_modules\/@jb9k62\/good2go\/dist\/good2go\.mjs/);
+    assert.ok(!fs.existsSync(path.join(cwd, '.claude', 'settings.json')), 'the shared file is not written');
+    assert.ok(!fs.existsSync(path.join(cwd, '.pi', 'extensions')), 'pi has no local scope, so nothing is written for it');
+    assert.equal(g2g(['hooks', '--local', '--check'], { cwd }).code, 0);
+    assert.equal(g2g(['hooks', '--local', '--remove'], { cwd }).code, 0);
+    assert.equal(commands(read(path.join(cwd, '.claude', 'settings.local.json'))).length, 0);
+  });
+
+  it('--local refuses --pi, exit 2', () => {
+    const cwd = path.join(scratch, 'local-pi');
+    fs.mkdirSync(cwd);
+    const r = g2g(['hooks', '--local', '--pi'], { cwd });
+    assert.equal(r.code, 2, r.out);
+    assert.match(r.out, /Claude Code only/);
+  });
+
   it('the project command runs the project copy, and is silent when there is none', { skip: process.platform === 'win32' }, () => {
     const cwd = path.join(scratch, 'projrun');
     fs.mkdirSync(cwd);

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **`good2go hooks --local`** writes the project hooks to `.claude/settings.local.json` (yours alone, uncommitted) for trying them in one repository; Claude Code only.
+
 - **The npm scripts are named `g2g:`** (`g2g:validate`, `g2g:view`, `g2g:search`, `g2g:recheck`, `g2g:mermaid`, `g2g:fix`, `g2g:widgets:*`), matching the `good2go` command and the `g2g-*` tools. `okf` stays the name of the format and the default design folder.
 
 - **`good2go hooks` is the one route to the memory hooks.** The Claude Code plugin (`hooks/`, `.claude-plugin/`) and the pi package route (`pi` key, `pi-package` keyword) are retired ([ADR-0007](design/adr/0007-install-hooks-and-skills-from-the-package.md)). User scope calls `good2go` from `PATH` in both harnesses and refuses to write when it is not there (`--force` overrides); `--project` runs the project's own `node_modules/@jb9k62/good2go` only if that file exists, with no npx. A symlinked `settings.json` is written through, keeping its mode. The version is read from `package.json` at run time; the release workflow publishes the tarball its `verify` job tested, installs with `--ignore-scripts` and pins npm to 11. `good2go --help` from the compiled package prints its own help again.

@@ -42,7 +42,8 @@ release rather than backporting a fix to an older line.
   - `good2go hooks`: user scope (the default) edits `~/.claude/settings.json` (or
     `$CLAUDE_CONFIG_DIR`) and writes `~/.pi/agent/extensions/edukai.ts` (or
     `$PI_CODING_AGENT_DIR`); `--project` writes `.claude/settings.json` and
-    `.pi/extensions/edukai.ts` in the current folder. It touches only entries whose command is
+    `.pi/extensions/edukai.ts` in the current folder; `--local` writes
+    `.claude/settings.local.json` (yours alone, meant to stay uncommitted; Claude Code only). It touches only entries whose command is
     `good2go hook run` (or the project form) and a pi file it marked as its own, refuses a
     `settings.json` that is not valid JSON, and `--remove` and `--dry-run` exist.
 - **What the memory hook runs.** The hook is `good2go hook run`: it reads the cache the project's
