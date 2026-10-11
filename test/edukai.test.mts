@@ -1507,10 +1507,10 @@ describe('the demo: Parcel tracker\'s memory', () => {
   });
 });
 
-describe('release metadata for 0.7.0', () => {
+describe('release metadata', () => {
   it('keeps the version in package.json and the lockfile only; the tools read it', () => {
     const pkg = JSON.parse(read(path.join(ROOT, 'package.json')));
-    assert.equal(pkg.version, '0.7.0');
+    assert.match(pkg.version, /^\d+\.\d+\.\d+$/);
     assert.equal(JSON.parse(read(path.join(ROOT, 'package-lock.json'))).version, pkg.version);
     assert.ok(!fs.existsSync(path.join(ROOT, '.claude-plugin')), 'the plugin route is retired');
     assert.doesNotMatch(read(GOOD2GO), /const VERSION = '/);
