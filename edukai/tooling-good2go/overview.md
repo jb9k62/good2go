@@ -3,7 +3,7 @@ type: Overview
 title: Working in the good2go repository
 description: How to build, test and release the skill, and the traps that are easy to miss
 tags: [overview, tooling, ci]
-generated: { by: claude-code/sonnet-5.5, at: 2026-10-11T09:35:00Z }
+generated: { by: claude-code/sonnet-5.5, at: 2026-10-11T11:40:42Z }
 ---
 
 This repository is the source of the npm package `@jb9k62/good2go`: two agent skills, the
@@ -29,6 +29,9 @@ One thing is easy to break by accident: the demo's memory lessons hold digests o
 `examples/demo/`. Edit one of those files and a lesson changes state, and so does a report that a
 test pins.
 
+Dependencies install with a two-day cool-down (`.npmrc`); a bump moves the CDN pins and Action SHAs too. The benchmark in `test/bench/` uses a stub `claude` in `npm test`; only `npm run bench -- --go`
+spends money. Keep a report by copying it to `test/bench/reports/`; results are gitignored.
+
 Last, never edit the vendored OKF spec by hand. `npm run spec -- status` tells you whether
 upstream has moved, and `npm run spec -- update` brings the new version in.
 
@@ -42,8 +45,15 @@ upstream has moved, and `npm run spec -- update` brings the new version in.
 - [The demo's lessons pin digests of files under examples/demo](/tooling-good2go/lessons/2026-10-08-demo-lessons-are-pinned.md)
 - [The release version is written once, in package.json](/tooling-good2go/lessons/2026-10-08-version-is-in-package-json.md)
 - [The vendored OKF spec is refreshed with npm run spec, never by hand](/tooling-good2go/lessons/2026-10-08-spec-is-vendored.md)
+- [Dependencies install with a two-day cool-down, and CDN pins move with them](/tooling-good2go/lessons/2026-10-11-dependencies-install-with-a-two-day-cool-down.md)
+- [Headless Claude Code shows hook output in its stream only with --include-hook-events](/tooling-good2go/lessons/2026-10-11-hook-events-flag.md)
+- [A headless run denies env-prefixed Bash commands unless an allow rule names them](/tooling-good2go/lessons/2026-10-11-headless-bash-allow-list.md)
+- [Benchmark results are gitignored, so a report is committed as a copy under test/bench/reports](/tooling-good2go/lessons/2026-10-11-bench-reports-are-tracked-copies.md)
+- [The memory hooks read a cache that only edukai recheck or index writes](/tooling-good2go/lessons/2026-10-11-hooks-read-a-cache.md)
+- [The first benchmark raised correctness on d2 and d3 but did not lower cost where both arms passed](/tooling-good2go/lessons/2026-10-11-first-benchmark-result.md)
 
 ## Open questions
 
 - The first publish (by hand, then trusted publishing and the `npm` environment) has not happened.
 - Dependabot and `SECURITY.md` were added with the release workflow; not reviewed in memory.
+- The benchmark's budget-stop detection and the Stop hook's turns are unseen; see `test/bench/TODO.md`.

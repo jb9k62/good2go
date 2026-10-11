@@ -17,3 +17,10 @@
   `okf-update` and the legacy migration were dropped (ADR-0008); a review pass hardened the hooks,
   input validation and the release workflow; the npm scripts became `g2g:`; `hooks --local` was
   added. Seven lessons were added; the overviews were rewritten. No older lesson's claim changed.
+
+## 2026-10-11
+
+Benchmark session: five lessons added to tooling-good2go (the stream flag for hook events, the
+headless Bash allow-list, why reports are copied to test/bench/reports, the hooks' cache, and the
+first benchmark result). The tooling overview was rewritten to cover them and the two-day
+dependency cool-down. No earlier lesson's claim changed.
