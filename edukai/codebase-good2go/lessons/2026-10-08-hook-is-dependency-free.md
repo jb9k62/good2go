@@ -1,7 +1,7 @@
 ---
 type: Lesson
 title: "g2g-hook.mts imports only node: built-ins and g2g-rank.mts"
-description: The hook core never imports yaml or g2g-core, because it runs from an installed plugin with no project node_modules.
+description: The hook core never imports yaml or g2g-core, because it runs from the installed package, in projects whose node_modules may not exist.
 tags: [hooks, edukai]
 confidence: observed
 generated: { by: pi/deepseek-ai/DeepSeek-V4.1-Flash, at: 2026-10-08T20:03:18Z }
