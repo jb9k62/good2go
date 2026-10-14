@@ -1,6 +1,8 @@
 node_modules/
 dist/
+/viz.html
 design/viz.html
+edukai/viz.html
 okf/viz.html
 examples/**/viz.html
 .cache/
