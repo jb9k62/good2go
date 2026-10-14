@@ -190,7 +190,9 @@ npm install
 npm install -D @mermaid-js/mermaid-cli@11 playwright && npx playwright install chromium
 
 npm run g2g:validate        # types, links, timestamps: expect 0 issues
-npm run g2g:view            # writes okf/viz.html (your design folder); open it in a browser
+npm run g2g:build-view      # writes viz.html for every bundle in .good2go.json, and a landing page at the root
+npm run g2g:view            # builds, then opens the landing page in your browser
+npm run g2g:view -- edukai  # ... or opens one bundle (a folder, or the last part of a listed one)
 npm run g2g:mermaid         # every diagram parses
 npm run g2g:mermaid:render  # every diagram renders, every quiz and widget works
 npm run g2g:search -- search "retry policy" --fresh   # ranked, freshness-aware lookup for agents
@@ -233,7 +235,7 @@ your-project/
 │   ├── index.md              # the syllabus; one generated block
 │   ├── log.md
 │   └── <domain>/             # overview.md, and lessons/YYYY-MM-DD-short-claim.md
-├── .good2go.json       # the install manifest: version, name, design folder, template hashes
+├── .good2go.json       # the install manifest: version, name, design folder, every bundle folder, skill hashes
 ├── packages/okf-widgets/     # with --widgets: your React widgets (an npm workspace)
 ├── okf-concept-template.md   # authoring aids, outside the bundle
 └── okf-explainer-template.md
@@ -287,7 +289,7 @@ design bundle and [`edukai/`](edukai/index.md) is its own agent memory. The tool
 
 ```bash
 npm run g2g:validate        # this repository's own design/ bundle
-npm run g2g:view            # render it to design/viz.html (builds the widgets first)
+npm run g2g:view -- design  # render it to design/viz.html and open it (builds the widgets first)
 npm run edukai:brief        # what an agent is told when a session opens
 npm run edukai:recheck      # lessons whose sources changed, or whose checks no longer hold
 ```

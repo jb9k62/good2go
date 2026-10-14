@@ -398,6 +398,8 @@ version adds:
 
 ```bash
 good2go view okf                # validate + write okf/viz.html
+good2go build-view               # viz.html for every bundle in .good2go.json, plus a landing page (viz.html at the root)
+good2go open [bundle]            # build, then open the landing page, or one bundle, in the browser
 good2go validate okf               # validate only
 good2go fix okf                    # first write the key under every ER diagram (see above)
 good2go view okf --strict        # exit 1 on any issue

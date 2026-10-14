@@ -41,8 +41,8 @@ scaffolds the design bundle, adds the `okf:*` npm scripts and copies these skill
 
 Run `good2go --help` for every command and `good2go init --help`, `good2go new --help`,
 `good2go search --help` and `good2go edukai --help` for their flags.
-The scaffolded scripts are the checks: `npm run g2g:fix`, `g2g:validate`, `g2g:view`,
-`g2g:mermaid`, `g2g:mermaid:render`, `g2g:search`, `g2g:recheck`. The Mermaid
+The scaffolded scripts are the checks: `npm run g2g:fix`, `g2g:validate`, `g2g:build-view`,
+`g2g:view`, `g2g:mermaid`, `g2g:mermaid:render`, `g2g:search`, `g2g:recheck`. The Mermaid
 gates need `npm i -D @mermaid-js/mermaid-cli@11 playwright && npx playwright install chromium`;
 without them they exit 2 ("could not run"). A plain re-run of `init` keeps authored files and refreshes the skills copies you have not edited.
 
@@ -60,7 +60,7 @@ an okf for this project", "write an explainer for this change with a quiz".
    - Explainers: from `okf-explainer-template.md`, following EXPLAINERS.md: background,
      intuition, details, then a quiz.
    - **Check every claim against the code before it goes in** (the playbook's checklist).
-3. **Verify.** Run `g2g:fix`, `g2g:validate` (expect 0 issues), `g2g:view`, `g2g:mermaid` and
+3. **Verify.** Run `g2g:fix`, `g2g:validate` (expect 0 issues), `g2g:build-view`, `g2g:mermaid` and
    `g2g:mermaid:render` (and `g2g:widgets:typecheck` and `g2g:widgets:test` with widgets). Exit
    codes: **0** pass, **1** broken (file and line named), **2** could not run. Read 2 as
    "unproven", never as "fine". Then open `viz.html` in light and dark: the gates prove it
@@ -73,7 +73,9 @@ an okf for this project", "write an explainer for this change with a quiz".
 Bundles stay separate because they have different readers and different rules: design (`okf/`,
 the team), memory (`edukai/`, the agent; `init --edukai`), and any other such as `ops/`
 (`good2go new ops --name ... --intent ...`). Other bundles take the same gates
-(`good2go validate ops`, `good2go view ops`).
+(`good2go validate ops`, `good2go view ops`); `good2go new` lists the bundle in `.good2go.json`, so
+`npm run g2g:build-view` builds every listed bundle and a landing page, and `npm run g2g:view -- ops`
+opens one.
 
 This skill covers the design bundle and other people-written bundles. Lessons are the
 **`edukai` skill's**. Never put lessons in the design bundle, or design docs in `edukai/`. Two

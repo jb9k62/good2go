@@ -15,7 +15,7 @@ sources:
 
 `g2g-view.mts` walks a bundle, checks it, builds a graph of its concepts, and writes one
 `viz.html` next to the bundle (or wherever `--out` says). The file is generated, so it is
-gitignored. A project builds it again with `npm run g2g:view`.
+gitignored. A project builds it again with `npm run g2g:build-view` (every bundle, plus a landing page) or opens it with `npm run g2g:view -- <bundle>`.
 
 ## One file, two sources of content
 

@@ -16,6 +16,7 @@ sources:
   - resource: scripts/g2g-start.mjs
   - resource: src/good2go.mts
   - resource: src/g2g-new.mts
+  - resource: src/g2g-build-view.mts
   - resource: src/g2g-skills.mts
   - resource: scripts/build.mts
   - resource: AGENTS.md
@@ -34,7 +35,8 @@ runs them with the `good2go` command; this repository runs the sources.
 | --- | --- |
 | `good2go.mts` | The command's dispatcher. Runs each tool below as a child process, so each keeps its own flags and exit codes. Subcommands `init`, `new`, `validate`, `fix`, `view`, `mermaid`, `search`, `recheck`, `edukai`, `hook`, `skills` |
 | `g2g-init.mts` | `good2go init`: writes the bundle skeleton, adds the `@jb9k62/good2go` devDependency and the npm scripts, writes `.good2go.json` at the project root. Copies no tools. `--design-dir`, `--widgets`, `--edukai`, `--no-scripts`, `--force` |
-| `g2g-new.mts` | `good2go new`: starts a further small bundle (index, log, one starter page) in a new folder. `--name`, `--intent`, `--project-dir`, `--force`; never overwrites a file |
+| `g2g-new.mts` | `good2go new`: starts a further small bundle (index, log, one starter page) in a new folder. `--name`, `--intent`, `--project-dir`, `--force`; never overwrites a file; adds the folder to the manifest's `bundles` |
+| `g2g-build-view.mts` | `good2go build-view` and `good2go open`: runs the viewer (`--summary`) on every bundle the manifest lists, writes a one-file landing page at the project root, and for `open` starts the default browser on it or on one bundle. `--widgets`, `--strict`, `--no-open`, `--project-dir` |
 | `g2g-skills.mts` | `good2go skills`: copies the skills (instructions and references only) into an agent's skills folder. `--claude`, `--pi`, `--agents`, `--force`, `--dir` |
 | `g2g-view.mts` | The validator and the viewer, and the render gate under `--check-render`. `--validate`, `--fix`, `--strict`, `--out`, `--widgets` |
 | `g2g-mermaid.mts` | The Mermaid parse gate: extracts every fenced `mermaid` block and runs it through `mmdc`. `--json`, `--timeout`, `--jobs` |
