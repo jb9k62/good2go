@@ -8,6 +8,8 @@
  *   good2go validate [bundle] [options]     validate a bundle (view --validate)
  *   good2go fix [bundle]                    validate and write the fixes that are safe
  *   good2go view [bundle] [options]         validate and write viz.html
+ *   good2go build-view [bundle...] [options]  write the viewer for every bundle, and a landing page
+ *   good2go open [bundle] [options]         build, then open the landing page (or one bundle) in a browser
  *   good2go mermaid [bundle]                every Mermaid block parses
  *   good2go search <command> [args]         ranked, freshness-aware search
  *   good2go recheck [options]               lessons that need an agent
@@ -34,6 +36,8 @@ const COMMANDS: Record<string, [string, string[]]> = {
   validate: ['g2g-view', ['--validate']],
   fix: ['g2g-view', ['--validate', '--fix']],
   view: ['g2g-view', []],
+  'build-view': ['g2g-build-view', ['build-view']],
+  open: ['g2g-build-view', ['open']],
   mermaid: ['g2g-mermaid', []],
   search: ['g2g-search', []],
   recheck: ['g2g-edukai', ['recheck']],
