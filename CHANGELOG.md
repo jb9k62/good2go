@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.0.1 - 2026-10-14
+
 - **`good2go build-view` and `good2go open`.** `.good2go.json` now lists every bundle folder in `bundles` (`init` records the design folder and `edukai/`; `new` adds its folder). `build-view` writes `<bundle>/viz.html` for each and a landing page at the project root (`viz.html`, one file, no scripts) with a card per bundle: title, concepts, links, issues. `open` builds, then opens the landing page in the default browser, or one bundle given as a folder or the last part of a listed one. `--no-open` skips the browser and `--strict` exits 1 on issues. The viewer gains `--summary <file>`, which writes the title and counts as JSON.
 - **The scaffolded scripts change.** `g2g:build-view` is `good2go build-view` and `g2g:view` is `good2go open`, so `npm run g2g:view -- ops` opens one bundle (npm appends what follows `--` to the last command). A re-run of `good2go init` rewrites both. `g2g:view` used to write the design bundle's viewer only; `g2g:build-view` or `good2go view <bundle>` still do that without opening a browser.
 
