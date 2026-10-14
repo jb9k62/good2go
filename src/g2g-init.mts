@@ -398,7 +398,9 @@ if (opts.scripts) {
       const d = designDir;
       pkg.scripts['g2g:validate'] = `good2go validate ${d}`;
       pkg.scripts['g2g:fix'] = `good2go fix ${d}`;
-      pkg.scripts['g2g:view'] = build + `good2go view ${d}`;
+      // npm appends what follows `--` to the last command, so `npm run g2g:view -- ops` opens ops.
+      pkg.scripts['g2g:build-view'] = build + 'good2go build-view';
+      pkg.scripts['g2g:view'] = build + 'good2go open';
       pkg.scripts['g2g:mermaid'] = `good2go mermaid ${d}`;
       pkg.scripts['g2g:search'] = `good2go search --bundle ${d}`;
       pkg.scripts['g2g:mermaid:render'] = build + `good2go view ${d} --check-render`;
@@ -446,7 +448,7 @@ if (opts.scripts) {
     }
   } else {
     console.warn(
-      `  no package.json found: run the tools with npx ${PACKAGE}@${VERSION} <command> (validate, view, search, ...).`,
+      `  no package.json found: run the tools with npx ${PACKAGE}@${VERSION} <command> (validate, build-view, open, search, ...).`,
     );
   }
 }
@@ -471,7 +473,8 @@ console.log('  npm i -D @mermaid-js/mermaid-cli@11 playwright && npx playwright 
 console.log('\nChecks (expect all to pass before you commit):');
 console.log('  npm run g2g:validate        # frontmatter + link conformance');
 console.log('  npm run g2g:fix             # write the relationship key under every ER diagram');
-console.log('  npm run g2g:view            # validate + write viz.html');
+console.log('  npm run g2g:build-view      # write viz.html for every bundle, and a landing page (viz.html at the root)');
+console.log('  npm run g2g:view            # build, then open the landing page; npm run g2g:view -- <bundle> opens one');
 console.log('  npm run g2g:mermaid         # every mermaid block parses (needs mmdc)');
 console.log('  npm run g2g:mermaid:render  # every diagram, quiz and widget works in the viewer');
 console.log('  npm run g2g:search -- search "query"   # find concepts before reading them');

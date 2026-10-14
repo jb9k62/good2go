@@ -55,7 +55,8 @@ describe('bootstrap', () => {
     assert.ok(!fs.existsSync(path.join(dir, 'packages')), 'no widgets without --widgets');
     const pkg = pkgOf(dir);
     assert.equal(pkg.scripts['g2g:validate'], 'good2go validate okf');
-    assert.equal(pkg.scripts['g2g:view'], 'good2go view okf');
+    assert.equal(pkg.scripts['g2g:build-view'], 'good2go build-view');
+    assert.equal(pkg.scripts['g2g:view'], 'good2go open');
     assert.equal(pkg.scripts['g2g:fix'], 'good2go fix okf');
     assert.equal(pkg.scripts['g2g:search'], 'good2go search --bundle okf');
     assert.equal(pkg.scripts['okf:update'], undefined, 'there is no updater: upgrades are npm update');
@@ -211,7 +212,8 @@ describe('bootstrap', () => {
     assert.ok(!fs.existsSync(path.join(widgets, 'dist')), 'no build output copied');
     const pkg = pkgOf(dir);
     assert.deepEqual(pkg.workspaces, ['apps/*', 'packages/okf-widgets']);
-    assert.equal(pkg.scripts['g2g:view'], 'npm run g2g:widgets:build && good2go view okf');
+    assert.equal(pkg.scripts['g2g:build-view'], 'npm run g2g:widgets:build && good2go build-view');
+    assert.equal(pkg.scripts['g2g:view'], 'npm run g2g:widgets:build && good2go open');
     assert.equal(pkg.scripts['g2g:widgets:build'], 'npm run build -w okf-widgets');
 
     fs.writeFileSync(path.join(widgets, 'src', 'mine.ts'), 'export {};\n');
@@ -258,7 +260,8 @@ describe('bootstrap --design-dir', () => {
     const s = pkgOf(dir).scripts;
     assert.equal(s['g2g:validate'], 'good2go validate docs-bundle');
     assert.equal(s['g2g:fix'], 'good2go fix docs-bundle');
-    assert.equal(s['g2g:view'], 'good2go view docs-bundle');
+    assert.equal(s['g2g:build-view'], 'good2go build-view', 'no folder: it builds every listed bundle');
+    assert.equal(s['g2g:view'], 'good2go open');
     assert.equal(s['g2g:mermaid'], 'good2go mermaid docs-bundle');
     assert.equal(s['g2g:recheck'], 'good2go recheck --bundle docs-bundle');
     assert.equal(JSON.parse(read(path.join(dir, '.good2go.json'))).designDir, 'docs-bundle');
