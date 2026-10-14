@@ -87,3 +87,46 @@ export function packageVersion(from: string): string {
     dir = parent;
   }
 }
+
+/** The install manifest `good2go init` writes at the project root. */
+export const MANIFEST = '.good2go.json';
+
+// A bundle folder ends up in shell commands (the npm scripts) and paths, so it is checked, not escaped.
+const BUNDLE_DIR_PATTERN = /^[a-z0-9][a-z0-9._-]*(\/[a-z0-9][a-z0-9._-]*)*$/;
+/** A relative folder of lowercase letters, digits, . _ - and / between segments, never leaving the project. */
+export function validBundleDir(dir: string): boolean {
+  return BUNDLE_DIR_PATTERN.test(dir) && !dir.split('/').includes('..');
+}
+
+/**
+ * The bundle folders the manifest in `project` lists, in order, keeping only safe ones. Empty when
+ * there is no manifest or it lists none (a manifest written before 1.0.1 has only `designDir`).
+ */
+export function recordedBundles(project: string): string[] {
+  try {
+    const m = JSON.parse(fs.readFileSync(path.join(project, MANIFEST), 'utf8')) as { bundles?: unknown; designDir?: unknown };
+    const listed = Array.isArray(m.bundles) ? m.bundles : typeof m.designDir === 'string' ? [m.designDir] : [];
+    return [...new Set(listed.filter((d): d is string => typeof d === 'string' && validBundleDir(d)))];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Add `dir` to the manifest's bundle list. Does nothing when the project has no readable
+ * manifest (it was not scaffolded by `good2go init`). Returns true when the file changed.
+ */
+export function recordBundle(project: string, dir: string): boolean {
+  const file = path.join(project, MANIFEST);
+  let m: Record<string, unknown>;
+  try {
+    m = JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown>;
+  } catch {
+    return false;
+  }
+  if (typeof m !== 'object' || m === null || Array.isArray(m) || !validBundleDir(dir)) return false;
+  const bundles = recordedBundles(project);
+  if (bundles.includes(dir)) return false;
+  fs.writeFileSync(file, JSON.stringify({ ...m, bundles: [...bundles, dir] }, null, 2) + '\n');
+  return true;
+}

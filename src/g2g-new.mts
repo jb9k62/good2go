@@ -7,11 +7,12 @@
  *
  * Exit codes: 0 ok, 1 the folder is not empty or is not a folder, 2 usage (including a path that
  * leaves the project) or could not run.
- * Existing files are never overwritten, even with --force.
+ * Existing files are never overwritten, even with --force. When the project has a .good2go.json,
+ * the folder is added to its `bundles` list, so `good2go build-view` and `open` find it.
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { renderTemplate } from './g2g-shared.mts';
+import { recordBundle, renderTemplate } from './g2g-shared.mts';
 
 type Vars = Record<string, string>;
 
@@ -130,6 +131,9 @@ function main(argv: string[]): number {
     console.error(`good2go new: could not write ${rel}: ${(e as Error).message}`);
     return 2;
   }
+
+  // A project scaffolded by `good2go init` lists its bundles in the manifest; this one joins them.
+  if (recordBundle(root, rel.split(path.sep).join('/'))) console.log(`recorded ${rel} in .good2go.json`);
 
   console.log(`\nNext steps:\n  good2go validate ${rel}\n  good2go view ${rel}`);
   return 0;

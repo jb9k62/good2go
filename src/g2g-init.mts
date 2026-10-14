@@ -12,7 +12,7 @@
  *   <design>/log.md           : update history (reserved)
  *   <design>/adr/readme.md    : decision records index (type: Reference)
  *   <design>/adr/template.md  : ADR template (type: Reference)
- *   .good2go.json             : the install manifest: version, name and the design folder
+ *   .good2go.json             : the install manifest: version, name, the design folder and every bundle folder
  *   edukai/index.md, log.md   : with --edukai, the memory bundle: what agents have learned
  *   AGENTS.md                 : with --edukai, a short marked snippet pointing agents at it
  *   okf-concept-template.md   : authoring aid for a reference concept (outside the bundle)
@@ -54,7 +54,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { copySkill, packageVersion, renderTemplate, skillsRoot } from './g2g-shared.mts';
+import { copySkill, MANIFEST, packageVersion, recordedBundles, renderTemplate, skillsRoot, validBundleDir } from './g2g-shared.mts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const TEMPLATES = path.join(HERE, 'templates');
@@ -63,11 +63,7 @@ const VERSION = packageVersion(import.meta.url);
 const PACKAGE = '@jb9k62/good2go';
 // The range written into a project's devDependencies: this release and compatible later ones.
 const DEPENDENCY_RANGE = '^' + VERSION;
-// Both end up in shell commands (the npm scripts) and paths, so they are checked, not escaped.
-const DESIGN_DIR_PATTERN = /^[a-z0-9][a-z0-9._-]*(\/[a-z0-9][a-z0-9._-]*)*$/;
 const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-// Written into the target on every run: the version, the name and the design folder.
-const MANIFEST = '.good2go.json';
 const WIDGETS_DIR = 'packages/okf-widgets';
 const WIDGETS_PKG = 'okf-widgets';
 // The snippet is written into AGENTS.md once; this marker is how a re-run knows it is there.
@@ -205,9 +201,6 @@ function readManifest(rel: string): Manifest | null {
     return null;
   }
 }
-function validDesignDir(dir: string): boolean {
-  return DESIGN_DIR_PATTERN.test(dir) && !dir.split('/').includes('..');
-}
 /** The recorded hashes, only where they have the expected shape. */
 function recordedSkills(m: Manifest | null): Record<string, Record<string, string>> {
   const out: Record<string, Record<string, string>> = {};
@@ -227,10 +220,10 @@ const slug = opts.slug === null ? kebab(name) : opts.slug.trim().toLowerCase().r
 if (!SLUG_PATTERN.test(slug)) {
   fail(`--slug must be kebab-case (lowercase letters, digits and hyphens), not "${opts.slug}"`);
 }
-if (opts.designDir !== null && !validDesignDir(opts.designDir)) {
+if (opts.designDir !== null && !validBundleDir(opts.designDir)) {
   fail(`--design-dir must be a relative folder of lowercase letters, digits, . _ - and /, not "${opts.designDir}"`);
 }
-if (opts.designDir === null && typeof previous?.designDir === 'string' && !validDesignDir(previous.designDir)) {
+if (opts.designDir === null && typeof previous?.designDir === 'string' && !validBundleDir(previous.designDir)) {
   fail(`${MANIFEST} records the design folder "${previous.designDir}", which is not a safe folder name; fix or delete it`);
 }
 const designDir = opts.designDir ?? (typeof previous?.designDir === 'string' ? previous.designDir : 'okf');
@@ -367,11 +360,15 @@ if (opts.skills) {
   }
 }
 
+// `bundles` lists every bundle folder, so `good2go build-view` and `open` know them all: those a
+// project already lists, then the design folder and the memory bundle if they are new.
+const bundles = [...new Set([...recordedBundles(target), designDir, ...(hasEdukai ? ['edukai'] : [])])];
+
 // The manifest is generated, so it is always overwritten. `skills` carries what the last run
 // installed (kept as it was when this run copied no skills).
 fs.writeFileSync(
   path.join(target, MANIFEST),
-  JSON.stringify({ version: VERSION, name, designDir, skills: skillHashes }, null, 2) + '\n',
+  JSON.stringify({ version: VERSION, name, designDir, bundles, skills: skillHashes }, null, 2) + '\n',
 );
 
 // --- widgets ------------------------------------------------------------------

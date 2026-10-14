@@ -74,3 +74,19 @@ describe('g2g-new', () => {
     assert.equal(fs.existsSync(path.join(p, 'x')), false);
   });
 });
+
+describe('g2g-new and the manifest', () => {
+  it('adds the folder to the manifest\'s bundles, once', () => {
+    const p = project();
+    fs.writeFileSync(path.join(p, '.good2go.json'), JSON.stringify({ version: '1.0.0', name: 'x', designDir: 'okf' }));
+    assert.equal(make(p, 'ops').code, 0);
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(p, '.good2go.json'), 'utf8')).bundles, ['okf', 'ops']);
+    assert.equal(make(p, 'ops', ['--force']).code, 0);
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(p, '.good2go.json'), 'utf8')).bundles, ['okf', 'ops']);
+  });
+  it('leaves a project without a manifest alone', () => {
+    const p = project();
+    assert.equal(make(p, 'ops').code, 0);
+    assert.ok(!fs.existsSync(path.join(p, '.good2go.json')));
+  });
+});

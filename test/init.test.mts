@@ -172,7 +172,7 @@ describe('bootstrap', () => {
     assert.ok(text.endsWith('}\n'), 'trailing newline');
     assert.equal(text, JSON.stringify(JSON.parse(text), null, 2) + '\n', '2-space indent');
     const manifest = JSON.parse(text);
-    assert.deepEqual(Object.keys(manifest), ['version', 'name', 'designDir', 'skills']);
+    assert.deepEqual(Object.keys(manifest), ['version', 'name', 'designDir', 'bundles', 'skills']);
     assert.equal(manifest.version, pkgOf(ROOT).version);
     assert.equal(manifest.name, 'Manifest App');
     assert.equal(manifest.designDir, 'okf');
@@ -270,6 +270,12 @@ describe('bootstrap --design-dir', () => {
     assert.ok(!fs.existsSync(path.join(dir, 'okf')));
     assert.equal(pkgOf(dir).scripts['g2g:validate'], 'good2go validate docs-bundle');
     assert.equal(JSON.parse(read(path.join(dir, '.good2go.json'))).designDir, 'docs-bundle');
+    assert.deepEqual(JSON.parse(read(path.join(dir, '.good2go.json'))).bundles, ['docs-bundle']);
+    // A bundle added later (good2go new) stays listed through another run, and --edukai joins it.
+    const m = JSON.parse(read(path.join(dir, '.good2go.json')));
+    fs.writeFileSync(path.join(dir, '.good2go.json'), JSON.stringify({ ...m, bundles: [...m.bundles, 'ops'] }));
+    assert.equal(run(BOOTSTRAP, [dir, '--edukai']).code, 0);
+    assert.deepEqual(JSON.parse(read(path.join(dir, '.good2go.json'))).bundles, ['docs-bundle', 'ops', 'edukai']);
   });
 
   it('does not create design/design when the bundle is called design', () => {
