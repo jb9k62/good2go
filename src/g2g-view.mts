@@ -31,6 +31,8 @@
  *     -h, --help    print this help and exit 0
  *     --widgets <f> the built widget bundle to inline (default:
  *                   ./packages/okf-widgets/dist/okf-widgets.js in the working directory)
+ *     --summary <f> also write the bundle's title and counts (concepts, edges, issues, stale) as
+ *                   JSON; `good2go build-view` reads it for the landing page
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -94,6 +96,7 @@ interface Options {
   checkRender: boolean;
   fix: boolean;
   widgets: string | null;
+  summary: string | null;
 }
 
 // The hooks the generated page exposes, which the render gate drives from inside Chromium.
@@ -4202,6 +4205,7 @@ function parseArgs(argv: string[]): Options {
     checkRender: false,
     fix: false,
     widgets: null,
+    summary: null,
   };
   const positional: string[] = [];
   for (let i = 0; i < argv.length; i++) {
@@ -4218,6 +4222,8 @@ function parseArgs(argv: string[]): Options {
       opts.strict = true;
     } else if (a === '--widgets') {
       opts.widgets = argv[++i] ?? null;
+    } else if (a === '--summary') {
+      opts.summary = argv[++i] ?? null;
     } else if (a === '-h' || a === '--help') {
       console.log(helpFromComment(import.meta.url));
       process.exit(0);
@@ -4738,6 +4744,18 @@ async function main() {
     console.log(
       `\nWrote viewer: ${outPath} (${html.length} bytes). Open it in a browser; libraries load from a CDN.`,
     );
+  }
+
+  if (opts.summary) {
+    const summary = {
+      title: readBundleTitle(bundleRoot),
+      concepts: concepts.length,
+      edges: graph.edges.length,
+      issues: issues.length,
+      stale: concepts.filter((c) => c.stale).length,
+    };
+    fs.mkdirSync(path.dirname(path.resolve(opts.summary)), { recursive: true });
+    fs.writeFileSync(opts.summary, JSON.stringify(summary) + '\n', 'utf8');
   }
 
   // A render gate that could not run (2) outranks a conformance failure (1):
