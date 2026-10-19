@@ -1447,6 +1447,9 @@ code { font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospac
 .prose th, .prose td { padding: 9px 14px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); }
 .prose th { background: var(--surface-2); font-weight: 600; color: var(--heading); white-space: nowrap; }
 .prose tr:last-child td { border-bottom: 0; }
+/* A long path in a cell has no break points; without this its column's minimum width is the whole
+   path and the neighbouring prose column is squeezed to one word per line. */
+.prose td code { overflow-wrap: anywhere; }
 .prose blockquote { margin: 0 0 1em; padding: 2px 16px; border-left: 3px solid var(--border-strong); color: var(--text-muted); }
 
 /* Callouts: a blockquote whose first line is [!type]. The accent drives the

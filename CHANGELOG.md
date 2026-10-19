@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.0.2 - 2026-10-19
+
+- **The viewer breaks long inline code in table cells.** A long path in a cell used to set its column's minimum width, squeezing the next column to one word per line.
+
 ## 1.0.1 - 2026-10-14
 
 - **`good2go build-view` and `good2go open`.** `.good2go.json` now lists every bundle folder in `bundles` (`init` records the design folder and `edukai/`; `new` adds its folder). `build-view` writes `<bundle>/viz.html` for each and a landing page at the project root (`viz.html`, one file, no scripts) with a card per bundle: title, concepts, links, issues. `open` builds, then opens the landing page in the default browser, or one bundle given as a folder or the last part of a listed one. `--no-open` skips the browser and `--strict` exits 1 on issues. The viewer gains `--summary <file>`, which writes the title and counts as JSON.
