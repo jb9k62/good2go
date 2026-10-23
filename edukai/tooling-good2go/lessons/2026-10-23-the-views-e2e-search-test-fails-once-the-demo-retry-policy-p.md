@@ -4,10 +4,12 @@ title: The views e2e search test fails once the demo retry policy passes its sta
 description: test/views.e2e.mts expects the human-reviewed, fresh retry policy to lead a search for "retry policy"; after its stale_after (2026-10-20) it drops below the retries tour and the suite cascades.
 tags: [testing, demo, e2e]
 confidence: tested
+status: deprecated
 generated: { by: claude-code/opus-5.5, at: 2026-10-23T08:40:35Z }
 verified:
   - { by: claude-code/opus-5.5, at: 2026-10-23T08:40:47Z }
 stale_after: 2026-11-22T08:40:47Z
+superseded_by: /tooling-good2go/lessons/2026-10-23-the-views-e2e-search-test-needs-the-demo-retry-policy-fresh.md
 sources:
   - resource: test/views.e2e.mts
     digest: sha256:50d91a7dbfb7c1a9

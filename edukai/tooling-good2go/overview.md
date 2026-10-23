@@ -3,7 +3,7 @@ type: Overview
 title: Working in the good2go repository
 description: How to build, test and release the skill, and the traps that are easy to miss
 tags: [overview, tooling, ci]
-generated: { by: claude-code/opus-5.5, at: 2026-10-23T08:42:00Z }
+generated: { by: claude-code/opus-5.5, at: 2026-10-23T09:06:00Z }
 ---
 
 This repository is the source of the npm package `@jb9k62/good2go`: two agent skills, the
@@ -51,7 +51,7 @@ upstream has moved, and `npm run spec -- update` brings the new version in.
 - [Benchmark results are gitignored, so a report is committed as a copy under test/bench/reports](/tooling-good2go/lessons/2026-10-11-bench-reports-are-tracked-copies.md)
 - [The memory hooks read a cache that only edukai recheck or index writes](/tooling-good2go/lessons/2026-10-11-hooks-read-a-cache.md)
 - [The first benchmark raised correctness on d2 and d3 but did not lower cost where both arms passed](/tooling-good2go/lessons/2026-10-11-first-benchmark-result.md)
-- [The views e2e search test fails once the demo retry policy passes its stale_after date](/tooling-good2go/lessons/2026-10-23-the-views-e2e-search-test-fails-once-the-demo-retry-policy-p.md)
+- [The views e2e search test needs the demo retry policy fresh, which it is until 2027-10-20](/tooling-good2go/lessons/2026-10-23-the-views-e2e-search-test-needs-the-demo-retry-policy-fresh.md)
 
 ## Open questions
 

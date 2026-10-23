@@ -1,6 +1,6 @@
 {
   "name": "@jb9k62/good2go",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "Node tooling for OKF (Open Knowledge Format) bundles and agent memory: validator, graph viewer, Mermaid gates, ranked search, and the edukai memory bundle, plus skills and hooks for Claude Code and pi.",
   "license": "MIT",
   "type": "module",
