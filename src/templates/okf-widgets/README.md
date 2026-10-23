@@ -30,11 +30,17 @@ came with are worked examples, each about one idea:
 | `cache-policy` | An eviction policy is a bet on the traffic; more room can hurt FIFO | `cache.ts` |
 | `http-concurrency` | Concurrency stops helping at the critical path; connections cost handshakes | `concurrency.ts` |
 | `css-specificity` | The cascade's tie-breakers, and specificity counts in columns | `specificity.ts` |
-| `bloom-filter` | "No" is certain, "yes" is only likely, and the bits fill up | `bloom.ts` |
+| `bloom-add` | A Bloom filter by hand: add sets bits, ask checks them (ladder rung 1) | `bloom.ts` |
+| `bloom-stranger` | A false positive, and why there is no delete (rung 2) | `bloom.ts` |
+| `bloom-filter` | "No" is certain, "yes" is only likely, and the bits fill up (rung 3) | `bloom.ts` |
 | `rate-limiter` | A fixed window lets twice its limit through at the boundary | `ratelimit.ts` |
 | `binary-search` | Halving beats scanning, but only on a sorted list | `search.ts` |
-| `consistent-hash` | A ring moves a fraction of keys when a server joins; `hash % n` moves most | `ring.ts` |
+| `hash-modulo` | `hash % servers` by hand: a new server moves most keys (ladder rung 1) | `ring.ts` |
+| `hash-ring` | The same keys on a ring: only the new arc moves; virtual nodes even it out (rung 2) | `ring.ts` |
+| `consistent-hash` | A ring moves a fraction of keys when a server joins; `hash % n` moves most (rung 3) | `ring.ts` |
 
+The Bloom filter and hashing widgets are **ladders**: two small walkthroughs, then the
+full-size widget, each teaching one idea in order (the skill's `EXPLAINERS.md` explains why).
 Keep them as references, delete them, or replace them with widgets about this project's own
 ideas.
 
@@ -43,7 +49,8 @@ ideas.
 | Path | What goes there |
 | --- | --- |
 | `src/index.tsx` | The registry (`WIDGETS`) and the `mount` / `unmountAll` / `names` API the viewer calls |
-| `src/kit.tsx` | Shared pieces: `useWorld` (state plus presets), `Presets`, `Choice`, `Slider`, `Toggle`, `BarChart`, `Scrubber`, `Facts`, `Note`, `ModelNote`, `SourceProblem` |
+| `src/kit.tsx` | Shared pieces: `useWorld` (state plus presets), `useSteps` and `Steps` (a walkthrough the reader steps through, then takes over), `Predict` (a guess before the outcome shows), `Presets`, `Choice`, `Slider`, `Toggle`, `BarChart`, `Scrubber`, `Facts`, `Note`, `ModelNote`, `SourceProblem` |
+| `src/widgets/bits.tsx`, `src/widgets/servers.tsx` | What the small rungs of a ladder share: a numbered bit row, key chips and server colours |
 | `src/widgets/*.tsx` | One component per widget, plus `widgets.test.tsx` |
 | `src/models/*.ts` | Pure logic a widget draws, each with a `*.test.ts`. `ddl.ts`, `schema.ts` and `layout.ts` serve `sql-erd`: they read SQL, review the design and place the tables, and work for any schema. `source.ts` reads the block's data lines; `hash.ts` is the string hash `bloom.ts` and `ring.ts` share |
 | `src/widgets.css` | Styles, built on the viewer's CSS variables so both themes work |
@@ -51,7 +58,9 @@ ideas.
 ## Add a widget
 
 1. **Pick one idea** the reader should come away with, and the edge cases that show it. A
-   widget that teaches three things teaches none.
+   widget that teaches three things teaches none. A concept with more than one idea gets a
+   ladder: a small walkthrough (`useSteps`), then the surprise (`Predict`), then the
+   full-size widget.
 2. **Put the logic in a model**, or better, import the project's real code through `@app`
    (see `vite.config.ts` and `tsconfig.json`; point the alias at your source). Only pure
    modules: no I/O, no framework side effects. When the real logic cannot run in a browser
@@ -60,7 +69,8 @@ ideas.
 3. **Write the component** in `src/widgets/`: `useWorld` with presets for the edge cases (each
    carrying its state and note), direct controls for free play, a result derived from the
    model on every render, and a `ModelNote` that says what is real code and what is a model.
-4. **Mark one control `data-probe`** (the `probe` prop of `Presets` does it). The viewer's
+4. **Mark one control `data-probe`** (the `probe` prop of `Presets` does it; in a
+   walkthrough, `Steps` marks its Next button). The viewer's
    render gate (`npm run g2g:mermaid:render`) clicks it and fails if the widget's text does
    not change.
 5. **Register it** in `WIDGETS` in `src/index.tsx`, with the name concepts will use and a

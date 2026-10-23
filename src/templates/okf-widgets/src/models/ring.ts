@@ -43,6 +43,17 @@ export function owner(ring: readonly Point[], key: string): number {
   return ring[lo % ring.length]!.node;
 }
 
+/** The fraction of the ring each of `nodes` owns: the arcs that end at its points. Sums to 1. */
+export function shares(ring: readonly Point[], nodes: number): number[] {
+  const owned = new Array<number>(nodes).fill(0);
+  if (ring.length === 0) return owned;
+  ring.forEach((point, i) => {
+    const previous = ring[(i - 1 + ring.length) % ring.length]!.at;
+    owned[point.node]! += ring.length === 1 ? 1 : ((point.at - previous + RING_SIZE) % RING_SIZE) / RING_SIZE;
+  });
+  return owned;
+}
+
 export interface Placement {
   /** Keys per node. */
   load: number[];

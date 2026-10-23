@@ -1,5 +1,11 @@
 # Bundle update log
 
+## 2026-10-23
+* **Decided**: micro-worlds teach a concept as a ladder of small widgets: by hand, then the
+  surprise predicted first, then at scale ([ADR-0009](/adr/0009-micro-worlds-teach-in-ladders.md)).
+  The kit gains `useSteps`, `Steps` and `Predict`, and the demo's Bloom filter and hashing
+  tours are the first ladders.
+
 ## 2026-10-11
 * **Changed**: the viewer's URL hash now carries its state (concept, section, search modal,
   query, mode and filters). The grammar and the single route module are described in

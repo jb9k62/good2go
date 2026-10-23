@@ -2,10 +2,14 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import BinarySearch from './BinarySearch.tsx';
+import BloomAdd from './BloomAdd.tsx';
 import BloomFilter from './BloomFilter.tsx';
+import BloomStranger from './BloomStranger.tsx';
 import CachePolicy from './CachePolicy.tsx';
 import ConsistentHash from './ConsistentHash.tsx';
 import CssSpecificity from './CssSpecificity.tsx';
+import HashModulo from './HashModulo.tsx';
+import HashRing from './HashRing.tsx';
 import HttpConcurrency from './HttpConcurrency.tsx';
 import RateLimiter from './RateLimiter.tsx';
 import RetryBackoff from './RetryBackoff.tsx';
@@ -302,5 +306,77 @@ describe('ConsistentHash', () => {
     const moved = /hash ring(\d+)%.*hash % servers(\d+)%/.exec(result.textContent ?? '');
     expect(moved).not.toBeNull();
     expect(Number(moved![1])).toBeLessThan(Number(moved![2]) / 2);
+  });
+});
+
+// The ladder rungs: each walks the reader through steps, and some ask for a prediction first.
+const next = () => userEvent.click(screen.getByRole('button', { name: 'Next ▶' }));
+const say = () => screen.getByTestId('step-say');
+
+describe('BloomAdd', () => {
+  it('adds keys one at a time, shows a shared bit, then answers yes and a certain no', async () => {
+    render(<BloomAdd />);
+    expect(say()).toHaveTextContent('Step 1 of 8');
+    await next();
+    expect(say()).toHaveTextContent('Add evt-1. Its three hashes give bits 11, 2 and 9');
+    await next();
+    await next();
+    await next();
+    expect(say()).toHaveTextContent('Bit 11 was already lit by evt-1');
+    await next();
+    expect(screen.getByTestId('bloom-add-answer')).toHaveTextContent('evt-2: probably seen (it was added)');
+    await next();
+    expect(screen.getByTestId('bloom-add-answer')).toHaveTextContent('definitely not seen (it was never added)');
+  });
+
+  it('lets the reader take over, and go back to the walkthrough', async () => {
+    render(<BloomAdd />);
+    await userEvent.click(screen.getByRole('button', { name: 'Ask about it' }));
+    expect(say()).toHaveTextContent('exploring on your own');
+    expect(screen.getByTestId('bloom-add-answer')).toHaveTextContent('evt-9: definitely not seen');
+    await userEvent.click(screen.getByRole('button', { name: 'Back to step 1' }));
+    expect(say()).toHaveTextContent('Step 1 of 8');
+  });
+});
+
+describe('BloomStranger', () => {
+  it('hides the outcome until the reader predicts, then explains the false positive and the false negative', async () => {
+    render(<BloomStranger />);
+    expect(screen.queryByTestId('stranger-bits')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Probably seen' }));
+    expect(screen.getByRole('status')).toHaveTextContent('Right.');
+    expect(screen.getByTestId('stranger-bits')).toHaveTextContent('lit by');
+    await next();
+    expect(screen.queryByRole('status')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Probably seen, as before' }));
+    expect(screen.getByRole('status')).toHaveTextContent('Not quite');
+    expect(screen.getByTestId('delete-result')).toHaveTextContent('false negative');
+  });
+});
+
+describe('HashModulo', () => {
+  it('moves most keys when a server joins, and says how many', async () => {
+    render(<HashModulo />);
+    expect(say()).toHaveTextContent('p1 hashes to 29, and 29 % 3 = 2, so it lives on server C');
+    await next();
+    await userEvent.click(screen.getByRole('button', { name: 'About 3 (a quarter)' }));
+    expect(screen.getByRole('status')).toHaveTextContent('Not quite');
+    expect(screen.getByRole('status')).toHaveTextContent('8 of 12 moved');
+    await next();
+    await userEvent.click(screen.getByRole('button', { name: '6 servers' }));
+    expect(screen.getByTestId('modulo-moved')).toHaveTextContent(/Going from 3 servers to 6: \d+ of 12/);
+  });
+});
+
+describe('HashRing', () => {
+  it('moves only the keys in the new server arc, then evens the arcs out with virtual nodes', async () => {
+    render(<HashRing />);
+    await next();
+    await userEvent.click(screen.getByRole('button', { name: 'About 3 (a quarter)' }));
+    expect(screen.getByRole('status')).toHaveTextContent('Right. 3 of 12 moved (p2, p8, p10), and every one of them went to D');
+    await next();
+    expect(say()).toHaveTextContent('A 70%, B 26%, C 4%');
+    await next();
+    expect(say()).toHaveTextContent('A 34%, B 31%, C 35%');
   });
 });

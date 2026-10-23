@@ -111,6 +111,155 @@ export function useWorld<S extends object>(presets: readonly WorldPreset<S>[], i
   };
 }
 
+/**
+ * One step of a guided walkthrough: the whole state it shows, and what a teacher would say about
+ * it, in a sentence or two.
+ */
+export interface Step<S> {
+  state: S;
+  say: ReactNode;
+}
+
+/**
+ * The state of a walkthrough: the reader steps through `steps` in order, each carrying the whole
+ * state it shows. `set` lets the reader take over and play; the walkthrough then steps aside
+ * until they go back to it. Like `useWorld`, keep the state minimal and derive the rest.
+ */
+export function useSteps<S extends object>(steps: readonly Step<S>[]) {
+  const [index, setIndex] = useState(0);
+  const [own, setOwn] = useState<S | null>(null);
+  const at = Math.min(index, steps.length - 1);
+  return {
+    index: at,
+    count: steps.length,
+    state: own ?? steps[at]!.state,
+    /** The step being shown, or null once the reader has taken over. */
+    step: own ? null : steps[at]!,
+    go(next: number) {
+      setIndex(Math.min(Math.max(next, 0), steps.length - 1));
+      setOwn(null);
+    },
+    set(patch: Partial<S>) {
+      setOwn((current) => ({ ...(current ?? steps[at]!.state), ...patch }));
+    },
+  };
+}
+
+/**
+ * The walkthrough's voice and its Back/Next buttons. Put it right under the picture, so what the
+ * reader is told sits next to what they see. Next carries `data-probe` for the render gate.
+ */
+export function Steps({
+  walk,
+}: {
+  walk: { index: number; count: number; step: Step<unknown> | null; go: (next: number) => void };
+}) {
+  const { index, count, step } = walk;
+  return (
+    <div className="okfw-steps">
+      <p className="okfw-say" aria-live="polite" data-testid="step-say">
+        {step ? (
+          <>
+            <span className="okfw-step-count">
+              Step {index + 1} of {count}
+            </span>{' '}
+            {step.say}
+          </>
+        ) : (
+          <>You are exploring on your own. Go back to the walkthrough at any time.</>
+        )}
+      </p>
+      <div className="okfw-step-buttons">
+        {step ? (
+          <>
+            <button type="button" disabled={index === 0} onClick={() => walk.go(index - 1)}>
+              ◀ Back
+            </button>
+            <button type="button" data-probe disabled={index >= count - 1} onClick={() => walk.go(index + 1)}>
+              Next ▶
+            </button>
+          </>
+        ) : (
+          <button type="button" data-probe onClick={() => walk.go(index)}>
+            Back to step {index + 1}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Ask the reader to commit to a guess before showing what happens. The outcome (`children`)
+ * stays covered until they choose; then it appears with whether they were right and why. A
+ * reader who is surprised remembers. Give it a `key` that changes with the question, so a new
+ * question starts unanswered.
+ */
+export function Predict({
+  question,
+  options,
+  answer,
+  why,
+  children,
+}: {
+  question: ReactNode;
+  options: readonly { id: string; label: string }[];
+  answer: string;
+  why: ReactNode;
+  children: ReactNode;
+}) {
+  const [guess, setGuess] = useState<string | null>(null);
+  const right = options.find((option) => option.id === answer);
+  return (
+    <div className="okfw-predict" data-answered={guess !== null}>
+      <p className="okfw-predict-q">
+        <strong>Predict:</strong> {question}
+      </p>
+      <div className="okfw-presets" role="group" aria-label="Your prediction">
+        {options.map((option) => (
+          <button
+            key={option.id}
+            type="button"
+            aria-pressed={option.id === guess}
+            disabled={guess !== null}
+            onClick={() => setGuess(option.id)}
+          >
+            {option.label}
+          </button>
+        ))}
+        {guess === null && (
+          <button type="button" className="okfw-skip" onClick={() => setGuess('')}>
+            Just show me
+          </button>
+        )}
+      </div>
+      {guess === null ? (
+        <p className="okfw-reason">Make a guess, then see what happens.</p>
+      ) : (
+        <>
+          <p className="okfw-verdict" role="status" data-right={guess === answer}>
+            {guess === '' ? (
+              <>
+                The answer: <strong>{right?.label}</strong>.
+              </>
+            ) : guess === answer ? (
+              <>
+                <strong>Right.</strong>
+              </>
+            ) : (
+              <>
+                <strong>Not quite:</strong> it is “{right?.label}”.
+              </>
+            )}{' '}
+            {why}
+          </p>
+          {children}
+        </>
+      )}
+    </div>
+  );
+}
+
 /** A labelled range input. The label is the accessible name; `format` shapes the value shown. */
 export function Slider({
   label,

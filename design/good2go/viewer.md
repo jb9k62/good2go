@@ -47,8 +47,9 @@ overrides that.
 A widget that cannot mount never leaves a blank space. Without a built bundle, the block
 shows a build hint. With an unknown name, it lists the registered ones.
 
-The template package ships ten worked example widgets, each with a pure model and a test. Once
-scaffolded, it is the project's code: the examples are there to learn from, and a project
+The template package ships fourteen worked example widgets, each with a pure model and a test.
+Two concepts are taught as ladders of small widgets, one idea per rung
+([ADR-0009](/adr/0009-micro-worlds-teach-in-ladders.md)). Once scaffolded, it is the project's code: the examples are there to learn from, and a project
 writes its own widgets beside them.
 
 ## What the page does

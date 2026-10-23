@@ -43,7 +43,8 @@ factual; the explainer links to them and adds the path through them.
 2. **Background**: the existing system and the problem, before the change. Define each term
    once with a `[!definition]` callout, then use exactly that word everywhere.
 3. **Intuition**: the idea in plain words and one picture before any code. A Mermaid diagram
-   for structure; a widget for behaviour.
+   for structure; a widget for behaviour. For behaviour, a ladder of small widgets (see
+   [Ladders](#ladders-one-idea-per-rung)) beats one large one.
 4. **Details**: the real code in the order the reader needs it, not file order (the "literate
    diff"). Short excerpts, each followed by why. Invariants as `[!important]`, traps as
    `[!warning]` or `[!caution]`, edge cases as `[!edge-case]`.
@@ -126,6 +127,37 @@ widgets take none. The viewer mounts the React component registered under that n
 `viz.html`, so the viewer stays a single file). The package's `README.md` has the step-by-step
 for adding one. The widgets it ships with are **worked examples**, not a library: the
 package belongs to the project once scaffolded, and its widgets should be about the project.
+
+### Ladders: one idea per rung
+
+A single widget that opens at full scale (a thousand bits, three sliders, two percentages)
+shows a reader the conclusion before they have the mechanism, and it does not land. Teach a
+concept the way a good lecturer would: as a **ladder** of two or three small widgets, each
+adding one idea, with a short check after each. The demo's Bloom filter and consistent
+hashing tours are worked examples.
+
+| Rung | The question | The widget |
+| --- | --- | --- |
+| **1. By hand** | How does it work? | Tiny and discrete (16 bits, 3 servers, 12 keys), so the reader can follow every item. A walkthrough (`useSteps`, `Steps`) does the mechanism one step at a time, each step a sentence or two. No sliders and no percentages yet. Free play after the last step |
+| **2. The surprise** | Where does it break, and why? | The same small world, set up for the failure. Ask the reader to **predict** (`Predict`) before you show what happens, then point at the exact items that caused it |
+| **3. At scale** | What do I tune? | Sliders, presets and measured rates. Every number now means something, because the reader has seen the thing it counts |
+
+- **Mechanism before story.** Put rung 1 before *Who is affected* and *The problem, one step
+  at a time*: the story makes sense once the reader knows the parts.
+- **Predict before reveal.** A reader who commits to a guess and is wrong remembers why. Write
+  options that are real misconceptions, as in a quiz, and say why in one line. `Predict` keeps
+  the outcome covered until the reader answers (or clicks "Just show me").
+- **Show things, not statistics.** Name the items: "bit 11 was lit by `evt-1`", "`p2`, `p8`
+  and `p10` moved, all to D". A percentage belongs on rung 3.
+- **Say it next to the picture.** The walkthrough's sentence sits right under the drawing it
+  describes, so the reader never scrolls between the tour's text and the widget.
+- **Check the small world's numbers.** Small worlds are noisy, so an unlucky choice of names
+  teaches the wrong thing (one server at one point can take 8 of 12 keys). Choose names whose
+  result is typical, pin the quoted numbers in a test, and say on screen when a sample is too
+  small to show an effect.
+- **A short check after each rung** (one quiz question), and the full quiz at the end.
+- Name rungs after what they show (`bloom-add`, `bloom-stranger`, `bloom-filter`), not by
+  number, so a rung can be reused or reordered.
 
 ### What makes a good widget
 
@@ -215,6 +247,8 @@ If the schema in the SQL and the diagram above it can disagree, say which one is
 - [ ] Opens with who it is for and what they will understand.
 - [ ] Background before the change; every term defined once and used consistently.
 - [ ] The intuition comes before the code, with a picture or a widget.
+- [ ] A concept with a widget climbs a ladder: by hand first, then the surprise (predicted
+      before it is shown), then at scale, with a short check after each rung.
 - [ ] Each widget has a prompt ("try X, notice Y") and a `[!tip] What to notice` after it.
 - [ ] Details are in reading order, with why after each excerpt.
 - [ ] Every claim was checked against the code and tests (the playbook's writing checklist

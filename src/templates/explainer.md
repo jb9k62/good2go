@@ -60,8 +60,16 @@ flowchart LR
     class A,B,C,D step
 ```
 
-Before the widget, number the steps ("Try it, in three steps"): one or two sentences each,
-naming the preset to click and what to read. A widget without a prompt is a toy.
+For behaviour, climb a ladder of small widgets, one idea each, with a one-question quiz
+after each (see "Ladders" in EXPLAINERS.md):
+
+1. **By hand**: a tiny world the reader steps through (`useSteps`), so they see the mechanism
+   on a few items before any number. This can come before "Who is affected".
+2. **The surprise**: the same small world set up to fail; the reader predicts (`Predict`)
+   before it shows what happens.
+3. **At scale**: sliders and presets. Number the steps ("Try it, in three steps"): one or two
+   sentences each, naming the preset to click and what to read. A widget without a prompt is
+   a toy.
 
 ```widget
 <widget-name>

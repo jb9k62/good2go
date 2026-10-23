@@ -18,6 +18,7 @@ generated: { by: good2go/0.6.0, at: 2026-10-08T20:00:00Z }
 | [0006](/adr/0006-publish-the-tools-to-npm.md) | Publish the tools to npm as `@jb9k62/good2go` | accepted |
 | [0007](/adr/0007-install-hooks-and-skills-from-the-package.md) | Install the hooks and skills from the package, per user by default | accepted |
 | [0008](/adr/0008-rename-to-good2go-and-src-layout.md) | Name everything good2go, and move the sources to `src/` | accepted |
+| [0009](/adr/0009-micro-worlds-teach-in-ladders.md) | Micro-worlds teach a concept as a ladder of small widgets | accepted |
 
 ## Adding one
 

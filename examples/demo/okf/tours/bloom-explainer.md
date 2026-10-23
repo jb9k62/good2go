@@ -1,7 +1,7 @@
 ---
 type: Explainer
 title: "Guided tour: have we seen this event?"
-description: "How a few bits can remember a large set of ids, why 'no' is certain and 'yes' is only likely, and why a Bloom filter belongs in front of a check, not in place of one. A widget shows the bits. Closes with a quiz."
+description: "How a few bits can remember a large set of ids, why 'no' is certain and 'yes' is only likely, and why a Bloom filter belongs in front of a check, not in place of one. Three widgets, one idea each: the bits by hand, where it goes wrong, and sizing it. Closes with a quiz."
 tags: [explainer, guided-tour, data-structures, bloom-filter]
 generated: { by: example-agent/1.0, at: 2026-10-01T09:00:00Z }
 cast: [Sam, Dana, Amira]
@@ -10,7 +10,41 @@ cast_source: ../cast.json
 
 This tour is for anyone who must ask "have I seen this id before?" about a large set. After
 it, you will know what a Bloom filter can answer, and what it cannot. Parcel tracker does not
-use one today; this tour helps decide. A [quiz](#quiz) closes it.
+use one today; this tour helps decide.
+
+It climbs in three steps, each with its own widget: **how it works** (sixteen bits, by hand),
+**where it goes wrong** (you predict, then see), and **how to size it** (the real thing, with
+sliders). A short check follows each step, and a [quiz](#quiz) closes it.
+
+## Step 1: how it works
+
+> [!definition] Bloom filter
+> A row of bits, all starting at 0, that remembers which keys were added without storing the
+> keys. To **add** a key, hash it a few different ways to get a few bit numbers, and set those
+> bits to 1. To **ask** about a key, hash it the same ways and look at those bits.
+
+That is all there is to it. Walk through it with the **Next** button: four keys go in, one at a
+time, then the filter is asked about one that was added and one that was not.
+
+```widget
+bloom-add
+```
+
+> [!tip] What to notice
+> When asked about `evt-2`, all its bits are lit: "probably yes". When asked about a key that
+> was never added, one dark bit is enough for "definitely not", because adding a key never
+> turns a bit off. Notice too that `evt-4` landed on a bit `evt-1` had already lit: keys share
+> bits.
+
+```quiz
+You ask a Bloom filter about a key, and one of its bits is 0. What do you know?
+- [x] The key was never added
+~ Adding a key sets all its bits, and nothing ever clears one. A single dark bit proves it.
+- [ ] The key was probably added
+~ Every added key lights all its bits. A dark bit rules it out.
+- [ ] Nothing yet: you need to check the other bits
+~ One dark bit already settles it. Only a "yes" needs every bit.
+```
 
 ## Who is affected
 
@@ -19,19 +53,6 @@ use one today; this tour helps decide. A [quiz](#quiz) closes it.
 | **Sam**, on call | Checking every event against the database is many slow queries |
 | **Dana**, at the carrier | Her feed repeats recent events on purpose, so clients can catch up |
 | **Amira**, a customer | If a new event is thrown away, she never hears "out for delivery" |
-
-## Background
-
-A Bloom filter is a row of bits, all starting at 0. To add a key (here, an event
-id), hash it a few times and set those bits to 1. To ask about a key, hash it the same way and check those bits.
-
-> [!definition] False positive
-> The filter says "probably seen" for a key it never saw, because other keys happened to set
-> all of its bits.
-
-> [!definition] False negative
-> The filter says "never seen" for a key it did see. This cannot happen: bits are only ever
-> set, never cleared.
 
 ## The problem, one step at a time
 
@@ -43,28 +64,46 @@ id), hash it a few times and set those bits to 1. To ask about a key, hash it th
    *probably* seen.
 4. **"Probably" is the catch.** Skip every "yes", and a few new events are lost. *Amira* never
    hears her parcel is out for delivery.
-5. **So the filter only saves work.** A "no" skips the query; a "yes" still asks the database.
 
-## The picture
+Step 2 shows exactly where "probably" comes from.
 
-The two answers are not equally trustworthy.
+## Step 2: where it goes wrong
 
-```mermaid
-flowchart LR
-    Q["have we seen evt-123?"] --> H{"are all its bits lit?"}
-    H -->|"no, at least one is dark"| N["definitely not seen:\nprocess it as new"]
-    H -->|"yes"| M["probably seen:\nask the database to be sure"]
+> [!definition] False positive
+> The filter says "probably seen" for a key it never saw, because other keys happened to set
+> all of its bits.
 
-    classDef neutral fill:#e0e7ff,stroke:#3730a3,color:#1e1b4b
-    classDef good fill:#dcfce7,stroke:#166534,color:#0f2417
-    classDef warn fill:#fef3c7,stroke:#92400e,color:#3a2408
-    class Q,H neutral
-    class N good
-    class M warn
+> [!definition] False negative
+> The filter says "never seen" for a key it did see. A Bloom filter promises this never
+> happens.
+
+The same sixteen bits, now with five keys in. Before each answer appears, **make a guess**:
+first about a key that was never added, then about what happens if you try to delete a key.
+
+```widget
+bloom-stranger
 ```
 
-Try it, in four steps. A lit cell is a bit set to 1. The ringed cells are the bits a key
-hashes to.
+> [!tip] What to notice
+> The stranger's bits were lit by other keys, and the filter keeps no record of whose bits
+> they were, so it cannot tell. Deleting is worse: a key's bits are shared, so turning them
+> off erases other keys too. That is why a Bloom filter never deletes.
+
+```quiz
+Why can't you delete a key from a Bloom filter by turning its bits back to 0?
+- [ ] The hashes cannot be run backwards
+~ You do not need to: you can hash the key again and find its bits. The trouble is who else uses them.
+- [x] Other keys may share those bits, and would then look as if they were never added
+~ That breaks the one promise the filter makes: "no" is always right.
+- [ ] It would make false positives more likely
+~ Clearing bits makes "yes" rarer, not more common. The danger is a wrong "no".
+```
+
+## Step 3: how big should it be?
+
+Now the real size: hundreds of keys, a thousand bits, and a slider for each. You have seen
+every part of it already; the question is how full it gets. Try it, in four steps. A lit cell
+is a bit set to 1. The ringed cells are the bits a key hashes to.
 
 1. **Working well.** Open on **Sized for the job**. Ask about `evt-7` (added), then `evt-999`
    (not added). The first is always "yes"; the second is almost always "no". False positives
@@ -84,6 +123,22 @@ bloom-filter
 > False positives rise as the bits fill. More hashes help until they fill the row. The best
 > number is about 0.69 times the bits per key.
 
+The two answers are not equally trustworthy, and that decides where the filter goes:
+
+```mermaid
+flowchart LR
+    Q["have we seen evt-123?"] --> H{"are all its bits lit?"}
+    H -->|"no, at least one is dark"| N["definitely not seen:\nprocess it as new"]
+    H -->|"yes"| M["probably seen:\nask the database to be sure"]
+
+    classDef neutral fill:#e0e7ff,stroke:#3730a3,color:#1e1b4b
+    classDef good fill:#dcfce7,stroke:#166534,color:#0f2417
+    classDef warn fill:#fef3c7,stroke:#92400e,color:#3a2408
+    class Q,H neutral
+    class N good
+    class M warn
+```
+
 ## Details
 
 > [!important] The rule
@@ -95,8 +150,9 @@ bloom-filter
 > would report it.
 
 > [!edge-case] It cannot forget
-> There is no delete: clearing a bit would break other keys that share it. To forget old
-> events, rebuild the filter on a schedule, or use a counting variant.
+> There is no delete, as step 2 showed. To forget old events, rebuild the filter on a
+> schedule, or use a counting variant, which keeps a small counter per bit instead of a single
+> bit.
 
 ## Quiz
 

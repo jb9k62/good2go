@@ -802,6 +802,208 @@
   border-radius: 2px 2px 0 0;
 }
 
+/* Teaching pieces (kit: Steps, Predict). The walkthrough's voice sits right under the picture. */
+.okfw-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: flex-start;
+  margin: 10px 0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--surface-2, #f1f5f9);
+  border-left: 3px solid var(--accent, #2563eb);
+}
+.okfw-say {
+  flex: 1 1 320px;
+  margin: 0;
+  line-height: 1.5;
+}
+.okfw-step-count {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted, #64748b);
+}
+.okfw-step-buttons {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+.okfw-step-buttons button[data-probe]:not(:disabled) {
+  border-color: var(--accent, #2563eb);
+  font-weight: 600;
+}
+.okfw-predict {
+  margin: 10px 0;
+  padding: 10px 12px;
+  border: 1px dashed var(--accent, #2563eb);
+  border-radius: 6px;
+}
+.okfw-predict[data-answered='true'] {
+  border-style: solid;
+  border-color: var(--border, #e2e8f0);
+}
+.okfw-predict-q {
+  margin: 0 0 8px;
+}
+.okfw-predict .okfw-presets {
+  margin-bottom: 4px;
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+.okfw .okfw-skip {
+  background: none;
+  border-color: transparent;
+  color: var(--text-muted, #64748b);
+  text-decoration: underline;
+}
+.okfw-verdict {
+  margin: 8px 0;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--okfw-warn-bg);
+}
+.okfw-verdict[data-right='true'] {
+  background: var(--okfw-good-bg);
+}
+.okfw-answer {
+  margin: 8px 0;
+}
+.okfw-answer[data-seen='true'] strong {
+  color: var(--okfw-good);
+}
+.okfw-answer[data-seen='false'] strong {
+  color: var(--okfw-bad);
+}
+.okfw-try {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+/* bloom-add, bloom-stranger: a short row of numbered bits */
+.okfw .okfw-bitrow {
+  display: grid;
+  grid-template-columns: repeat(16, minmax(0, 1fr));
+  gap: 3px;
+  margin: 4px 0;
+  padding: 0;
+  list-style: none;
+}
+.okfw .okfw-bitrow li {
+  margin: 0;
+  text-align: center;
+}
+.okfw-bitrow span {
+  display: block;
+  padding: 6px 0;
+  border: 1px solid var(--border-strong, #cbd5e1);
+  border-radius: 4px;
+  font-family: ui-monospace, monospace;
+  font-weight: 700;
+  color: var(--text-muted, #64748b);
+  background: var(--surface, #fff);
+  transition: background 0.25s, color 0.25s;
+}
+.okfw-bitrow small {
+  font-size: 10px;
+  color: var(--text-muted, #64748b);
+}
+.okfw-bitrow li[data-lit='true'] span {
+  background: var(--accent, #2563eb);
+  border-color: var(--accent, #2563eb);
+  color: var(--surface, #fff);
+}
+.okfw-bitrow li[data-focus] span {
+  outline: 3px solid var(--heading, #0f172a);
+  outline-offset: 1px;
+}
+.okfw-bitrow li[data-focus][data-lit='false'] span {
+  outline-color: var(--okfw-bad);
+}
+.okfw-bitrow li[data-cleared] span {
+  text-decoration: line-through;
+  background: var(--okfw-bad-bg);
+}
+.okfw .okfw-keylist li[data-focus] {
+  font-weight: 600;
+}
+
+/* hash-modulo, hash-ring: servers as columns of key chips */
+.okfw-servers {
+  display: grid;
+  gap: 8px;
+  margin: 6px 0;
+}
+.okfw-servers section {
+  padding: 6px 8px;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 6px;
+}
+.okfw-servers h4 {
+  margin: 0 0 6px;
+}
+.okfw-servers-grid {
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+.okfw-servers-list {
+  align-content: start;
+}
+.okfw-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.okfw-chip {
+  display: inline-block;
+  padding: 1px 7px;
+  border: 2px solid;
+  border-radius: 999px;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.okfw-chip[data-moved] {
+  background: var(--okfw-warn-bg);
+  font-weight: 700;
+}
+.okfw-chip small {
+  font-weight: 400;
+  color: var(--text-muted, #64748b);
+}
+.okfw-ringrow {
+  align-items: center;
+}
+.okfw-ring-big {
+  max-width: 280px;
+}
+.okfw-arc {
+  fill: none;
+  stroke-width: 9;
+  opacity: 0.55;
+}
+.okfw-arc[data-focus] {
+  stroke-width: 14;
+  opacity: 1;
+}
+.okfw-keydot[data-moved] {
+  stroke: var(--heading, #0f172a);
+  stroke-width: 2.5;
+}
+.okfw-serverdot {
+  stroke: var(--surface, #fff);
+  stroke-width: 2;
+}
+.okfw-ring-label {
+  font-size: 14px;
+  font-weight: 700;
+  fill: var(--heading, #0f172a);
+}
+
 /* Refinements shared by every widget: native controls take the accent, and plain lists and
    inline controls sit tighter than the reading column's prose rhythm. */
 .okfw input[type='range'],

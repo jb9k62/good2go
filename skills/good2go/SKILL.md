@@ -119,7 +119,9 @@ concepts by text and by what the spec says about them (trust tier, stale, deprec
 registry, a kit, styles on the viewer's theme variables, and worked examples with pure, tested
 models. Keep the examples as references or delete them; write the project's own widgets beside
 them, importing its real pure code through the `@app` alias where possible. Its `README.md`
-has the steps.
+has the steps. Teach a concept as a **ladder** of small widgets, one idea each: by hand on a
+tiny world, then the failure predicted before it is shown, then at scale (EXPLAINERS.md,
+"Ladders").
 
 ## OKF spec version
 

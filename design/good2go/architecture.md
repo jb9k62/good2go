@@ -100,7 +100,7 @@ folder. The tools themselves are described in [the tools](/good2go/tools.md).
 - `okf/` (or the `--design-dir` folder) and `edukai/`: the reserved `index.md` and `log.md`, and the ADR index and template.
 - `concept.md` and `explainer.md`: authoring aids. They are scaffolded outside the bundle, so
   the validator does not scan them.
-- `okf-widgets/`: a React workspace with ten worked example widgets, their pure models and
+- `okf-widgets/`: a React workspace with fourteen worked example widgets, their pure models and
   their tests. With `--widgets` it becomes the project's code, and is never replaced.
 
 ## The adapters

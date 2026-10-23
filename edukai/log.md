@@ -1,5 +1,8 @@
 # Memory update log
 
+## 2026-10-23
+* **Learned**: the views e2e suite fails in a cascade once the demo's retry policy passes its `stale_after` (2026-10-20); see [the lesson](/tooling-good2go/lessons/2026-10-23-the-views-e2e-search-test-fails-once-the-demo-retry-policy-p.md).
+
 ## 2026-10-08
 * **Creation**: Established the good2go memory bundle (OKF v0.2): root `index.md` and
   `log.md`, then the first lessons in `tooling-good2go/` and `codebase-good2go/`.

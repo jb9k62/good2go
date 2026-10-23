@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildRing, keyNames, owner, place } from './ring.ts';
+import { buildRing, keyNames, owner, place, shares } from './ring.ts';
 
 describe('ring', () => {
   it('gives every key an owner, the same one each time', () => {
@@ -34,6 +34,17 @@ describe('ring', () => {
     const many = place(5, 128, 5000).imbalance;
     expect(many).toBeLessThan(few);
     expect(many).toBeLessThan(1.3);
+  });
+
+  it('splits the whole ring between the nodes, more evenly with virtual nodes', () => {
+    const one = shares(buildRing(3, 1), 3);
+    const four = shares(buildRing(3, 4), 3);
+    expect(one.reduce((a, b) => a + b, 0)).toBeCloseTo(1);
+    expect(four.reduce((a, b) => a + b, 0)).toBeCloseTo(1);
+    // The hash-ring widget quotes these: 70%, 26%, 4% with one point each; 34%, 31%, 35% with four.
+    expect(one.map((s) => Math.round(s * 100))).toEqual([70, 26, 4]);
+    expect(four.map((s) => Math.round(s * 100))).toEqual([34, 31, 35]);
+    expect(shares(buildRing(1, 1), 1)).toEqual([1]);
   });
 
   it('has no owner on an empty ring', () => {

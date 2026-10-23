@@ -26,10 +26,10 @@ records, and ten guided tours, most with interactive widgets, all with quizzes. 
   limit requests, and the burst a fixed window lets through
 * [Guided tour: how many looks does it take?](/tours/search-explainer.md) - binary against
   linear search, and what an unsorted list does to the answer
-* [Guided tour: which server holds this key?](/tours/hashing-explainer.md) - a hash ring against
-  `hash % servers`, and why each server needs many points
-* [Guided tour: have we seen this event?](/tours/bloom-explainer.md) - a Bloom filter's bits,
-  and why a "yes" must still be checked
+* [Guided tour: which server holds this key?](/tours/hashing-explainer.md) - `hash % servers`
+  by hand, then the same keys on a ring, then the ring at scale: a ladder of three widgets
+* [Guided tour: have we seen this event?](/tours/bloom-explainer.md) - a Bloom filter's bits by
+  hand, where a "yes" goes wrong, then sizing it: a ladder of three widgets
 * [Guided tour: what does the agent remember?](/tours/memory-explainer.md) - lessons with a
   receipt, and how code notices when one stops being true
 

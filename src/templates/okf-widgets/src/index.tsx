@@ -22,10 +22,14 @@ import {
 import { createRoot, type Root } from 'react-dom/client';
 import styles from './widgets.css?inline';
 import BinarySearch from './widgets/BinarySearch.tsx';
+import BloomAdd from './widgets/BloomAdd.tsx';
 import BloomFilter from './widgets/BloomFilter.tsx';
+import BloomStranger from './widgets/BloomStranger.tsx';
 import CachePolicy from './widgets/CachePolicy.tsx';
 import ConsistentHash from './widgets/ConsistentHash.tsx';
 import CssSpecificity from './widgets/CssSpecificity.tsx';
+import HashModulo from './widgets/HashModulo.tsx';
+import HashRing from './widgets/HashRing.tsx';
 import HttpConcurrency from './widgets/HttpConcurrency.tsx';
 import RateLimiter from './widgets/RateLimiter.tsx';
 import RetryBackoff from './widgets/RetryBackoff.tsx';
@@ -70,9 +74,25 @@ export const WIDGETS: Readonly<
     title: 'Try it: how many looks does it take?',
     component: BinarySearch,
   },
+  'hash-modulo': {
+    title: 'Try it: where does each key live with hash % servers?',
+    component: HashModulo,
+  },
+  'hash-ring': {
+    title: 'Try it: the same keys on a ring',
+    component: HashRing,
+  },
   'consistent-hash': {
     title: 'Try it: which server holds this key?',
     component: ConsistentHash,
+  },
+  'bloom-add': {
+    title: 'Try it: add keys and ask about them, one bit at a time',
+    component: BloomAdd,
+  },
+  'bloom-stranger': {
+    title: 'Try it: where a Bloom filter goes wrong',
+    component: BloomStranger,
   },
   'bloom-filter': {
     title: 'Try it: a set that forgets what it holds',
