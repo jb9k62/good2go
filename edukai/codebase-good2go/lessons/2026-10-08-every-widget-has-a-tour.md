@@ -8,12 +8,13 @@ generated: { by: pi/deepseek-ai/DeepSeek-V4.1-Flash, at: 2026-10-08T20:03:18Z }
 verified:
   - { by: pi/deepseek-ai/DeepSeek-V4.1-Flash, at: 2026-10-08T20:07:52Z }
   - { by: claude-code/claude-sonnet-5-5, at: 2026-10-10T18:14:15Z }
-stale_after: 2026-11-09T18:14:15Z
+  - { by: process:edukai-recheck, at: 2026-10-29T14:12:59Z }
+stale_after: 2026-11-28T14:12:59Z
 sources:
   - resource: test/render.e2e.mts
-    digest: sha256:ca871c19f66de8fc
+    digest: sha256:602341b3b60953ce
   - resource: src/templates/okf-widgets/src/index.tsx
-    digest: sha256:ab711de61f9b984c
+    digest: sha256:3a2cc829bcdd995d
 check:
   - { file: test/render.e2e.mts, contains: "the demo has no tour using widget" }
 ---

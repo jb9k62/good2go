@@ -7,10 +7,11 @@ confidence: tested
 generated: { by: claude-code/claude-haiku-5-5, at: 2026-10-11T12:22:11Z }
 verified:
   - { by: claude-code/claude-haiku-5-5, at: 2026-10-11T12:59:52Z }
-stale_after: 2026-11-10T12:59:52Z
+  - { by: process:edukai-recheck, at: 2026-10-29T14:12:59Z }
+stale_after: 2026-11-28T14:12:59Z
 sources:
   - resource: src/g2g-view.mts
-    digest: sha256:eae5530e4005b50a
+    digest: sha256:49f0fc0ea4c949d5
 check:
   - { file: src/g2g-view.mts, contains: 'const JS = `' }
 ---

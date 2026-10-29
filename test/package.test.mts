@@ -33,7 +33,7 @@ describe('the built package', () => {
   });
 
   it('compiles every tool to JavaScript beside the templates and the skills', () => {
-    for (const tool of ['good2go', 'g2g-init', 'g2g-view', 'g2g-search', 'g2g-questions', 'g2g-rank', 'g2g-core', 'g2g-edukai', 'g2g-hook', 'g2g-new', 'g2g-build-view', 'g2g-mermaid', 'g2g-install-hooks', 'g2g-skills', 'g2g-shared']) {
+    for (const tool of ['good2go', 'g2g-init', 'g2g-view', 'g2g-search', 'g2g-questions', 'g2g-qparse', 'g2g-rank', 'g2g-core', 'g2g-edukai', 'g2g-hook', 'g2g-new', 'g2g-build-view', 'g2g-mermaid', 'g2g-install-hooks', 'g2g-skills', 'g2g-shared']) {
       assert.ok(fs.existsSync(path.join(DIST, `${tool}.mjs`)), `${tool}.mjs`);
       assert.ok(!fs.existsSync(path.join(DIST, `${tool}.mts`)), `no TypeScript source for ${tool}`);
     }

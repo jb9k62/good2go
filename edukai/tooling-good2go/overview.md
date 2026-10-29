@@ -3,7 +3,7 @@ type: Overview
 title: Working in the good2go repository
 description: How to build, test and release the skill, and the traps that are easy to miss
 tags: [overview, tooling, ci]
-generated: { by: claude-code/opus-5.5, at: 2026-10-23T09:06:00Z }
+generated: { by: claude-code/claude-sonnet-5-5, at: 2026-10-29T14:13:36Z }
 ---
 
 This repository is the source of the npm package `@jb9k62/good2go`: two agent skills, the
@@ -51,11 +51,12 @@ upstream has moved, and `npm run spec -- update` brings the new version in.
 - [Benchmark results are gitignored, so a report is committed as a copy under test/bench/reports](/tooling-good2go/lessons/2026-10-11-bench-reports-are-tracked-copies.md)
 - [The memory hooks read a cache that only edukai recheck or index writes](/tooling-good2go/lessons/2026-10-11-hooks-read-a-cache.md)
 - [The first benchmark raised correctness on d2 and d3 but did not lower cost where both arms passed](/tooling-good2go/lessons/2026-10-11-first-benchmark-result.md)
+- [A views e2e test that waits for lostpointercapture needs a pointer event](/tooling-good2go/lessons/2026-10-29-lostpointercapture-needs-a-pointer-event.md)
 - [The views e2e search test needs the demo retry policy fresh, which it is until 2027-10-20](/tooling-good2go/lessons/2026-10-23-the-views-e2e-search-test-needs-the-demo-retry-policy-fresh.md)
 
 ## Open questions
 
-- The first publish (by hand, then trusted publishing and the `npm` environment) has not happened.
-- Dependabot and `SECURITY.md` were added with the release workflow; not reviewed in memory.
-- The benchmark's budget-stop detection and the Stop hook's turns are unseen; see `test/bench/TODO.md`.
-- The views test for a divider drag that loses its pointer capture (`A: a drag whose capture is lost…`) failed in two of ten full `test:views` runs of the contents change, and passed in the other eight, in four runs of the untouched HEAD, and when run alone. It is not traced. Treat one failure of it as unproven until a run of the suite shows it again.
+- [x] The first publish (by hand, then trusted publishing and the `npm` environment) has not happened. — answered in [RELEASING](../../docs/RELEASING.md), 2026-10-29
+- [ ] Dependabot and `SECURITY.md` were added with the release workflow; not reviewed in memory.
+- [ ] The benchmark's budget-stop detection and the Stop hook's turns are unseen; see `test/bench/TODO.md`.
+- [x] The views test for a divider drag that loses its pointer capture (`A: a drag whose capture is lost…`) failed in two of ten full `test:views` runs of the contents change, and passed in the other eight, in four runs of the untouched HEAD, and when run alone. It is not traced. Treat one failure of it as unproven until a run of the suite shows it again. — answered in [2026-10-29-lostpointercapture-needs-a-pointer-event](lessons/2026-10-29-lostpointercapture-needs-a-pointer-event.md), 2026-10-29

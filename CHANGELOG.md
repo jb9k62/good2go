@@ -3,6 +3,8 @@
 ## Unreleased
 
 - **`good2go questions`: open questions, found and closed deterministically.** A section headed `Open Questions` (the singular is read the same and warned about) holds one `- [ ]` item per question. `good2go questions` lists the open ones by concept with a derived id and line number (`--status answered|all`, `--concept`, `--json`); `check` prints only the problems; `answer <id> --by <concept or file:line>` ticks the box and links where it was answered, and `reopen <id>` undoes it. Questions are marked answered, never deleted. `good2go validate` now fails an answered question with no link that resolves or a repeated question, and prints warnings (singular heading, a bullet with no checkbox, an empty section) without failing. `init` adds a `g2g:questions` script and the concept template documents the section.
+- **Open questions show up where people and agents look.** The session brief says how many are open and where (`Open questions: 2 in okf/`), counted from the Markdown itself; the pure parser moves to `g2g-qparse.mts`, which the brief may import beside `g2g-rank.mts`. The viewer shows a badge on a concept with open questions, a sortable Questions column in the table, and a Questions filter in the Filters panel that the URL carries (`oq=open`).
+- **A flaky viewer test is fixed.** The drag test waited for `lostpointercapture` with no pointer input, which Chromium sometimes holds back; it failed about one run in four.
 - **The viewer's pinned libraries move to Cytoscape 3.34.4, marked 18.1.1 and Mermaid 12.2.0**, with fresh integrity hashes. Mermaid now matches the version `mmdc` resolves, so the parse and render gates accept one dialect.
 
 ## 1.1.0 - 2026-10-23

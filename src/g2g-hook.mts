@@ -5,7 +5,7 @@
  *
  * This file runs from an installed plugin or package, where `node_modules` may not exist, and
  * its output is put in front of an agent. So it follows a hard rule that a test enforces: it
- * imports only `node:` built-ins and ./g2g-rank.mts. It never parses YAML, never imports
+ * imports only `node:` built-ins, ./g2g-rank.mts and ./g2g-qparse.mts (pure, same rule). It never parses YAML, never imports
  * g2g-core.mts, and never runs code from the project. It reads the JSON cache that
  * g2g-edukai.mts writes, and the files that cache names.
  *
@@ -38,6 +38,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
+import { parseQuestions } from './g2g-qparse.mts';
 import { freshness } from './g2g-rank.mts';
 import type { EntryMeta } from './g2g-rank.mts';
 
@@ -702,6 +703,61 @@ export interface Reply {
 const citesFile = (l: LessonRecord, rel: string): boolean =>
   l.sources.some((s) => s.path === rel) || l.checks.some((c) => typeof c.file === 'string' && normalizeRel(c.file) === rel);
 
+// --- open questions -----------------------------------------------------------
+
+const QUESTION_FILES_MAX = 400;
+const QUESTION_FILE_BYTES = 200_000;
+
+/** The bundle folders the project's `.good2go.json` lists, else `okf/`; only folders inside the root. */
+function projectBundles(root: string): string[] {
+  let listed: unknown[] = [];
+  try {
+    const m = JSON.parse(fs.readFileSync(path.join(root, '.good2go.json'), 'utf8')) as { bundles?: unknown; designDir?: unknown };
+    listed = Array.isArray(m.bundles) ? m.bundles : typeof m.designDir === 'string' ? [m.designDir] : [];
+  } catch {
+    listed = ['okf'];
+  }
+  return [...new Set(listed.filter((d): d is string => typeof d === 'string' && /^[a-z0-9][a-z0-9._/-]*$/.test(d) && !d.split('/').includes('..')))];
+}
+
+/** Open questions per bundle folder (only those with some), read from the Markdown itself. */
+export function openQuestionCounts(root: string): Array<{ bundle: string; open: number }> {
+  const out: Array<{ bundle: string; open: number }> = [];
+  let seen = 0;
+  for (const bundle of projectBundles(root)) {
+    const dir = path.join(root, bundle);
+    let open = 0;
+    const walk = (d: string, prefix: string): void => {
+      let entries: fs.Dirent[];
+      try {
+        entries = fs.readdirSync(d, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const e of entries) {
+        if (e.name === 'node_modules' || e.name === '.git' || seen >= QUESTION_FILES_MAX) continue;
+        const rel = prefix ? `${prefix}/${e.name}` : e.name;
+        if (e.isDirectory()) walk(path.join(d, e.name), rel);
+        else if (e.isFile() && e.name.endsWith('.md')) {
+          seen++;
+          try {
+            const full = path.join(d, e.name);
+            if (fs.statSync(full).size > QUESTION_FILE_BYTES) continue;
+            const text = fs.readFileSync(full, 'utf8');
+            if (!/open questions?/i.test(text)) continue;
+            open += parseQuestions(rel, text).questions.filter((q) => !q.answered).length;
+          } catch {
+            /* an unreadable file has no questions to report */
+          }
+        }
+      }
+    };
+    walk(dir, '');
+    if (open > 0) out.push({ bundle, open });
+  }
+  return out;
+}
+
 export function brief(ctx: Context): Reply {
   const where = ctx.bundleLabel;
   const file = sessionFile(ctx.paths, ctx.session);
@@ -738,6 +794,11 @@ export function brief(ctx: Context): Reply {
   }
   if (stopped) tail.push(`Stopped after reading ${BRIEF_MAX_HASHED.toLocaleString('en-GB')} source files; npm run edukai:recheck checks them all.`);
   if (!current) tail.push('edukai: the index is out of date. Run npm run edukai:index.');
+  const questions = openQuestionCounts(ctx.root);
+  const openTotal = questions.reduce((n, q) => n + q.open, 0);
+  if (openTotal) {
+    tail.push(`Open questions: ${questions.map((q) => `${q.open} in ${safe(q.bundle)}/`).join(', ')}. npm run g2g:questions lists them; answer one with its answer command, never by deleting it.`);
+  }
   tail.push(
     'Find a lesson: npm run edukai:search -- search "<words>". Read a domain\'s overview before',
     'working in it. Use the edukai skill to record what you learn.',
@@ -758,7 +819,7 @@ export function brief(ctx: Context): Reply {
     used += line.length + 1;
   }
   const text = [head, ...lines, ...tail].join('\n');
-  return { text, data: { indexed: true, current, lessons: lessons.length, domains, counts, stopped } };
+  return { text, data: { indexed: true, current, lessons: lessons.length, domains, counts, stopped, openQuestions: openTotal } };
 }
 
 const WRONG: State[] = ['broken', 'failed', 'suspect'];

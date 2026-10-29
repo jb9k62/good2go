@@ -7,10 +7,11 @@ confidence: observed
 generated: { by: claude-code/sonnet-5.5, at: 2026-10-11T09:29:38Z }
 verified:
   - { by: claude-code/sonnet-5.5, at: 2026-10-14T18:25:46Z }
-stale_after: 2026-11-13T18:25:46Z
+  - { by: process:edukai-recheck, at: 2026-10-29T14:12:59Z }
+stale_after: 2026-11-28T14:12:59Z
 sources:
   - resource: src/g2g-init.mts
-    digest: sha256:3349ff7df0798f96
+    digest: sha256:e9adbaee2f45b057
 check:
   - { file: src/g2g-shared.mts, contains: "export const MANIFEST = '.good2go.json'" }
   - { file: src/g2g-init.mts, contains: "recordedBundles" }

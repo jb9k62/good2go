@@ -8,12 +8,13 @@ generated: { by: pi/deepseek-ai/DeepSeek-V4.1-Flash, at: 2026-10-08T20:03:17Z }
 verified:
   - { by: pi/deepseek-ai/DeepSeek-V4.1-Flash, at: 2026-10-08T20:07:52Z }
   - { by: claude-code/claude-sonnet-5-5, at: 2026-10-10T17:42:20Z }
-stale_after: 2026-11-09T17:42:20Z
+  - { by: process:edukai-recheck, at: 2026-10-29T14:12:59Z }
+stale_after: 2026-11-28T14:12:59Z
 sources:
   - resource: skills/good2go/references/okf-spec/UPSTREAM.json
     digest: sha256:c381ee8d8c1ab7dd
   - resource: scripts/okf-spec.mts
-    digest: sha256:baf2d274cf038d98
+    digest: sha256:a95beaf7150e83eb
 check:
   - { file: skills/good2go/references/okf-spec/UPSTREAM.json, exists: true }
 ---

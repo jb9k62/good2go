@@ -7,14 +7,14 @@ confidence: observed
 generated: { by: pi/deepseek-ai/DeepSeek-V4.1-Flash, at: 2026-10-08T20:03:17Z }
 verified:
   - { by: pi/deepseek-ai/DeepSeek-V4.1-Flash, at: 2026-10-08T20:07:51Z }
-  - { by: process:edukai-recheck, at: 2026-10-08T20:16:39Z }
+  - { by: process:edukai-recheck, at: 2026-10-29T14:12:59Z }
   - { by: claude-code/claude-sonnet-5-5, at: 2026-10-10T18:14:17Z }
-stale_after: 2026-11-09T18:14:17Z
+stale_after: 2026-11-28T14:12:59Z
 sources:
   - resource: examples/demo/README.md
     digest: sha256:a9a0e8364bf50a83
   - resource: test/edukai.test.mts
-    digest: sha256:d45254cb46d7da7f
+    digest: sha256:53b5df2fb8b9a6aa
 check:
   - { file: examples/demo/README.md, contains: "changed on purpose" }
 ---

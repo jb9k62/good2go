@@ -7,11 +7,12 @@ confidence: observed
 generated: { by: claude-code/opus-5.5, at: 2026-10-23T08:46:00Z }
 verified:
   - { by: claude-code/opus-5.5, at: 2026-10-23T08:47:49Z }
-stale_after: 2026-11-22T08:47:49Z
+  - { by: process:edukai-recheck, at: 2026-10-29T14:12:59Z }
+stale_after: 2026-11-28T14:12:59Z
 supersedes: /tooling-good2go/lessons/2026-10-23-the-views-e2e-search-test-fails-once-the-demo-retry-policy-p.md
 sources:
   - resource: test/views.e2e.mts
-    digest: sha256:50d91a7dbfb7c1a9
+    digest: sha256:1a4b6e337eda0c4e
   - resource: examples/demo/okf/parcel-tracker/retry-policy.md
     digest: sha256:e8b6d46043e715ba
 check:

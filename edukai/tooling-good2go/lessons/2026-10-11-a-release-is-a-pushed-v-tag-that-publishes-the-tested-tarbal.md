@@ -7,12 +7,13 @@ confidence: observed
 generated: { by: claude-code/sonnet-5.5, at: 2026-10-11T09:29:38Z }
 verified:
   - { by: claude-code/sonnet-5.5, at: 2026-10-11T09:30:08Z }
-stale_after: 2026-11-10T09:30:08Z
+  - { by: process:edukai-recheck, at: 2026-10-29T14:12:59Z }
+stale_after: 2026-11-28T14:12:59Z
 sources:
   - resource: .github/workflows/release.yml
-    digest: sha256:23b49b8236e4c64f
+    digest: sha256:daddde790f9737b8
   - resource: docs/RELEASING.md
-    digest: sha256:f59f253809da500f
+    digest: sha256:8b35826ac8dcf3df
 check:
   - { file: .github/workflows/release.yml, contains: "environment: npm" }
   - { file: .github/workflows/release.yml, contains: "--provenance --access public" }

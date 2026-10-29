@@ -8,12 +8,13 @@ generated: { by: pi/deepseek-ai/DeepSeek-V4.1-Flash, at: 2026-10-08T20:03:18Z }
 verified:
   - { by: pi/deepseek-ai/DeepSeek-V4.1-Flash, at: 2026-10-08T20:08:56Z }
   - { by: claude-code/claude-sonnet-5-5, at: 2026-10-23T09:39:28Z }
-stale_after: 2026-11-22T09:39:28Z
+  - { by: process:edukai-recheck, at: 2026-10-29T14:12:59Z }
+stale_after: 2026-11-28T14:12:59Z
 sources:
   - resource: src/g2g-view.mts
-    digest: sha256:97ad44148d220287
+    digest: sha256:49f0fc0ea4c949d5
   - resource: test/views.e2e.mts
-    digest: sha256:50d91a7dbfb7c1a9
+    digest: sha256:1a4b6e337eda0c4e
 check:
   - { file: src/g2g-view.mts, contains: "cdn.jsdelivr.net/npm/mermaid@12." }
   - { file: src/g2g-view.mts, contains: 'integrity="sha384-' }

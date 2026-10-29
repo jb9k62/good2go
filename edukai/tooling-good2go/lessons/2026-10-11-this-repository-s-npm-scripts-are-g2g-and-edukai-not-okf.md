@@ -7,10 +7,11 @@ confidence: observed
 generated: { by: claude-code/sonnet-5.5, at: 2026-10-11T09:29:38Z }
 verified:
   - { by: claude-code/sonnet-5.5, at: 2026-10-11T09:30:09Z }
-stale_after: 2026-11-10T09:30:09Z
+  - { by: process:edukai-recheck, at: 2026-10-29T14:12:59Z }
+stale_after: 2026-11-28T14:12:59Z
 sources:
   - resource: package.json
-    digest: sha256:9e84fa4523d01049
+    digest: sha256:be08d7e6eb564cbe
 check:
   - { file: package.json, contains: "\"g2g:validate\"" }
   - { file: package.json, contains: "\"edukai:brief\"" }

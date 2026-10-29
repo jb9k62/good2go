@@ -503,6 +503,39 @@ describe('viewer views', { timeout: 120_000 }, () => {
     await page.click('[data-view=graph]');
   });
 
+  // The demo's carrier-outage runbook has one open question and one answered; no other concept has any.
+  view('open questions: a table column, a filter that survives a reload, and a badge on the concept', async () => {
+    await page.click('[data-view=table]');
+    const header = await page.$$eval('#concept-table thead th', (ths) => ths.map((t) => t.textContent?.trim()));
+    const col = header.indexOf('Questions') + 1;
+    assert.ok(col > 0, `a Questions column in ${header.join(', ')}`);
+    const counts = (await page.$$eval(`#concept-table tbody tr td:nth-child(${col})`, (cells) => cells.map((c) => c.textContent ?? ''))).filter((t) => t !== '\u2014');
+    assert.deepEqual(counts, ['1'], 'one concept has open questions, and the answered one is not counted');
+    await page.click(`#concept-table th:nth-child(${col}) button`);
+    await page.click(`#concept-table th:nth-child(${col}) button`);
+    assert.match((await page.textContent('#concept-table tbody tr:first-child td:first-child')) ?? '', /carrier/i, 'sorted by open questions, descending');
+
+    await inPanel(page, 'filters', () => page.selectOption('#filter-questions', 'open'));
+    assert.equal(await page.locator('#concept-table tbody tr').count(), 1, 'the filter keeps the concept with open questions');
+    assert.match(await page.evaluate('location.hash'), /oq=open/, 'the filter is in the URL');
+    assert.equal(await page.locator('#filter-chips .filter-chip:has-text("Questions")').count(), 1);
+    const url = page.url();
+    const again = await openViewer({ hash: url.slice(url.indexOf('#')) });
+    try {
+      assert.equal(await again.inputValue('#filter-questions'), 'open', 'a link restores the filter');
+    } finally {
+      await again.context().close();
+    }
+
+    await page.click('[data-view=graph]');
+    const id: string = await page.evaluate("window.BUNDLE.nodes.find((n) => n.data.open_questions > 0).data.id");
+    await page.evaluate(`location.hash = '#' + ${JSON.stringify(id)}`);
+    await hashShown();
+    assert.equal((await page.textContent('#detail-badges .badge.questions'))?.trim(), '1 open question');
+    await resetIfShown(page);
+    await page.click('#clear-filters').catch(() => {});
+  });
+
   view('table rows open with the keyboard', async () => {
     await page.click('[data-view=table]');
     await page.locator('#concept-table tbody tr').nth(3).focus();
@@ -1778,7 +1811,7 @@ describe('viewer keyboard shortcuts', { timeout: 120_000 }, () => {
         search: document.getElementById('search')!.title,
       }));
     const t = await titles();
-    assert.equal(t.filters, 'Search mode, and filters by type, trust and freshness (f)');
+    assert.equal(t.filters, 'Search mode, and filters by type, trust, freshness and open questions (f)');
     assert.equal(t.reading, 'Reading view: hide the graph and widen the concept (r)');
     assert.match(t.theme, /^Switch to (dark|light) theme \(t\)$/);
     assert.equal(t.hood, 'Show only the open concept and the concepts it links to or is linked from (n)');

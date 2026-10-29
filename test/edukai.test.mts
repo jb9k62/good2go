@@ -812,11 +812,11 @@ describe('g2g-hook: checks that cannot finish, and lessons the index no longer d
 });
 
 describe('g2g-hook: the dependency rule', () => {
-  it('imports nothing but node: built-ins and ./g2g-rank.mts', () => {
+  it('imports nothing but node: built-ins, ./g2g-rank.mts and ./g2g-qparse.mts', () => {
     const source = read(HOOK);
     const specifiers = [...source.matchAll(/^\s*(?:import|export)\b[^'"\n]*?from\s+['"]([^'"]+)['"]/gm), ...source.matchAll(/\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g), ...source.matchAll(/\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/g), ...source.matchAll(/^\s*import\s+['"]([^'"]+)['"]/gm)].map((m) => m[1]!);
     assert.ok(specifiers.length >= 5, 'the import scan found the imports');
-    for (const s of specifiers) assert.ok(s.startsWith('node:') || s === './g2g-rank.mts', `g2g-hook.mts must not import ${s}`);
+    for (const s of specifiers) assert.ok(s.startsWith('node:') || s === './g2g-rank.mts' || s === './g2g-qparse.mts', `g2g-hook.mts must not import ${s}`);
     const rank = read(path.join(ASSETS, 'g2g-rank.mts'));
     assert.doesNotMatch(rank, /^\s*import\b|\brequire\s*\(|\bimport\s*\(/m, 'g2g-rank.mts stays pure');
   });
@@ -825,7 +825,7 @@ describe('g2g-hook: the dependency rule', () => {
     // Outside the repo, as an installed plugin is: no node_modules above it.
     const plugin = path.join(outside, 'plugin');
     fs.mkdirSync(plugin, { recursive: true });
-    for (const f of ['g2g-hook.mts', 'g2g-rank.mts']) fs.copyFileSync(path.join(ASSETS, f), path.join(plugin, f));
+    for (const f of ['g2g-hook.mts', 'g2g-rank.mts', 'g2g-qparse.mts']) fs.copyFileSync(path.join(ASSETS, f), path.join(plugin, f));
     const copied = path.join(plugin, 'g2g-hook.mts');
     const proj = fs.realpathSync(fs.mkdtempSync(path.join(outside, 'project-')));
     fs.mkdirSync(path.join(proj, 'node_modules'));
@@ -1521,5 +1521,23 @@ describe('release metadata', () => {
     assert.match(read(GOOD2GO), /edukai: \['g2g-edukai', \[\]\]/);
     assert.match(read(GOOD2GO), /hook: \['g2g-hook', \[\]\]/);
     assert.match(read(path.join(ROOT, 'tsconfig.json')), /"extensions\/\*\.ts"/);
+  });
+});
+
+describe('g2g-hook: open questions in the brief', () => {
+  it('counts the open questions in the project bundles, and says nothing when there are none', () => {
+    const proj = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'oq-brief-')));
+    try {
+      fs.mkdirSync(path.join(proj, 'okf'));
+      fs.mkdirSync(path.join(proj, 'edukai'));
+      fs.writeFileSync(path.join(proj, 'edukai', 'index.md'), '---\nokf_version: "0.2"\n---\n# M\n');
+      assert.equal(edukai(proj, ['index']).code, 0);
+      const run = () => hook(proj, ['brief']).out;
+      assert.doesNotMatch(run(), /Open questions/);
+      fs.writeFileSync(path.join(proj, 'okf', 'a.md'), '---\ntype: Concept\n---\n# A\n\n## Open Questions\n\n- [ ] One?\n- [ ] Two?\n- [x] Three? — answered in [b](b.md), 2026-10-29\n');
+      assert.match(run(), /Open questions: 2 in okf\/\. npm run g2g:questions lists them/);
+    } finally {
+      fs.rmSync(proj, { recursive: true, force: true });
+    }
   });
 });

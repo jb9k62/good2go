@@ -7,14 +7,14 @@ confidence: observed
 generated: { by: pi/deepseek-ai/DeepSeek-V4.1-Flash, at: 2026-10-08T20:03:17Z }
 verified:
   - { by: pi/deepseek-ai/DeepSeek-V4.1-Flash, at: 2026-10-08T20:07:52Z }
-  - { by: process:edukai-recheck, at: 2026-10-08T20:16:39Z }
+  - { by: process:edukai-recheck, at: 2026-10-29T14:12:59Z }
   - { by: claude-code/claude-sonnet-5-5, at: 2026-10-10T18:14:16Z }
-stale_after: 2026-11-09T18:14:16Z
+stale_after: 2026-11-28T14:12:59Z
 sources:
   - resource: tsconfig.json
-    digest: sha256:f97ed0c469a14703
+    digest: sha256:75b20ab1dcc92922
   - resource: package.json
-    digest: sha256:c8a3b5ec8cc3d1de
+    digest: sha256:be08d7e6eb564cbe
 check:
   - { file: tsconfig.json, matches: erasableSyntaxOnly }
   - { file: package.json, matches: '"node": ">=24"' }

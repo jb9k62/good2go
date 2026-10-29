@@ -7,12 +7,13 @@ confidence: observed
 generated: { by: claude-code/sonnet-5.5, at: 2026-10-11T09:29:37Z }
 verified:
   - { by: claude-code/sonnet-5.5, at: 2026-10-11T09:30:08Z }
-stale_after: 2026-11-10T09:30:08Z
+  - { by: process:edukai-recheck, at: 2026-10-29T14:12:59Z }
+stale_after: 2026-11-28T14:12:59Z
 sources:
   - resource: package.json
-    digest: sha256:9e84fa4523d01049
+    digest: sha256:be08d7e6eb564cbe
   - resource: src/good2go.mts
-    digest: sha256:72c3d66ff5a71c51
+    digest: sha256:4719d1afaf65ef1a
   - resource: scripts/build.mts
     digest: sha256:d55e703a3e5c2cb3
 check:

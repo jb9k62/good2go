@@ -29,6 +29,7 @@ learn with the edukai skill. Before finishing, run `npm run edukai:recheck`.
 | `src/g2g-view.mts` | Validator + graph viewer; emits one `viz.html` (~4500 lines) that loads its four libraries from pinned CDNs |
 | `src/g2g-mermaid.mts` | Mermaid parse gate and headless-Chromium render gate |
 | `src/g2g-search.mts` | Ranked, freshness-aware search (`search`, `show`, `related`, `facets`, `stale`) with an on-disk cache |
+| `src/g2g-questions.mts` | Open questions: `good2go questions` lists them, `check` reports problems, `answer`/`reopen` mark one. The parsing is in `g2g-qparse.mts` (pure, shared with the session brief in `g2g-hook.mts`) |
 | `src/g2g-rank.mts` | The ranking and its inverted index: pure, no imports. Run by `g2g-search` and inlined (types stripped) into `viz.html` for its search box |
 | `src/g2g-core.mts` | Parsing shared by the viewer and search: frontmatter, trust tier, staleness, links. Loads `yaml` on the first parse, so a search answered from its cache never loads it |
 | `src/g2g-edukai.mts` | The memory bundle's tool: `new`, `verify`, `supersede`, `index`, `recheck`. Writes the cache the hooks read |
@@ -104,8 +105,8 @@ do not prove it reads well.
 - **`g2g-rank.mts` must stay pure** (no imports, no `fs`/`path`/`process`/DOM): the viewer inlines
   it into the page, so one ranking serves the CLI and the search box.
 
-- **`g2g-hook.mts` must stay dependency-free**: it imports only `node:` built-ins and
-  `./g2g-rank.mts`, never `g2g-core.mts` or `yaml`, and never runs code from the project. It
+- **`g2g-hook.mts` must stay dependency-free**: it imports only `node:` built-ins,
+  `./g2g-rank.mts` and `./g2g-qparse.mts` (the pure open-questions parser, same rule), never `g2g-core.mts` or `yaml`, and never runs code from the project. It
   runs from the installed package, and its output is put in front of an agent. A test enforces the imports and runs it outside the repo.
 - **The demo's memory bundle is pinned.** Lessons in `examples/demo/edukai/` hold digests of
   files under `examples/demo/` (source files, and `okf/adr/0002-…` and `okf/parcel-tracker/api.md` (the demo keeps the default `okf/` folder, as a project scaffolded with the defaults has)).

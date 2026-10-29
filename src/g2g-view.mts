@@ -50,6 +50,7 @@ import {
 } from './g2g-core.mts';
 import type { Evidence, Frontmatter } from './g2g-core.mts';
 import { checkProblem, CONFIDENCES } from './g2g-hook.mts';
+import { parseQuestions } from './g2g-qparse.mts';
 import { readQuestions } from './g2g-questions.mts';
 import { helpFromComment, siblingFile } from './g2g-shared.mts';
 
@@ -75,6 +76,8 @@ interface Concept {
   sources: object[];
   trust_tier: string;
   stale: boolean;
+  open_questions: number;
+  answered_questions: number;
   body: string;
   links_to: string[];
 }
@@ -244,6 +247,7 @@ function walkBundle(
       : fm.sources && typeof fm.sources === 'object'
         ? [fm.sources]
         : [];
+    const questionsIn = parseQuestions(rel, text).questions;
     concepts.push({
       id: rel.replace(/\.md$/, ''),
       type: String(fm.type),
@@ -266,6 +270,8 @@ function walkBundle(
       sources,
       trust_tier: trustTier(fm),
       stale: isStale(fm, today),
+      open_questions: questionsIn.filter((q) => !q.answered).length,
+      answered_questions: questionsIn.filter((q) => q.answered).length,
       body: doc.body,
       links_to: extractLinks(doc.body, path.dirname(full), bundleRoot),
     });
@@ -689,6 +695,8 @@ function buildGraph(concepts: Concept[]): Graph {
       sources: c.sources,
       trust_tier: c.trust_tier,
       stale: c.stale,
+      open_questions: c.open_questions,
+      answered_questions: c.answered_questions,
       color: TYPE_PALETTE[c.type] ?? DEFAULT_NODE_COLOR,
       // Sized by how many concepts link here, so hubs stand out.
       size: Math.min(56, 24 + 6 * (inDegree.get(c.id) ?? 0)),
@@ -795,7 +803,7 @@ ${CSS}
       <button type="button" data-view="table" aria-pressed="false">Table</button>
     </div>
     <div class="popover-wrap">
-      <button id="filters-toggle" type="button" aria-expanded="false" aria-controls="filters-panel" title="Search mode, and filters by type, trust and freshness (f)">Filters <span id="filters-count" class="count-badge" hidden>0</span></button>
+      <button id="filters-toggle" type="button" aria-expanded="false" aria-controls="filters-panel" title="Search mode, and filters by type, trust, freshness and open questions (f)">Filters <span id="filters-count" class="count-badge" hidden>0</span></button>
       <div id="filters-panel" class="popover" role="group" aria-label="Filters" hidden>
         <label class="field"><span>Search mode</span>
           <select id="search-mode" title="Ranked: relevance, with stale and unverified concepts ranked lower. Contains: a plain match on title, path or tag.">
@@ -820,6 +828,12 @@ ${CSS}
             <option value="fresh">Not stale</option>
             <option value="soon">Stale within 30 days</option>
             <option value="stale">Stale</option>
+          </select>
+        </label>
+        <label class="field"><span>Questions</span>
+          <select id="filter-questions">
+            <option value="">Any concept</option>
+            <option value="open">Has open questions</option>
           </select>
         </label>
         <button id="clear-filters" type="button" disabled>Clear filters</button>
@@ -1393,12 +1407,14 @@ body[data-view="tree"] #legend {
 .badge.trust-machine-confirmed { background: #dbeafe; color: #1e40af; }
 .badge.trust-unverified { background: #fef3c7; color: #92400e; }
 .badge.status-draft { background: #fef3c7; color: #92400e; }
+.badge.questions { background: #fef3c7; color: #92400e; }
 .badge.status-deprecated, .badge.stale { background: #fee2e2; color: #991b1b; }
 :root[data-theme="dark"] .badge.trust-human-reviewed { background: #2e1065; color: #c4b5fd; }
 :root[data-theme="dark"] .badge.trust-machine-confirmed { background: #172554; color: #93c5fd; }
 :root[data-theme="dark"] .badge.trust-unverified,
 :root[data-theme="dark"] .badge.status-draft { background: #422006; color: #fcd34d; }
 :root[data-theme="dark"] .badge.status-deprecated,
+:root[data-theme="dark"] .badge.questions { background: #451a03; color: #fcd34d; }
 :root[data-theme="dark"] .badge.stale { background: #450a0a; color: #fca5a5; }
 .provenance { margin-top: 14px; font-size: 13px; }
 .provenance summary { cursor: pointer; color: var(--text-muted); }
@@ -2013,7 +2029,7 @@ const JS = `
   }
 
   // --- Route: the URL hash carries the concept, section, search modal and filters ---
-  // Grammar: #<concept-id>[?<params>], params s, search, q, mode, type, trust, fresh.
+  // Grammar: #<concept-id>[?<params>], params s, search, q, mode, type, trust, fresh, oq.
   // go() is the only writer that pushes history; syncRoute() is the only writer that replaces it.
   // Nothing writes the URL before the initial load has applied it.
   let routeReady = false;
@@ -2036,6 +2052,7 @@ const JS = `
       type: params.get("type") || "",
       trust: params.get("trust") || "",
       fresh: params.get("fresh") || "",
+      oq: params.get("oq") || "",
     };
   }
 
@@ -2049,6 +2066,7 @@ const JS = `
     if (route.type) params.set("type", route.type);
     if (route.trust) params.set("trust", route.trust);
     if (route.fresh) params.set("fresh", route.fresh);
+    if (route.oq) params.set("oq", route.oq);
     const query = params.toString();
     return "#" + encodeURI(route.id).replace(/\\?/g, "%3F") + (query ? "?" + query : "");
   }
@@ -2065,6 +2083,7 @@ const JS = `
       type: $("filter-type").value,
       trust: $("filter-trust").value,
       fresh: $("filter-fresh").value,
+      oq: $("filter-questions").value,
     };
   }
 
@@ -2099,6 +2118,7 @@ const JS = `
       setSelectTo($("filter-type"), route.type);
       setSelectTo($("filter-trust"), route.trust);
       setSelectTo($("filter-fresh"), route.fresh);
+      setSelectTo($("filter-questions"), route.oq);
       applyFilters();
     }
     const id = initial && !byId[route.id] ? fallbackId() : route.id;
@@ -2141,6 +2161,7 @@ const JS = `
     if (data.status !== "stable") badges.push(badge(data.status, "status-" + data.status));
     badges.push(badge(data.trust_tier.replaceAll("-", " "), "trust-" + data.trust_tier));
     if (data.stale) badges.push(badge("stale since " + data.stale_after.slice(0, 10), "stale"));
+    if (data.open_questions) badges.push(badge(data.open_questions + (data.open_questions === 1 ? " open question" : " open questions"), "questions"));
     for (const tag of data.tags) badges.push(badge(tag, "tag"));
     $("detail-badges").replaceChildren(...badges);
 
@@ -3066,6 +3087,7 @@ const JS = `
 
   function passesFilters(d) {
     if (!Rank.matchesFilters(metaById[d.id], filtersNow, searchedAt)) return false;
+    if ($("filter-questions").value === "open" && !d.open_questions) return false;
     if (rankedIds) return rankedIds.has(d.id);
     const query = $("search").value.trim().toLowerCase();
     if (query === "" || $("search-mode").value === "ranked") return true;
@@ -3483,6 +3505,7 @@ const JS = `
   });
   $("filter-trust").addEventListener("change", applyFilters);
   $("filter-fresh").addEventListener("change", applyFilters);
+  $("filter-questions").addEventListener("change", applyFilters);
   $("filter-type").addEventListener("change", applyFilters);
 
   $("layout").addEventListener("change", () => {
@@ -3495,6 +3518,7 @@ const JS = `
     { id: "filter-type", label: "Type" },
     { id: "filter-trust", label: "Trust" },
     { id: "filter-fresh", label: "Freshness" },
+    { id: "filter-questions", label: "Questions" },
   ];
   const panels = [
     { button: $("filters-toggle"), panel: $("filters-panel") },
@@ -3816,6 +3840,7 @@ const JS = `
     { key: "tags", label: "Tags", value: (d) => d.tags.join(" ").toLowerCase() },
     { key: "in", label: "In", num: true, value: (d) => (backlinks[d.id] || []).length },
     { key: "out", label: "Out", num: true, value: (d) => (outLinks[d.id] || []).length },
+    { key: "questions", label: "Questions", num: true, value: (d) => d.open_questions || 0 },
     // Only while a ranked query is active: how well each concept matches it.
     { key: "match", label: "Match", num: true, value: (d) => (rankedIds && rankedIds.has(d.id) ? ranking.find((h) => h.entry.id === d.id).score : 0) },
   ];
@@ -3887,6 +3912,7 @@ const JS = `
         cell(d.tags.join(", ")),
         cell(String((backlinks[d.id] || []).length), "num"),
         cell(String((outLinks[d.id] || []).length), "num"),
+        cell(d.open_questions ? String(d.open_questions) : "\u2014", d.open_questions ? "num" : "num muted"),
       );
       if (rankedIds) tr.append(cell((scores.get(d.id) || 0).toFixed(2), "num"));
       return tr;
@@ -3943,6 +3969,7 @@ const JS = `
     $("filter-type").value = "";
     $("filter-trust").value = "";
     $("filter-fresh").value = "";
+    $("filter-questions").value = "";
     userSorted = false;
     applyFilters();
     clearFocus();

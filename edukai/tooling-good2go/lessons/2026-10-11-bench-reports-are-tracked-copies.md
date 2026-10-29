@@ -7,10 +7,11 @@ confidence: observed
 generated: { by: claude-code/sonnet-5.5, at: 2026-10-11T11:40:31Z }
 verified:
   - { by: claude-code/sonnet-5.5, at: 2026-10-11T11:40:31Z }
-stale_after: 2026-11-10T11:40:31Z
+  - { by: process:edukai-recheck, at: 2026-10-29T14:12:59Z }
+stale_after: 2026-11-28T14:12:59Z
 sources:
   - resource: .gitignore
-    digest: sha256:d6e13ba8e933ba02
+    digest: sha256:91885cce33a99610
   - resource: test/bench/reports/2026-10-11-sonnet-5-5.md
     digest: sha256:3a5beb117ded2948
 check:

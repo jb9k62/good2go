@@ -16,6 +16,8 @@ on:
       - src/g2g-core.mts
       - src/g2g-rank.mts
       - src/g2g-hook.mts
+      - src/g2g-questions.mts
+      - src/g2g-qparse.mts
       # The widget bundle inlined into the viewer and built by the screenshots script.
       - src/templates/okf-widgets/**
       # The bundle the shots are taken from, and the tool that takes them.

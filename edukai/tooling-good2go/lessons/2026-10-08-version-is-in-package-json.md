@@ -7,14 +7,15 @@ confidence: observed
 generated: { by: pi/deepseek-ai/DeepSeek-V4.1-Flash, at: 2026-10-08T20:03:17Z }
 verified:
   - { by: claude-code/claude-sonnet-5-5, at: 2026-10-10T18:14:16Z }
-stale_after: 2026-11-09T18:14:16Z
+  - { by: process:edukai-recheck, at: 2026-10-29T14:12:59Z }
+stale_after: 2026-11-28T14:12:59Z
 sources:
   - resource: package.json
-    digest: sha256:c8a3b5ec8cc3d1de
+    digest: sha256:be08d7e6eb564cbe
   - resource: package-lock.json
-    digest: sha256:b67ed47f532f0d3f
+    digest: sha256:14d6ec837229563d
   - resource: src/g2g-shared.mts
-    digest: sha256:481b36a303a50c94
+    digest: sha256:22156453a4ae53da
 check:
   - { file: package.json, contains: '"version": "' }
   - { file: package-lock.json, contains: '"version": "' }

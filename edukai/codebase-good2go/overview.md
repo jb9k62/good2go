@@ -3,7 +3,7 @@ type: Overview
 title: The good2go codebase
 description: What each tool and adapter must never do, and why
 tags: [overview, codebase, invariants]
-generated: { by: claude-code/claude-haiku-5-5, at: 2026-10-11T12:23:04Z }
+generated: { by: claude-code/claude-sonnet-5-5, at: 2026-10-29T14:13:36Z }
 ---
 
 good2go is an npm package, `@jb9k62/good2go` (not yet published; see the tooling overview).
@@ -15,7 +15,7 @@ this codebase is to learn what each file must *not* do, and why.
 Start with the two strictest files. `g2g-rank.mts` imports nothing at all. The viewer strips
 its types and pastes it into `viz.html` as a plain script, so the command line and the search
 box share one ranking. A single import would break that. `g2g-hook.mts` is nearly as
-strict: `node:` built-ins and `./g2g-rank.mts`, and nothing else. It runs from the installed
+strict: `node:` built-ins, `./g2g-rank.mts` and `./g2g-qparse.mts` (the pure parser for open questions, so the session brief can count them), and nothing else. It runs from the installed
 package in projects whose `node_modules` may not exist, and whatever it prints is put in
 front of an agent.
 
@@ -41,15 +41,16 @@ so a new widget is not done until a tour uses it.
 - [good2go hooks is the only route to the memory hooks](/codebase-good2go/lessons/2026-10-11-good2go-hooks-is-the-only-route-to-the-memory-hooks.md)
 - [good2go hooks installs at user, project or local scope](/codebase-good2go/lessons/2026-10-11-good2go-hooks-installs-at-user-project-or-local-scope.md)
 - [g2g-rank.mts imports nothing so the viewer can inline it](/codebase-good2go/lessons/2026-10-08-rank-has-no-imports.md)
-- [g2g-hook.mts imports only node: built-ins and g2g-rank.mts](/codebase-good2go/lessons/2026-10-08-hook-is-dependency-free.md)
+- [g2g-hook.mts imports only node: built-ins, g2g-rank.mts and g2g-qparse.mts](/codebase-good2go/lessons/2026-10-08-hook-is-dependency-free.md)
 - [The viewer loads its libraries from a pinned CDN](/codebase-good2go/lessons/2026-10-08-viewer-uses-a-pinned-cdn.md)
 - [The viewer's browser script sits in a template literal, so a backtick in it breaks the typecheck and the viewer](/codebase-good2go/lessons/2026-10-11-the-viewer-s-browser-script-sits-in-a-template-literal-so-a.md)
 - [The reading pane's rail is set from a ResizeObserver, because an ancestor with a containment or transform would clip an expanded diagram](/codebase-good2go/lessons/2026-10-11-the-reading-pane-s-rail-is-set-from-a-resizeobserver-because.md)
 - [The reading pane's contents are built from its rendered headings, so each entry lands on its anchor](/codebase-good2go/lessons/2026-10-11-the-reading-pane-s-contents-are-built-from-its-rendered-head.md)
+- [Open questions are parsed by g2g-qparse.mts, shared by the command, validate, the brief and the viewer](/codebase-good2go/lessons/2026-10-29-open-questions-parser-is-shared.md)
 - [The harness adapters call good2go hook, not a file path](/codebase-good2go/lessons/2026-10-08-adapters-call-good2go-hook.md)
 - [Every registered widget must appear in a demo tour](/codebase-good2go/lessons/2026-10-08-every-widget-has-a-tour.md)
 
 ## Open questions
 
-- Project-scope hooks use POSIX shell, so Windows needs Git Bash or WSL; not tested here.
-- `good2go hooks` has no test for a harness started with a different `PATH`.
+- [ ] Project-scope hooks use POSIX shell, so Windows needs Git Bash or WSL; not tested here.
+- [ ] `good2go hooks` has no test for a harness started with a different `PATH`.

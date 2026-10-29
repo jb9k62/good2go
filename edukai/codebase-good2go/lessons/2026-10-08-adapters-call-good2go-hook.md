@@ -7,12 +7,13 @@ confidence: observed
 generated: { by: pi/deepseek-ai/DeepSeek-V4.1-Flash, at: 2026-10-08T20:03:18Z }
 verified:
   - { by: claude-code/claude-sonnet-5-5, at: 2026-10-10T18:14:14Z }
-stale_after: 2026-11-09T18:14:14Z
+  - { by: process:edukai-recheck, at: 2026-10-29T14:12:59Z }
+stale_after: 2026-11-28T14:12:59Z
 sources:
   - resource: extensions/edukai.ts
     digest: sha256:81038f6a950757c0
   - resource: src/g2g-install-hooks.mts
-    digest: sha256:1791b61926fdc5a5
+    digest: sha256:101c029c8251e17c
 check:
   - { file: extensions/edukai.ts, contains: "pi.exec('good2go'" }
   - { file: src/g2g-install-hooks.mts, contains: "const USER_COMMAND = 'good2go hook run'" }
