@@ -37,7 +37,8 @@ same ranking `npm run g2g:search` gives an agent on the command line.
 | --- | --- |
 | **A doc pack** | `okf/` with an index, a dated log, decision records (ADRs) and concept folders, plus templates for concepts and guided tours |
 | **A validator** | Every concept has a type, every internal link resolves, every timestamp is a real datetime; every ER diagram has its relationship key (`g2g:fix` writes it); trust tiers (unverified, human-reviewed) and staleness derived from frontmatter |
-| **A viewer** | One `viz.html` with no build step: searchable graph with switchable layouts, tree and table views, a neighbourhood focus, colouring by type, trust or freshness, reading pane with a contents list, Mermaid diagrams with pan and zoom, light and dark themes, deep links |
+| **Open questions** | An `Open Questions` section of `- [ ]` items in any concept; `good2go questions` lists them, `answer` ticks one and links where it was settled, and the validator fails an answer with no link |
+| **A viewer** | One `viz.html` with no build step: searchable graph with switchable layouts, tree and table views, a neighbourhood focus, colouring by type, trust or freshness, reading pane with a contents list, Mermaid diagrams with pan and zoom, light and dark themes, deep links, and a badge and filter for concepts with open questions |
 | **Quality gates** | Diagrams parsed by the real Mermaid parser, then rendered in headless Chromium, with quizzes and widgets clicked; one exit-code contract (0 pass, 1 broken, 2 could not run) |
 | **Interactive explainers** | Callouts, click-to-check quizzes, and React widgets that let a reader change the inputs and watch the system respond |
 | **Agent memory** (opt-in) | `edukai/`: one-claim lessons pinned to the files they rest on, a re-check that finds the ones that stopped being true, and hooks for Claude Code and pi that tell the agent |
@@ -196,6 +197,7 @@ npm run g2g:view -- edukai  # ... or opens one bundle (a folder, or the last par
 npm run g2g:mermaid         # every diagram parses
 npm run g2g:mermaid:render  # every diagram renders, every quiz and widget works
 npm run g2g:search -- search "retry policy" --fresh   # ranked, freshness-aware lookup for agents
+npm run g2g:questions       # open questions in the bundle; `answer <id> --by <where>` closes one
 
 npm run edukai:index        # with --edukai: the syllabus, and the cache the hooks read
 npm run edukai:recheck      # lessons that need an agent: broken, failed, suspect, stale

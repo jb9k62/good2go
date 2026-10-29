@@ -1,5 +1,8 @@
 # Bundle update log
 
+## 2026-10-29
+* **Added**: open questions. `good2go questions` finds, answers and reopens them; the session brief counts them and the viewer badges and filters them. See [the tools](/good2go/tools.md) and [the viewer](/good2go/viewer.md).
+
 ## 2026-10-23
 * **Decided**: micro-worlds teach a concept as a ladder of small widgets: by hand, then the
   surprise predicted first, then at scale ([ADR-0009](/adr/0009-micro-worlds-teach-in-ladders.md)).

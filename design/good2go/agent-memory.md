@@ -73,7 +73,7 @@ harnesses handle the same three from the same core file:
 
 | Moment | Command | What it says |
 | --- | --- | --- |
-| a session opens, or is compacted | `brief` | the domains, their lesson counts and their overviews, plus what needs an agent. Titles and pointers only, never a lesson's text |
+| a session opens, or is compacted | `brief` | the domains, their lesson counts and their overviews, how many open questions the bundles hold and where, plus what needs an agent. Titles and pointers only, never a lesson's text |
 | the agent reads or edits a file a lesson cites | `cites` | the lessons that rest on that file, with the state of any that is in the re-check queue. Once per session |
 | the agent is about to finish having broken a lesson | `debt` | the lesson its own change left wrong. Named once per session, so it cannot loop |
 
@@ -84,7 +84,7 @@ harnesses handle the same three from the same core file:
 silent on any error. In a project with no `edukai/index.md`, the hooks do nothing.
 
 The core file must stay dependency-free, because it runs from an installed plugin where the
-project's `node_modules` may not exist. It imports only `node:` built-ins and `./g2g-rank.mts`
+project's `node_modules` may not exist. It imports only `node:` built-ins, `./g2g-rank.mts` and `./g2g-qparse.mts`
 ([the tools](/good2go/tools.md)).
 
 ## Where it is exercised

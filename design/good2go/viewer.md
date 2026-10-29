@@ -59,6 +59,7 @@ writes its own widgets beside them.
   switches between type, trust and freshness.
 - **Ranked search in a modal**, with the same ranking as `g2g-search`: results on the left, a
   preview on the right, with type, trust and freshness filters and a plain "contains" mode.
+- **Open questions.** A badge on a concept that has any, a sortable Questions column in the table, and a Questions filter in the Filters panel that the URL carries (`oq=open`).
 - **Mermaid diagrams**, rendered one at a time. A diagram that fails shows a visible error
   and its source. Each has pan/zoom controls, which the render gate checks are wired.
 - **Callouts** (`> [!definition] Term`), click-to-check quizzes, and widgets.

@@ -43,8 +43,10 @@ runs them with the `good2go` command; this repository runs the sources.
 | `g2g-search.mts` | Ranked, freshness-aware search over a bundle. Commands `facets`, `search`, `show`, `related`, `stale`; `--bundle`, `--json`, `--explain`, `--no-cache`, `--strict` |
 | `g2g-core.mts` | Parsing shared by the viewer and search: frontmatter, trust tier, staleness, links. Loads `yaml` on the first parse, so a search answered from its cache never loads it |
 | `g2g-rank.mts` | The ranking and its inverted index. Run by `g2g-search`, and inlined into `viz.html` for the viewer's search box |
+| `g2g-questions.mts` | Open questions: `good2go questions` lists them (`--status`, `--concept`, `--json`), `check` reports problems (`--strict` fails on warnings), `answer <id> --by <where>` and `reopen <id>` |
+| `g2g-qparse.mts` | The pure open-questions parser, shared by `g2g-questions` and the session brief |
 | `g2g-edukai.mts` | The memory bundle's tool: `new`, `verify`, `supersede`, `index`, `recheck`. `verify`, `supersede` and `recheck` also work on a design bundle with `--bundle okf` |
-| `g2g-hook.mts` | What the harness adapters run (`brief`, `cites`, `debt`, `hook`) and the code that derives a lesson's state |
+| `g2g-hook.mts` | What the harness adapters run (`brief`, `cites`, `debt`, `hook`) and the code that derives a lesson's state. The brief also counts open questions |
 | `g2g-start.mjs` | Loaded first by this repository's own npm scripts: turns on Node's compile cache, so a tool's TypeScript is stripped once. Not copied to projects, and not in the package |
 
 ## The rules each must keep
@@ -56,8 +58,8 @@ depends on, and the test suite enforces the first two.
   or the DOM. The viewer inlines it into the page with its types stripped, so one ranking
   serves the CLI and the search box. An import here would either break the page or force a
   bundler on it ([ADR-0004](/adr/0004-viz-html-stays-one-file.md)).
-- **`g2g-hook.mts` stays dependency-free.** It imports only `node:` built-ins and
-  `./g2g-rank.mts`, never `g2g-core.mts` or `yaml`, and it never runs code from the project.
+- **`g2g-hook.mts` stays dependency-free.** It imports only `node:` built-ins,
+  `./g2g-rank.mts` and `./g2g-qparse.mts` (pure, same rule), never `g2g-core.mts` or `yaml`, and it never runs code from the project.
   It runs from an installed plugin where the project's `node_modules` may not exist, and its
   output is put in front of an agent. A test runs it outside the repository to prove it. The
   plugin keeps its own copy, so the package never supplies the hook.
