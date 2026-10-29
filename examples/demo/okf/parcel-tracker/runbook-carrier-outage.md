@@ -16,3 +16,8 @@ generated: { by: example-agent/1.0, at: 2026-10-01T09:00:00Z }
 4. When it recovers, watch the poll success rate; it should climb gradually, not spike.
 
 See the [architecture](/parcel-tracker/architecture.md) for where the poller sits.
+
+## Open Questions
+
+- [ ] Should the banner appear sooner for carriers that handle most of our parcels?
+- [x] Do we page anyone? — answered in [the retry policy](/parcel-tracker/retry-policy.md), 2026-10-20

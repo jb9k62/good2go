@@ -42,7 +42,7 @@ scaffolds the design bundle, adds the `okf:*` npm scripts and copies these skill
 Run `good2go --help` for every command and `good2go init --help`, `good2go new --help`,
 `good2go search --help` and `good2go edukai --help` for their flags.
 The scaffolded scripts are the checks: `npm run g2g:fix`, `g2g:validate`, `g2g:build-view`,
-`g2g:view`, `g2g:mermaid`, `g2g:mermaid:render`, `g2g:search`, `g2g:recheck`. The Mermaid
+`g2g:view`, `g2g:mermaid`, `g2g:mermaid:render`, `g2g:search`, `g2g:recheck`, `g2g:questions`. The Mermaid
 gates need `npm i -D @mermaid-js/mermaid-cli@11 playwright && npx playwright install chromium`;
 without them they exit 2 ("could not run"). A plain re-run of `init` keeps authored files and refreshes the skills copies you have not edited.
 
@@ -95,6 +95,17 @@ Do not read a whole bundle to answer a question. `npm run g2g:search -- <command
 concepts by text and by what the spec says about them (trust tier, stale, deprecated, links):
 `facets`, `search "query"`, `show <id> --outline` then `--section`, `related`, `stale`. Treat a
 `stale` or `unverified` hit as a lead to check, not a fact. See the playbook's "Finding concepts".
+
+## Open questions
+
+Unsettled points go under a `## Open Questions` heading in the concept they belong to, one
+`- [ ]` item per question (`Open Question` is read the same but warned about). Do not hunt for
+them by reading: run `npm run g2g:questions -- --json` for every open question with its id,
+concept and line. When the bundle or the code answers one, propose
+`npm run g2g:questions -- answer <id> --by <concept or file:line>` to the user rather than
+marking it silently; it ticks the box and links the answer, and `reopen <id>` undoes it. Never
+delete a question to close it. `g2g:validate` fails an answered question with no link that
+resolves, and warns about a bullet with no checkbox.
 
 ## Writing rules
 

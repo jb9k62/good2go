@@ -264,6 +264,7 @@ describe('bootstrap --design-dir', () => {
     assert.equal(s['g2g:view'], 'good2go open');
     assert.equal(s['g2g:mermaid'], 'good2go mermaid docs-bundle');
     assert.equal(s['g2g:recheck'], 'good2go recheck --bundle docs-bundle');
+    assert.equal(s['g2g:questions'], 'good2go questions --bundle docs-bundle');
     assert.equal(JSON.parse(read(path.join(dir, '.good2go.json'))).designDir, 'docs-bundle');
     assert.equal(run(GOOD2GO, ['validate', 'docs-bundle', '--strict'], dir).code, 0);
 

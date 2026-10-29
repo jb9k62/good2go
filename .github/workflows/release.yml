@@ -85,3 +85,25 @@ jobs:
           name: release-tarball
       # The tarball the verify job built and smoke-tested, not a second build.
       - run: npm publish ./release.tgz --provenance --access public
+
+  # The GitHub release, named "Good2Go X.Y.Z", with the notes from that version's CHANGELOG
+  # section. Runs only after the npm publish, in its own job so `contents: write` is held by
+  # nothing that builds or publishes.
+  github-release:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          version="${TAG#v}"
+          awk -v v="$version" '/^## /{p = ($2 == v)} p && !/^## /' CHANGELOG.md > notes.md
+          [ -s notes.md ] || { echo "no CHANGELOG section for $version" >&2; exit 1; }
+          gh release create "$TAG" --title "Good2Go $version" --notes-file notes.md --verify-tag

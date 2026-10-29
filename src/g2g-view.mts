@@ -50,6 +50,7 @@ import {
 } from './g2g-core.mts';
 import type { Evidence, Frontmatter } from './g2g-core.mts';
 import { checkProblem, CONFIDENCES } from './g2g-hook.mts';
+import { readQuestions } from './g2g-questions.mts';
 import { helpFromComment, siblingFile } from './g2g-shared.mts';
 
 interface Issue {
@@ -4698,6 +4699,13 @@ async function main() {
     );
   }
   const { concepts, issues, reserved } = walkBundle(bundleRoot, new Date());
+  // Open questions: an answer without a link that resolves is an issue; the rest are warnings,
+  // printed beside the issues and never failing the run.
+  const questions = readQuestions(bundleRoot);
+  for (const p of questions.problems) {
+    if (p.level === 'error') issues.push({ file: p.file, kind: 'open-question', message: `line ${p.line}: ${p.message}` });
+  }
+  const questionWarnings = questions.problems.filter((p) => p.level === 'warning');
   const graph = buildGraph(concepts);
   const outPath = opts.out
     ? path.resolve(opts.out)
@@ -4723,6 +4731,10 @@ async function main() {
     console.log(
       '  ✓ every non-reserved .md has a type, and every internal link resolves',
     );
+  }
+  if (questionWarnings.length) {
+    console.log('\nOpen questions (warnings):');
+    for (const w of questionWarnings) console.log(`  ! ${w.file}:${w.line}  ${w.message}`);
   }
   console.log(`  trust tiers: ${countBy(concepts, 'trust_tier')}`);
   console.log(`  statuses   : ${countBy(concepts, 'status')}`);

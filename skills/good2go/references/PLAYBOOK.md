@@ -224,6 +224,31 @@ date. A cache under `node_modules/.cache/g2g-search/` (or the OS temp dir) is ke
 file's mtime and size, re-checked on every run; `--no-cache` skips it. Files it cannot index
 (bad frontmatter, no `type`) are named on stderr; `--strict` makes that exit 1.
 
+### Open questions (`good2go questions`)
+
+A section headed `Open Questions` (the singular is read the same and warned about; any heading
+level, any case) lists what a concept leaves unsettled, one list item each:
+
+```
+- [ ] Should retries be capped per parcel?
+- [x] Which carrier API? — answered in [ADR-0003](../adr/0003-carrier.md), 2026-10-29
+```
+
+- `[ ]` is open, `[x]` answered. An answered question links to where the answer lives: a
+  concept in the bundle, or a file in the project (`src/retry.mts#L42`). A bullet with no
+  checkbox counts as open and is warned about.
+- Close a question by answering it, never by deleting it, so the record of what was asked and
+  where it was settled stays. `good2go questions answer <id> --by <where>` ticks the box and
+  writes the link; `reopen <id>` undoes it.
+- An id is derived from the concept and the question's text, so nothing is stored in the
+  Markdown; rewording a question changes its id. `good2go questions --json` is the agent's
+  entry: every open question with id, concept and line, no reading of whole concepts.
+- `g2g:validate` fails an answered question with no link, a link to a missing file, and two
+  identical questions in one concept. Warnings (singular heading, no checkbox, an empty
+  section) print but do not fail unless `good2go questions --strict`.
+- What stays with the agent: deciding whether the bundle already answers a question, and
+  grouping or summarising a long list. It proposes the `answer` command; a person confirms.
+
 ### Bundles: design (`okf/` by default) and memory (`edukai/`)
 
 `good2go init --edukai` (also on a project that already has a design bundle) adds a second OKF bundle,

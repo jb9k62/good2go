@@ -58,6 +58,8 @@ Do this once, before the first automated release.
    checks, packs the tarball, smoke-tests it and uploads it. Then the `publish` job waits for
    approval in the `npm` environment and publishes that same tarball (it does not build again).
    Approve it only after `verify` has passed.
+   Once it has published, the `github-release` job creates the GitHub release, titled
+   `Good2Go X.Y.Z`, with that version's `CHANGELOG.md` section as its notes.
 7. Confirm the release: `npm view @jb9k62/good2go version`, and `npm audit signatures` in a
    scratch project after `npm install @jb9k62/good2go`.
 

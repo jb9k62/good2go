@@ -24,6 +24,14 @@ repeating its content.
   `sources` above, or refer to it as a code path in the text, for example `src/example.ts`.
 - A fenced mermaid block renders as a diagram in the viewer's detail panel.
 
+<!-- Optional. A question nobody has answered yet goes under this heading, one item each, so
+     `npm run g2g:questions` can list it. Delete the comment markers to use it.
+
+## Open Questions
+
+- [ ] What do we not know yet?
+-->
+
 ## Notes on the frontmatter above (delete this section)
 
 - `type` is the only required field. Pick one that matches the node palette (Application,
@@ -36,6 +44,9 @@ repeating its content.
   document the text was copied from. A path from the project root also feeds
   `npm run g2g:recheck`: after `npx good2go edukai verify <concept> --bundle okf
   --by <actor>` pins it, the re-check reports when that file changes.
+- Record what is unsettled under a `## Open Questions` heading, one `- [ ]` item per question.
+  When it is settled, `npm run g2g:questions -- answer <id> --by <concept or file>` ticks it
+  and links the answer; it does not delete it. An empty section is a warning.
 - Leave `status` out. It defaults to `stable`. Set it to `draft` while still writing, or
   `deprecated` once the concept no longer applies.
 - Don't add `verified` until a person has actually reviewed this text: an unreviewed

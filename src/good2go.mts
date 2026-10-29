@@ -12,6 +12,7 @@
  *   good2go open [bundle] [options]         build, then open the landing page (or one bundle) in a browser
  *   good2go mermaid [bundle]                every Mermaid block parses
  *   good2go search <command> [args]         ranked, freshness-aware search
+ *   good2go questions <command> [args]      open questions: list, check, answer, reopen
  *   good2go recheck [options]               lessons that need an agent
  *   good2go edukai <command> [args]         the memory tool: new, verify, supersede, index, recheck
  *   good2go hook <command> [args]           what the harness hooks run: run, brief, cites, debt
@@ -40,6 +41,7 @@ const COMMANDS: Record<string, [string, string[]]> = {
   open: ['g2g-build-view', ['open']],
   mermaid: ['g2g-mermaid', []],
   search: ['g2g-search', []],
+  questions: ['g2g-questions', []],
   recheck: ['g2g-edukai', ['recheck']],
   edukai: ['g2g-edukai', []],
   hook: ['g2g-hook', []],

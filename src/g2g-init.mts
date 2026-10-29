@@ -405,6 +405,7 @@ if (opts.scripts) {
       pkg.scripts['g2g:search'] = `good2go search --bundle ${d}`;
       pkg.scripts['g2g:mermaid:render'] = build + `good2go view ${d} --check-render`;
       pkg.scripts['g2g:recheck'] = `good2go recheck --bundle ${d}`;
+      pkg.scripts['g2g:questions'] = `good2go questions --bundle ${d}`;
       if (hasEdukai) {
         pkg.scripts['edukai:validate'] = 'good2go validate edukai --strict && good2go edukai index --check';
         pkg.scripts['edukai:index'] = 'good2go edukai index';
@@ -479,6 +480,7 @@ console.log('  npm run g2g:mermaid         # every mermaid block parses (needs m
 console.log('  npm run g2g:mermaid:render  # every diagram, quiz and widget works in the viewer');
 console.log('  npm run g2g:search -- search "query"   # find concepts before reading them');
 console.log('  npm run g2g:recheck         # do the files that concepts cite still say what was pinned?');
+console.log('  npm run g2g:questions       # the open questions in the bundle; `answer <id> --by <where>` marks one answered');
 if (hasEdukai) {
   console.log('\nMemory bundle (edukai/):');
   console.log('  npm run edukai:index        # rebuild the syllabus and the cache the hooks read (run once after a clone)');

@@ -21,6 +21,7 @@ const COMMANDS: Array<[string[], RegExp]> = [
   [['search'], /good2go search <command>/],
   [['edukai'], /good2go edukai <command>/],
   [['hook'], /good2go hook <command>/],
+  [['questions'], /good2go questions \[list\]/],
 ];
 
 for (const [label, entry] of ENTRIES) {
