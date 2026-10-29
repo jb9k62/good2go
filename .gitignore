@@ -7,3 +7,4 @@ okf/viz.html
 examples/**/viz.html
 .cache/
 test/bench/results/
+.claude/
