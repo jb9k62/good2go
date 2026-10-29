@@ -7,15 +7,15 @@ confidence: observed
 generated: { by: pi/deepseek-ai/DeepSeek-V4.1-Flash, at: 2026-10-08T20:03:18Z }
 verified:
   - { by: pi/deepseek-ai/DeepSeek-V4.1-Flash, at: 2026-10-08T20:08:56Z }
-  - { by: claude-code/claude-sonnet-5-5, at: 2026-10-10T18:14:17Z }
-stale_after: 2026-11-09T18:14:17Z
+  - { by: claude-code/claude-sonnet-5-5, at: 2026-10-23T09:39:28Z }
+stale_after: 2026-11-22T09:39:28Z
 sources:
   - resource: src/g2g-view.mts
-    digest: sha256:8dc35fe2078e88f7
+    digest: sha256:97ad44148d220287
   - resource: test/views.e2e.mts
-    digest: sha256:7ee714a7806d71c5
+    digest: sha256:50d91a7dbfb7c1a9
 check:
-  - { file: src/g2g-view.mts, contains: "cdn.jsdelivr.net/npm/mermaid@12.1.0" }
+  - { file: src/g2g-view.mts, contains: "cdn.jsdelivr.net/npm/mermaid@12." }
   - { file: src/g2g-view.mts, contains: 'integrity="sha384-' }
 ---
 

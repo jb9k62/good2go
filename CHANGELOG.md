@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **The viewer's pinned libraries move to Cytoscape 3.34.4, marked 18.1.1 and Mermaid 12.2.0**, with fresh integrity hashes. Mermaid now matches the version `mmdc` resolves, so the parse and render gates accept one dialect.
+
 ## 1.1.0 - 2026-10-23
 
 - **Micro-worlds teach in ladders.** A concept's widget used to open at full scale (a thousand bits, three sliders, two percentages), which showed the conclusion before the mechanism. The kit gains `useSteps` and `Steps`, a walkthrough the reader steps through with one sentence per step and then takes over, and `Predict`, which keeps an outcome covered until the reader has guessed it. Four new example widgets use them as the first rungs of two ladders: `bloom-add` and `bloom-stranger` before `bloom-filter`, and `hash-modulo` and `hash-ring` before `consistent-hash` (`ring.ts` gains `shares`). The demo's Bloom filter and hashing tours are rebuilt as ladders with a short check after each rung, and `EXPLAINERS.md` and the explainer template describe the pattern. Existing widget names are unchanged.
