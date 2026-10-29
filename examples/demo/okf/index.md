@@ -6,7 +6,7 @@ okf_version: "0.2"
 
 The knowledge bundle for **Parcel tracker**, a small (fictional) service that follows parcels
 across courier companies and tells customers where their delivery is. It is the demo for
-[okf-bootstrap](https://github.com/jb9k62/okf-bootstrap): reference concepts, decision
+[good2go](https://github.com/jb9k62/good2go): reference concepts, decision
 records, and ten guided tours, most with interactive widgets, all with quizzes. Build it with
 `npm run demo`, then open `examples/demo/okf/viz.html`.
 
