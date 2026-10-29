@@ -1124,7 +1124,9 @@ describe('viewer views', { timeout: 120_000 }, () => {
           }
         }, lose);
         // The button is still held. The drag must already be over, and the divider must have let go of the pointer.
-        // lostpointercapture is dispatched as a task after the release, so wait for the class rather than read it at once.
+        // Chromium may hold lostpointercapture until the next pointer event (a real pointer never stops sending them),
+        // so move one pixel with the button down, then wait for the class rather than read it at once.
+        await p.mouse.move(x + 81, y);
         const ended = await p
           .waitForFunction(() => !document.body.classList.contains('dragging-split'), undefined, { timeout: 2_000 })
           .then(() => true, () => false);
