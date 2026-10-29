@@ -63,7 +63,8 @@ release rather than backporting a fix to an older line.
 ## How releases are made
 
 1. A maintainer bumps the version in `package.json`, updates the changelog, and pushes a
-   `v<version>` tag (see [docs/RELEASING.md](docs/RELEASING.md)).
+   `v<version>` tag (see [docs/RELEASING.md](docs/RELEASING.md)). The `release-pr` workflow can
+   prepare the bump as a pull request from the changelog; it cannot tag or publish.
 2. The `release` workflow checks that the tag and `package.json` agree, installs dependencies with
    `--ignore-scripts`, runs the full check suite, packs the tarball, smoke-tests it in a fresh
    project and stores that tarball.

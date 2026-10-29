@@ -40,6 +40,25 @@ Do this once, before the first automated release.
 
 ## Per release
 
+The `release-pr` workflow does steps 2 to 4 for you. When `main` changes `CHANGELOG.md` or
+`package.json`, it runs `scripts/release-plan.mts`, which reads only the entries under
+`## Unreleased`:
+
+- none: no release (a screenshot or dev-dependency pull request adds none);
+- an entry starting `**Breaking`: major;
+- every entry starting `**Fix`, `**Fixed` or `**Security`: patch;
+- anything else: minor.
+
+If a release is warranted it opens a `Release X.Y.Z` pull request from `release/vX.Y.Z` (bumped
+`package.json` and lockfile, the changelog section moved under a dated heading). It never tags and
+never publishes, and it holds no npm credential. If the runtime `dependencies` changed since the
+last tag with no changelog entry, it says so in the run summary instead of guessing one.
+
+Pull requests opened with the default `GITHUB_TOKEN` do not start other workflows, so CI does not
+run on the release pull request by itself. Close and reopen it to start CI, or rely on the
+`release` workflow, whose `verify` job runs the full check before anything is published. Then
+merge it and carry on from step 5. Or do it by hand:
+
 1. Make sure `main` is green in CI and the working tree is clean.
 2. Choose the version (semver). Set it in `package.json` (`npm version X.Y.Z --no-git-tag-version` also
    updates `package-lock.json`). The tools read their version from it at run time, so there is

@@ -43,7 +43,7 @@ learn with the edukai skill. Before finishing, run `npm run edukai:recheck`.
 | `examples/demo/okf/` | "Parcel tracker" demo bundle; used by `npm run demo`, tests and screenshots |
 | `examples/demo/edukai/`, `examples/demo/src/` | The demo's memory bundle and the small source files its lessons cite; `examples/demo/README.md` is the walkthrough |
 | `test/` | `init.test.mts`, `search.test.mts`, `edukai.test.mts` (unit), `render.e2e.mts` and `views.e2e.mts` (Chromium) |
-| `scripts/` | Maintainer tools: `install-skill`, `okf-spec`, `screenshots` |
+| `scripts/` | Maintainer tools: `install-skill`, `okf-spec`, `screenshots`, `release-plan` (decides from `CHANGELOG.md` whether to open a release PR; see `docs/RELEASING.md`) |
 | `vendor/knowledge-catalog` | Shallow git submodule pinning the upstream spec commit |
 | `docs/images/` | README screenshots, **generated** by `npm run screenshots` |
 
@@ -117,7 +117,7 @@ do not prove it reads well.
   rules) in the same change, plus a test in `test/init.test.mts` for scaffolder changes.
 - **Viewer features**: add to `test/views.e2e.mts` and show the demo bundle exercising it
   (add to `examples/demo/okf` if nothing there covers it).
-- **User-visible changes**: add a line under `## Unreleased` in `CHANGELOG.md`.
+- **User-visible changes**: add a line under `## Unreleased` in `CHANGELOG.md`. The `release-pr` workflow opens a release PR when that section has entries; start an entry `**Fix`, `**Security` or `**Breaking` to make the release a patch or a major (otherwise minor).
 - **Releases**: the version lives only in `package.json` (and the lockfile); the tools read it at
   run time. See `docs/RELEASING.md`.
 - **Vendored OKF spec**: never hand-edit `references/okf-spec/` or `vendor/`. Use
