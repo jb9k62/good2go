@@ -29,3 +29,10 @@ npm scripts work around that by passing the folder every time. Have the tools wa
 working directory to `.good2go.json` and use its `designDir` as the default bundle, so
 `good2go validate` and `good2go recheck` work in any layout and the CI template names no folder.
 The same file is the place for ADR-0005's role-to-folder map (`ops`, and so on).
+
+## Optional watch mode for `build-view`
+
+Add a `--watch` flag to `good2go build-view` (and the `g2g:build-view` script) that rebuilds
+`viz.html` whenever a file in a listed bundle changes, so the viewer can stay open while a
+concept is being written. Off by default, so the one-shot build and its exit-code contract are
+unchanged.
